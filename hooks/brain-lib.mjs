@@ -372,6 +372,22 @@ export const RECORD_PATHS = [
 export const isRecordPath = (f) => RECORD_PATHS.some((p) => f === p || f.startsWith(`${p}/`));
 
 /**
+ * Pull trust ([[0039-pulls-trust-signed-commits-verified-before-fast-forward]], K2-K5): may HEAD take
+ * @{u}? Yes when pullTrust is unset or nothing is incoming. Otherwise only the tip is checked, and
+ * %G? must be G: U is a good signature from a key not in allowed_signers. allowed_signers is passed
+ * per call, so nothing inside the repo decides the trust, and a missing file refuses. Every path
+ * that moves HEAD onto @{u} asks this first: ffPull, and syncRecords' fast-forward and rebase.
+ * `git` is the caller's spawnSync runner for the checkout.
+ */
+export function tipTrusted(git) {
+  if (CONFIG.pullTrust !== "signed") return true;
+  if (git("rev-list", "--count", "HEAD..@{u}").stdout?.trim() === "0") return true;
+  const signers = join(CONFIG.trustDir, "allowed_signers");
+  return existsSync(signers) && git("-c", `gpg.ssh.allowedSignersFile=${signers}`, "log", "-1", "--format=%G?", "@{u}").stdout?.trim() === "G";
+}
+export const UNTRUSTED_TIP = "the tip is not signed by a known key";
+
+/**
  * Commit the hook-written records and push them, so the other boot pulls them at its next session
  * start (owner, 2026-11-02). The last flush runs at SessionEnd, after the user's last commit, so
  * without this the session's own record never left the machine that ran it.
@@ -382,7 +398,9 @@ export const isRecordPath = (f) => RECORD_PATHS.some((p) => f === p || f.startsW
  *   and pushing that is theirs to decide. `held` says so.
  * - Behind origin, it rebases first. The records merge by union (.gitattributes), so two boots
  *   appending to the same daily log do not conflict.
- * Returns `{ busy }`, `{ skipped }`, or `{ committed, pushed, pulled, held, failed }`.
+ * - Under pull trust, an untrusted origin tip is neither merged nor rebased onto: `refused`, the
+ *   records stay committed locally, and the doctor's `auth` check shows `pull-vault`.
+ * Returns `{ busy }`, `{ skipped }`, or `{ committed, pushed, pulled, held, refused, failed }`.
  */
 export function syncRecords() {
   return withLock("records", () => {
@@ -434,6 +452,10 @@ export function syncRecords() {
     const unpushed = list("rev-list", "@{u}..HEAD");
     if (unpushed.some((h) => list("show", "--name-only", "--format=", h).some((p) => !isRecordPath(p)))) return { ...res, held: true };
     res.pulled = Number(out("rev-list", "--count", "HEAD..@{u}") || 0);
+    if (res.pulled && !tipTrusted(git)) {
+      recordFailure("pull-vault", new Error(UNTRUSTED_TIP));
+      return { ...res, pulled: 0, refused: true };
+    }
     if (res.pulled && unpushed.length) {
       const r = git("rebase", "--quiet", "--autostash", "@{u}");
       if (r.status !== 0) {

@@ -14,6 +14,7 @@ import { spawn, spawnSync } from "node:child_process";
 import {
   VAULT, DEV_ROOT, HOOKS, sessionDbs, failures, HOOK_EVENTS, ledgerRead, logicalDate, FOLDERS, CONFIG,
   PIN_FILE, skeletonPin, compareVersions, withLock, syncRecords, recordFailure, clearFailure,
+  tipTrusted, UNTRUSTED_TIP,
 } from "./brain-lib.mjs";
 
 /**
@@ -45,7 +46,7 @@ function machine() {
 
 /**
  * Fast-forward one checkout from its upstream: clean tree only (untracked files never block a
- * fast-forward), pull only - pushing stays the user's call. `{ busy }`, `{ skipped }`, `{ failed }`,
+ * fast-forward), pull only - pushing stays the user's call. `{ busy }`, `{ skipped }`, `{ failed }`, `{ refused }`,
  * or the commit count and the `git` runner for a follow-up question about the pulled range.
  * Fetch, then merge the upstream ref, under a lock: two sessions starting together each ran
  * `git pull`, and the two fetches left FETCH_HEAD with two merge lines (2026-11-02). Busy means
@@ -63,6 +64,7 @@ function ffPull(cwd) {
     const before = git("rev-parse", "HEAD").stdout?.trim();
     const f = git("fetch", "--quiet");
     if (f.status !== 0) return { failed: why(f) };
+    if (!tipTrusted(git)) return { refused: true };
     const m = git("merge", "--ff-only", "--quiet", "@{u}");
     if (m.status !== 0) return { failed: why(m) };
     return { n: Number(git("rev-list", "--count", `${before}..HEAD`).stdout?.trim() || 0), before, git };
@@ -72,11 +74,14 @@ function ffPull(cwd) {
 /**
  * Commit and push records an earlier session left behind: its SessionEnd sync never ran, or the
  * machine went down first (a reboot into the other OS). Before the vault pull, so the tree it
- * pulls into is clean. Silent when there was nothing to do.
+ * pulls into is clean. Silent when there was nothing to do. syncRecords fast-forwards the vault
+ * itself when it is behind, so what it pulled is counted into vaultPull's line and reindex.
  */
+let pulledByRecords = 0;
 function recordsSync() {
   if (process.env.CLAUDE_INVOKED_BY || process.argv.includes("--dry")) return null;
   const r = syncRecords();
+  pulledByRecords = r.pulled || 0;
   if (r.failed) {
     recordFailure("records", new Error(r.failed));
     return null; // the `!! BRAIN RECORDS FAILING` line carries it
@@ -89,6 +94,12 @@ function recordsSync() {
   return null;
 }
 
+/** A refused pull: one line, and a failure the doctor's `auth` check reports until a good pull clears it. */
+function refused(tag, what) {
+  recordFailure(tag, new Error(UNTRUSTED_TIP));
+  return `!! ${what} PULL refused: ${UNTRUSTED_TIP}. Nothing was merged; check who pushed it.`;
+}
+
 /**
  * Fast-forward the vault from origin before the session reads it ([[0045-cross-os-vault-sync-and-os-stamps]]).
  * The two boots never edit at once, so every conflict so far was a forgotten pull.
@@ -97,12 +108,15 @@ function recordsSync() {
 function vaultPull() {
   if (process.env.CLAUDE_INVOKED_BY || process.argv.includes("--dry")) return null;
   const r = ffPull(VAULT);
+  const n = pulledByRecords + (r.n || 0);
+  if (n) spawn(process.execPath, ["--bun", join(HOOKS, "brain-reindex.mjs"), "--vault"], { detached: true, stdio: "ignore", windowsHide: true }).unref();
   if (r.busy) return null;
   if (r.skipped) return "!! VAULT PULL skipped: uncommitted changes. Commit or stash, then `git pull --ff-only`.";
   if (r.failed) return `!! VAULT PULL failed: ${r.failed}. Pull by hand before editing.`;
-  if (!r.n) return null;
-  spawn(process.execPath, ["--bun", join(HOOKS, "brain-reindex.mjs"), "--vault"], { detached: true, stdio: "ignore", windowsHide: true }).unref();
-  return `Vault pulled ${r.n} commit${r.n === 1 ? "" : "s"} from origin (the other OS may have written since). Reindex scheduled.`;
+  if (r.refused) return refused("pull-vault", "VAULT");
+  clearFailure("pull-vault");
+  if (!n) return null;
+  return `Vault pulled ${n} commit${n === 1 ? "" : "s"} from origin (the other OS may have written since). Reindex scheduled.`;
 }
 
 /**
@@ -119,6 +133,8 @@ function skeletonPull() {
   if (r.busy) return null;
   if (r.skipped) return `!! SKELETON PULL skipped: uncommitted changes in ${root}.`;
   if (r.failed) return `!! SKELETON PULL failed: ${r.failed}. Pull ${root} by hand.`;
+  if (r.refused) return refused("pull-skeleton", "SKELETON");
+  clearFailure("pull-skeleton");
   if (!r.n) return null;
   const hooks = r.git("diff", "--name-only", `${r.before}..HEAD`, "--", "settings.hooks.json").stdout?.trim();
   return (
@@ -361,7 +377,8 @@ try {
   } catch {}
 
   // The cause, when a hook recorded one — no waiting STALE_DAYS for the symptom.
-  const failing = Object.entries(failures()).map(
+  // A refused pull already has its own line.
+  const failing = Object.entries(failures()).filter(([tag]) => !tag.startsWith("pull-")).map(
     ([tag, f]) =>
       `!! BRAIN ${tag.toUpperCase()} FAILING since ${new Date(f.at).toISOString().slice(0, 16)}Z: ${f.reason}. ` +
       "Tell the user in the first reply; a `claude -p` auth failure needs them to run `claude` and /login.",

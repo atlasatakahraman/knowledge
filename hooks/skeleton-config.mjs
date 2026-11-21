@@ -72,11 +72,17 @@ for (const k of ["vault", "devRoot"])
 const hour = raw.rolloverHour ?? 5;
 if (!Number.isInteger(hour) || hour < 0 || hour > 23)
   throw new Error(`knowledge config ${raw.source}: "rolloverHour" must be an integer 0-23`);
+// A misspelt trust setting must not quietly mean "no check".
+if (raw.pullTrust !== undefined && raw.pullTrust !== "signed")
+  throw new Error(`knowledge config ${raw.source}: "pullTrust" must be "signed" or absent`);
 
 /**
  * vault, devRoot - absolute paths. os - the label stamped on records. machine - free text the
  * SessionStart banner opens with (hardware, dual-boot, dotfiles). rolloverHour - when a daily note
  * starts, local time: a session at 02:00 belongs to the previous day with the default 5.
+ * pullTrust - "signed": SessionStart pulls only a tip signed by a key in trustDir/allowed_signers
+ * ([[0039-pulls-trust-signed-commits-verified-before-fast-forward]]); absent: no check. trustDir -
+ * the folder config.json is in, which holds allowed_signers and this boot's signing key.
  */
 export const CONFIG = Object.freeze({
   vault: raw.vault,
@@ -84,6 +90,8 @@ export const CONFIG = Object.freeze({
   os: typeof raw.os === "string" && raw.os ? raw.os : detectedOs(),
   machine: typeof raw.machine === "string" ? raw.machine : "",
   rolloverHour: hour,
+  pullTrust: raw.pullTrust ?? "",
+  trustDir: dirname(CONFIG_PATH),
   source: raw.source,
 });
 

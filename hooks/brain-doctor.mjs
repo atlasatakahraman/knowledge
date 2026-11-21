@@ -18,7 +18,7 @@ import { join, basename, dirname, isAbsolute } from "node:path";
 import { homedir } from "node:os";
 import { execFileSync } from "node:child_process";
 import {
-  VAULT, DEV_ROOT, HOOKS, VAULT_LIKE, HOOK_EVENTS, FOLDERS,
+  VAULT, DEV_ROOT, HOOKS, VAULT_LIKE, HOOK_EVENTS, FOLDERS, CONFIG,
   openDb, ftsMatch, vaultSearch, failures, logicalDate, notePath,
   repoList, recentCommits, recordedCommits, unrecorded, indexVault, pruneVaultIndex,
   rebuildGraph, missingLinkEdges, wikilinkPairs, MERGED_GRAPH, skeletonPin, PIN_FILE, isRecordPath,
@@ -138,6 +138,20 @@ function checkSessions() {
 function checkAuth() {
   const f = failures();
   return { id: "auth", level: "fail", ok: !Object.keys(f).length, detail: Object.fromEntries(Object.entries(f).map(([k, v]) => [k, v.reason])) };
+}
+
+/** Pull trust (0039): unset is a WARN, the rollout's last step. Set, every piece it needs must be there. */
+function checkPullTrust() {
+  if (CONFIG.pullTrust !== "signed") return { id: "pull-trust", level: "warn", ok: false, detail: { pullTrust: "unset: pulls are not signature-checked" } };
+  const missing = ["allowed_signers", "signing_ed25519", "signing_ed25519.pub"].filter((f) => !existsSync(join(CONFIG.trustDir, f)));
+  for (const repo of [VAULT, skeletonPin().root]) {
+    try {
+      if (execFileSync("git", ["-C", repo, "config", "commit.gpgsign"], { encoding: "utf8", windowsHide: true }).trim() !== "true") throw 0;
+    } catch {
+      missing.push(`commit.gpgsign in ${repo}`);
+    }
+  }
+  return { id: "pull-trust", level: "fail", ok: !missing.length, detail: { pullTrust: "signed", missing } };
 }
 
 function checkFrontmatter({ notes }) {
@@ -352,7 +366,7 @@ const CHECKS = {
   "vault-index": checkIndex, retrieval: checkRetrieval, sessions: checkSessions, auth: checkAuth,
   frontmatter: checkFrontmatter, links: checkLinks, reach: checkReach, ignores: checkIgnores,
   commits: checkCommits, priming: checkPriming, "graph-links": checkGraphLinks,
-  "skeleton-version": checkSkeletonVersion, hygiene: checkHygiene,
+  "skeleton-version": checkSkeletonVersion, hygiene: checkHygiene, "pull-trust": checkPullTrust,
 };
 if (only) {
   const unknown = [...only].filter((id) => !(id in CHECKS));
