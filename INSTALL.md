@@ -75,6 +75,16 @@ with the checkout. An adopted vault without one is not checked: commit the same 
 `core.fileMode false`: Obsidian on Linux rewrites `.obsidian/*.json` with mode 755, and a mode-only
 change blocks the SessionStart pull. The vault tracks no executables.
 
+The pre-commit secret scan, in the vault and in the skeleton clone:
+
+```bash
+git -C <vault> config core.hooksPath <skeleton>/githooks
+git -C <skeleton> config core.hooksPath <skeleton>/githooks
+```
+
+`githooks/pre-commit` runs `gitleaks git --staged` on every commit, the hooks' own included, and
+refuses the commit when gitleaks is missing. It adds about 1.3 s per commit on Windows.
+
 ### 3. config.json
 
 `~/.config/knowledge/config.json` on every OS (`$XDG_CONFIG_HOME/knowledge/` when set);
@@ -90,7 +100,7 @@ there; the hooks name both paths until it does.
 ```
 
 `os` is what logs and commit notes are stamped with. `rolloverHour` is when a daily note starts,
-local time. Create `devRoot` if it does not exist. Check what the hooks see:
+local time. `"pullTrust": "signed"` turns on pull trust; set it last (§ Signing and pull trust). Create `devRoot` if it does not exist. Check what the hooks see:
 `bun --bun <skeleton>/hooks/skeleton-config.mjs`.
 
 ### 4. Links into `~/.claude`
@@ -205,6 +215,54 @@ Every check PASS (`hygiene` may WARN). Then, for a new vault, fill the `<!-- FIL
 in `00-Meta/Identity.md` and `00-Meta/Hard-Rules.md` and replace the questions in
 `00-Meta/retrieval-cases.json` with ones the vault must always answer.
 
+## Signing and pull trust
+
+Commits from every machine are signed with an SSH key, and each session start pulls only a tip
+signed by a key you listed. The key has no passphrase, because the hooks commit with nobody present;
+it signs commits and nothing else. In this order, because step 4 is the one that can refuse a pull:
+
+1. **Each machine:** `bun install.ts --signing`. It writes `~/.config/knowledge/signing_ed25519`,
+   sets `gpg.format ssh`, `user.signingkey`, `commit.gpgsign` and `tag.gpgsign` in the vault and in
+   the skeleton clone, adds this machine's key to `~/.config/knowledge/allowed_signers`, and prints
+   the key's fingerprint. Add the public key on GitHub as a **signing** key
+   (`gh ssh-key add <key>.pub --type signing`; needs `gh auth refresh -s admin:ssh_signing_key`).
+2. **Each machine:** add the other machine's public key to `allowed_signers`, one line each:
+   `<email> namespaces="git" ssh-ed25519 AAAA…`. Fetch it from
+   `https://api.github.com/users/<you>/ssh_signing_keys`, and compare its fingerprint
+   (`ssh-keygen -lf <file>`) with the one the other machine printed before trusting it.
+3. **Both machines at the same tip** of the vault and the skeleton, so the first checked pull is a
+   signed commit.
+4. **Each machine:** `"pullTrust": "signed"` in `config.json`. Then, on GitHub, a ruleset that
+   requires signed commits on `main`, once every machine signs.
+
+Only the tip of a pull is checked: a signed tip vouches for the unsigned commits under it. `%G?`
+must be `G`; `U` (a good signature from a key not in `allowed_signers`) is refused, and so is a
+missing `allowed_signers`. `allowed_signers` is passed on each call, never read from the repo's
+config. `brain-doctor`'s `pull-trust` check WARNs until step 4 and FAILs if a piece goes missing.
+Undo, at any step: `git config --unset commit.gpgsign` in a clone, or remove `pullTrust`.
+
+## Credential fences
+
+Recommended for `~/.claude/settings.json`; the installer never writes it, since security settings
+stay yours:
+
+```json
+{
+  "permissions": {
+    "deny": [
+      "Read(~/.ssh/**)",
+      "Read(~/.codex/auth.json)",
+      "Read(~/.claude/.credentials.json)",
+      "Read(**/.env*)",
+      "Read(~/.config/knowledge/signing_ed25519)"
+    ]
+  }
+}
+```
+
+Merge it into an existing `permissions.deny`. These rules cover the Read tool; a shell command can
+still read the files, so keep shell commands on approval.
+
 ## Updating
 
 The skeleton fast-forwards itself at each session start when its tree is clean; when its
@@ -232,5 +290,7 @@ the vault). The vault stays a folder of Markdown notes.
 | `links` FAIL on a fresh clone, pointing at a date | A record links a daily log that was never committed: commit it, or let the flush write it |
 | `!! SKELETON x is behind the vault's pin y` at session start | The other machine moved the vault to a newer skeleton: `git -C <skeleton> pull --ff-only` |
 | `!! SKELETON x is ahead of the vault's pin y` | The skeleton moved on: read its changes since `y` (`git -C <skeleton> log vy..`), adapt the vault, set `.skeleton.json` to `x`, commit |
+| `!! VAULT PULL refused: the tip is not signed by a known key` | Pull trust is on and origin's tip is unsigned or signed by a key not in `allowed_signers`: check who pushed it (`git log --show-signature -1 @{u}`) before adding a key |
+| `pre-commit: gitleaks is not on PATH; commit refused` | Install gitleaks (§ 1), or the commit stays unscanned |
 | `pin FAIL` from the installer | The adopted vault pins another version: check out that one, or adapt the vault and bump the pin |
 | Every hook errors with `no knowledge config` | Step 3 is missing, or `$KNOWLEDGE_CONFIG` points somewhere empty |

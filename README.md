@@ -51,7 +51,8 @@ The hooks read their paths from one untracked file, written once per machine:
   "machine": "Free text the SessionStart banner opens with.", "rolloverHour": 5 }
 ```
 
-`vault` and `devRoot` are required. `rolloverHour` (default 5) is when a daily note starts, local
+`vault` and `devRoot` are required. `"pullTrust": "signed"` makes each session start pull only a
+tip signed by a key in `allowed_signers` beside the config (INSTALL.md § Signing and pull trust). `rolloverHour` (default 5) is when a daily note starts, local
 time. `install.ts` writes it. Check what the hooks see with `bun --bun hooks/skeleton-config.mjs`.
 
 ## Sync
@@ -81,8 +82,8 @@ Installed from their own upstreams, never vendored here:
   and serves it over MCP.
 - [context-mode](https://github.com/mksglu/context-mode) - Elastic License 2.0. Full-text index and
   sandboxed tools. The hooks degrade without it; the doctor's index and retrieval checks need it.
-- [gitleaks](https://github.com/gitleaks/gitleaks) - MIT. Scans the records before they are
-  committed and pushed. Without it, no records are committed.
+- [gitleaks](https://github.com/gitleaks/gitleaks) - MIT. Scans every commit (`githooks/pre-commit`)
+  and the records before they are pushed. Without it, nothing is committed.
 
 ## License
 
