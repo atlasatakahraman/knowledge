@@ -12,9 +12,30 @@ import { Database } from "bun:sqlite";
  * bun ships `bun:sqlite`, NOT `node:sqlite` (verified absent on 1.4.0-canary.1).
  * The option key is `readonly` here, vs node's `readOnly`. `prepare()` is
  * API-compatible with node:sqlite, so call sites need no other change.
+ *
+ * `close()` finalizes every statement the handle prepared. A read-only handle closed with a live
+ * statement costs the process ~1.5 s at exit: 1,523 ms against 51 ms on the 94 MB vault index
+ * (bun 1.4.3, Windows, 2026-11-16), and brain-inject paid that on every prompt. Finalizing here
+ * means no caller has to remember. A read-write handle does not show it (48 ms).
  */
+class ReadOnlyDb extends Database {
+  #stmts = [];
+  prepare(...args) {
+    const s = super.prepare(...args);
+    this.#stmts.push(s);
+    return s;
+  }
+  close(...args) {
+    for (const s of this.#stmts) {
+      try {
+        s.finalize();
+      } catch {}
+    }
+    return super.close(...args);
+  }
+}
 export function openDb(file) {
-  return new Database(file, { readonly: true });
+  return new ReadOnlyDb(file, { readonly: true });
 }
 
 // The roots, the OS label and the rollover hour differ per machine, so they come from
