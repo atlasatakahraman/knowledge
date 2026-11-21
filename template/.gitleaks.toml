@@ -1,0 +1,12 @@
+# gitleaks config for the vault. Extends the default ruleset; it only narrows it.
+title = "vault"
+
+[extend]
+useDefault = true
+
+# Obsidian plugin bundles are minified JavaScript. The generic-api-key rule matches their
+# identifiers (FourKeyMap, SequencerByKey, VALID_TOKENS). The bundles hold no secret.
+# Plugin data.json files are not allowlisted and stay scanned.
+[[allowlists]]
+description = "Obsidian plugin bundles: minified JS identifiers, not secrets"
+paths = ['''\.obsidian/plugins/[^/]+/main\.js$''']

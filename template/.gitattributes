@@ -5,6 +5,11 @@
 *.jsonl text eol=lf
 *.json text eol=lf
 
+# A .docx is a zip. Git for Windows' system attributes textconv it through docx2txt.exe, which is
+# not installed, so `git log -p` errors and the history secret scan stops mid-run. Binary means the
+# scan never converts it; its text is not scanned, which it was not before either.
+*.docx binary
+
 # Hook-written records travel between the boots by syncRecords (brain-lib). Both boots append to
 # the same daily log, ledger and month indexes, so a rebase would conflict on every shared day; a
 # union merge keeps both sides' lines. Commit notes are one file each; they collide only when both

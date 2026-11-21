@@ -6,6 +6,7 @@
 //   ... --machine "<text>"               what the SessionStart banner opens with
 //   ... --from-template | --adopt        force one: a new vault from template/, or an existing vault.
 //                                        Default: adopt a non-empty path, else the template
+//   ... --signing                        also: this boot's commit-signing key and both clones signing (INSTALL.md § Signing)
 //   ... --dry-run                        say what each step would do, change nothing
 //
 // Safe to run twice: every step checks before it writes, and a second run reports `ok` for each.
@@ -29,13 +30,13 @@ const STAMP = new Date().toISOString().replace(/[-:]/g, "").slice(0, 15);
 // ---- arguments -----------------------------------------------------------------------------------
 
 const argv = process.argv.slice(2);
-const KNOWN = new Set(["--vault", "--dev", "--machine", "--from-template", "--adopt", "--dry-run", "--help", "-h"]);
+const KNOWN = new Set(["--vault", "--dev", "--machine", "--from-template", "--adopt", "--dry-run", "--signing", "--help", "-h"]);
 const die = (msg: string): never => {
   process.stderr.write(`install: ${msg}\n`);
   process.exit(1);
 };
 if (argv.includes("--help") || argv.includes("-h")) {
-  process.stdout.write(readFileSync(import.meta.path, "utf8").split("\n").slice(3, 10).map((l) => l.slice(3)).join("\n") + "\n");
+  process.stdout.write(readFileSync(import.meta.path, "utf8").split("\n").slice(3, 11).map((l) => l.slice(3)).join("\n") + "\n");
   process.exit(0);
 }
 for (let i = 0; i < argv.length; i++) {
@@ -167,6 +168,56 @@ if (existsSync(join(VAULT, ".git")) || (dry && mode === "template")) {
     line(changed(), "core.fileMode", "false (Obsidian's mode-only rewrites would block the pull)");
   }
 } else line("WARN", "core.fileMode", `${VAULT} is not a git repository; sync between machines needs one`);
+
+// The pre-commit secret scan (githooks/pre-commit) guards every commit in the vault and in this clone.
+const HOOKS_DIR = fwd(join(ROOT, "githooks"));
+for (const repo of [VAULT, ROOT].filter((d) => existsSync(join(d, ".git")))) {
+  if (sh(bin.git, ["-C", repo, "config", "core.hooksPath"]).out === HOOKS_DIR) line("ok", "hooksPath", `${repo} -> ${HOOKS_DIR}`);
+  else {
+    if (!dry) sh(bin.git, ["-C", repo, "config", "core.hooksPath", HOOKS_DIR]);
+    line(changed(), "hooksPath", `${repo} -> ${HOOKS_DIR} (pre-commit secret scan)`);
+  }
+}
+
+// --signing: this boot's ed25519 signing key beside config.json (no passphrase: hooks commit with
+// nobody present), both clones signing with it, and its line in allowed_signers. The other boot's
+// key goes into allowed_signers by hand, after its fingerprint is compared (INSTALL.md § Signing).
+if (argv.includes("--signing")) {
+  const keygen = Bun.which("ssh-keygen");
+  if (!keygen) die("--signing needs ssh-keygen (OpenSSH) on PATH");
+  const KEY = join(dirname(CONFIG_PATH), "signing_ed25519");
+  if (existsSync(KEY)) line("ok", "signing key", KEY);
+  else {
+    if (!dry) {
+      mkdirSync(dirname(KEY), { recursive: true });
+      const r = sh(keygen, ["-q", "-t", "ed25519", "-N", "", "-C", `knowledge-signing ${osTag()}`, "-f", KEY]);
+      if (!r.ok) die(`ssh-keygen failed: ${r.err}`);
+    }
+    line(changed(), "signing key", `${KEY} (ed25519, signing only)`);
+  }
+  for (const repo of [VAULT, ROOT].filter((d) => existsSync(join(d, ".git")))) {
+    const want: Record<string, string> = { "gpg.format": "ssh", "user.signingkey": fwd(`${KEY}.pub`), "commit.gpgsign": "true", "tag.gpgsign": "true" };
+    const off = Object.entries(want).filter(([k, v]) => sh(bin.git, ["-C", repo, "config", k]).out !== v);
+    if (!off.length) line("ok", "signing", repo);
+    else {
+      if (!dry) for (const [k, v] of off) sh(bin.git, ["-C", repo, "config", k, v]);
+      line(changed(), "signing", `${repo}: ${off.map(([k]) => k).join(", ")}`);
+    }
+  }
+  const SIGNERS = join(dirname(CONFIG_PATH), "allowed_signers");
+  if (existsSync(`${KEY}.pub`)) {
+    const pub = readFileSync(`${KEY}.pub`, "utf8").trim().split(/\s+/).slice(0, 2).join(" ");
+    const have = existsSync(SIGNERS) ? readFileSync(SIGNERS, "utf8") : "";
+    if (have.includes(pub)) line("ok", "allowed_signers", SIGNERS);
+    else {
+      const email = sh(bin.git, ["-C", VAULT, "config", "user.email"]).out;
+      if (!email) die("--signing needs git's user.email set in the vault");
+      if (!dry) writeFileSync(SIGNERS, `${have}${have && !have.endsWith("\n") ? "\n" : ""}${email} namespaces="git" ${pub}\n`);
+      line(changed(), "allowed_signers", `${SIGNERS} (this boot's key)`);
+    }
+    line("info", "fingerprint", sh(keygen, ["-lf", `${KEY}.pub`]).out);
+  }
+}
 
 // ---- 4. config.json ------------------------------------------------------------------------------
 

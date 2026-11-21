@@ -1,0 +1,2 @@
+# githooks/ is POSIX sh. With core.autocrlf=true (Git for Windows) a checkout would give it CRLF endings, which sh cannot run.
+githooks/* text eol=lf
