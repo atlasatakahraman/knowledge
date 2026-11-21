@@ -86,4 +86,7 @@ Installed from their own upstreams, never vendored here:
 
 ## License
 
-GPL-3.0-only. See `LICENSE`.
+MIT. See `LICENSE`. The third-party tools above keep their own licences.
+
+Versions up to 0.4.0 were released under GPL-3.0-only and stay available under it; from 0.5.0 on
+the skeleton takes no GPL dependency, so the MIT grant stays whole.
