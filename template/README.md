@@ -36,7 +36,7 @@ Installing the engine itself (hooks, config, graphify, context-mode) is the know
 | [`60-Decisions/`](60-Decisions/) | ADRs: `Repos/<Remote-Name>/` per repo, `Identity/` for the vault, hooks and agent | you; `brain-compile` |
 | [`80-Assets/`](80-Assets/) | Attachments: pasted images, diagrams, brand masters | you |
 | [`90-Inbox/`](90-Inbox/) | Unsorted capture, kept empty | you |
-| `graphify-out/` | The knowledge graph (gitignored) | `brain-reindex` |
+| `graphify-out/` | The repo graphs, merged for the graphify MCP (gitignored) | `brain-graph`, `brain-doctor --repair` |
 | `00-MOC-Sessions`, `00-MOC-Plans`, `00-MOC-Ops` | Generated hubs. Never edit by hand | `brain-hubs` |
 
 Every hook, its event and its cost: [Hook-Lifecycle](00-Meta/Hook-Lifecycle.md).
@@ -47,7 +47,7 @@ Every hook, its event and its cost: [Hook-Lifecycle](00-Meta/Hook-Lifecycle.md).
 
 - Session start: the vault fast-forwards if it is clean, and any `!!` line is shown.
 - Each prompt: the names of matching vault notes are injected.
-- Edits: the index and graph rebuild 90 s after the last edit.
+- Edits: the note is reindexed at once, by the `knowledge` binary.
 - Session end: once the last flush is written, the records (logs, commit notes, ledger) are
   committed and pushed, so another machine pulls them. The next session start retries any left behind.
 - Commits in any repo under `devRoot`: one note each in `50-Ops/Commits/`.
@@ -75,11 +75,13 @@ Every hook, its event and its cost: [Hook-Lifecycle](00-Meta/Hook-Lifecycle.md).
 | `/brain-log` | Write or append today's session note | the session's tokens |
 | `/brain-usage` | This month's token/cost digest into `50-Ops/Usage/` | free |
 | `/brain-commits` | Run the commit recorder over the whole month | free |
-| `/brain-sync` | Rebuild graphs, re-index, prune phantom rows, verify links | free |
+| `/brain-sync` | Re-index, merge the repo graphs, prune phantom rows, verify links | free |
 | `bun --bun ~/.claude/hooks/brain-doctor.mjs --pretty` | The health check | free |
 | `bun --bun ~/.claude/hooks/brain-doctor.mjs --repair --record --pretty` | The daily sweep: rebuild derived artifacts, check, record a line in `50-Ops/Health/` | free |
-| `bun --bun ~/.claude/hooks/brain-graph.mjs` | Rebuild the graph. `--force` if it shrank | free |
-| `graphify query "<q>" --budget 1500` | Ask the graph how things connect | free |
+| `knowledge find <words>` | Search the vault: ranked notes, each with its best passage | free |
+| `knowledge graph <note> [<note>]` | A note's links in and out, or the path between two notes | free |
+| `bun --bun ~/.claude/hooks/brain-graph.mjs` | Merge the repo graphs into the served graph | free |
+| `graphify query "<q>" --budget 1500` | Ask the repo graphs how code connects | free |
 
 `/graphify . --update` is the semantic pass and **costs tokens**. It is a deliberate act, not
 maintenance.

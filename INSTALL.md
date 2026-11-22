@@ -44,9 +44,9 @@ checkout, `<vault>` the vault, `<dev>` the checkouts folder.
 
 ### 1. Prerequisites
 
-`bun`, `git`, `uv` (for graphify), `claude` (Claude Code) and `gitleaks`, all on `PATH`. The hooks
-commit and push their records on their own and scan them with gitleaks first. Without it they
-commit nothing.
+`bun`, `git`, `uv` (for graphify), `claude` (Claude Code), `gitleaks` and `cargo` (the Rust
+toolchain, for the knowledge binary), all on `PATH`. The hooks commit and push their records on
+their own and scan them with gitleaks first. Without it they commit nothing.
 
 | Tool | Linux | Windows |
 |---|---|---|
@@ -55,6 +55,10 @@ commit nothing.
 | uv | `curl -LsSf https://astral.sh/uv/install.sh \| sh` | `powershell -c "irm https://astral.sh/uv/install.ps1 \| iex"` |
 | claude | `curl -fsSL https://claude.ai/install.sh \| bash` | `irm https://claude.ai/install.ps1 \| iex` |
 | gitleaks | your package manager (`pacman -S gitleaks`, `brew install gitleaks`) | `winget install Gitleaks.Gitleaks` |
+| cargo | `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \| sh` | `winget install Rustlang.Rustup` |
+
+`rust-toolchain.toml` pins the compiler (1.100.0); rustup fetches it on the first build. On Windows
+rustup also needs the MSVC build tools (Visual Studio Build Tools, "Desktop development with C++").
 
 `CLAUDE_CONFIG_DIR` must be unset: the hooks read `~/.claude`.
 
@@ -122,15 +126,28 @@ Get-ChildItem C:\dev\knowledge-skeleton\commands\brain-*.md | ForEach-Object {
 A file symlink on Windows needs Developer Mode (Settings > For developers) or an elevated shell; a
 junction needs neither. Move an existing `~/.claude/hooks` folder aside first rather than deleting it.
 
+### 4b. The knowledge binary
+
+```bash
+cargo install --path <skeleton> --locked
+knowledge --version    # knowledge 0.7.0 / SQLite 3.x, FTS5 on
+```
+
+It lands in `~/.cargo/bin` (`%USERPROFILE%\.cargo\bin` on Windows). A release build takes about a
+minute. Rerun it after pulling a skeleton whose `src/` changed; `install.ts` does when the source is
+newer than the installed binary. Its index lives beside `config.json` unless `KNOWLEDGE_HOME` says
+otherwise.
+
 ### 5. The hook block in `~/.claude/settings.json`
 
 [`settings.hooks.json`](settings.hooks.json) is the block. Merge each event's entries into the
 `hooks` key, with `{BUN}` replaced by bun's absolute path (`command -v bun`,
-`(Get-Command bun).Source`) and `{HOOKS}` by `~/.claude/hooks` written out absolute. Use forward
-slashes on Windows too. Keep every other hook; plugins add their own. On Linux, once:
+`(Get-Command bun).Source`), `{HOOKS}` by `~/.claude/hooks` written out absolute, and `{KNOWLEDGE}`
+by the binary's absolute path. Use forward slashes on Windows too. Keep every other hook; plugins
+add their own. On Linux, once:
 
 ```bash
-cd <skeleton> && sed "s#{BUN}#$(command -v bun)#g; s#{HOOKS}#$HOME/.claude/hooks#g" settings.hooks.json > /tmp/hooks.json
+cd <skeleton> && sed "s#{BUN}#$(command -v bun)#g; s#{HOOKS}#$HOME/.claude/hooks#g; s#{KNOWLEDGE}#$HOME/.cargo/bin/knowledge#g" settings.hooks.json > /tmp/hooks.json
 jq --slurpfile b /tmp/hooks.json '.hooks = reduce ($b[0] | to_entries[]) as $e (.hooks // {}; .[$e.key] = ((.[$e.key] // []) + $e.value))' \
   ~/.claude/settings.json > /tmp/settings.json && mv /tmp/settings.json ~/.claude/settings.json
 ```
@@ -189,12 +206,13 @@ claude plugin install context-mode@context-mode
 ### 10. First index and graph
 
 ```bash
+knowledge index
 bun --bun ~/.claude/hooks/brain-doctor.mjs --repair --pretty
 ```
 
-It records commits made outside Claude, regenerates the hub MOCs, indexes the vault into
-context-mode and builds the graph (`graphify-out/merged-graph.json`). All of it is derived; run it
-whenever a check fails.
+The first builds the vault index (about a second for 2,000 notes). The repair records commits made
+outside Claude, regenerates the hub MOCs, brings the index level again and merges the repo graphs
+into `graphify-out/merged-graph.json`. All of it is derived; run it whenever a check fails.
 
 ### 11. graphify MCP, local scope
 

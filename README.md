@@ -6,13 +6,15 @@ commits, inject relevant note names into each prompt, promote decisions, and kee
 and a link graph current. The vault itself holds notes only and stays private.
 
 ```
+src/            *.rs          the `knowledge` binary: the vault index, search, prompt and edit hooks,
+                              link graph, portability check (Rust, one SQLite file per machine)
 hooks/          brain-*.mjs   Claude Code hooks and their tools, run with `bun --bun`
 skills/brain/                 /brain new|edit <kind> - writes notes in the vault's conventions
 commands/       brain-*.md    /brain-commits /brain-log /brain-sync /brain-usage
 template/                     the empty vault: folders, MOCs, conventions, system docs, Identity and
                               Hard-Rules stubs (`FILL:` marks each placeholder)
-install.ts                    sets a machine up: prerequisites, graphify, context-mode, vault, config,
-                              links, hook block, CLAUDE.md imports, first index and graph
+install.ts                    sets a machine up: prerequisites, the binary (`cargo install`), graphify,
+                              context-mode, vault, config, links, hook block, CLAUDE.md imports, first index
 INSTALL.md                    the same steps by hand, for a person or an agent
 settings.hooks.json           the hook block install.ts merges into ~/.claude/settings.json
 ```
@@ -36,7 +38,30 @@ has the rest.
 
 ## Requirements
 
-`bun`, `git`, Claude Code (`claude`), and `uv` for graphify.
+`bun`, `git`, Claude Code (`claude`), `gitleaks`, `uv` for graphify, and the Rust toolchain
+(`rustup`; `rust-toolchain.toml` pins 1.100.0 and rustup fetches it on the first build).
+
+## The knowledge binary
+
+One native program owns the vault's index and answers the hooks that run on every prompt and edit,
+so neither starts a JavaScript runtime. It is built from `src/` by `install.ts`
+(`cargo install --path . --locked`) into `~/.cargo/bin/knowledge`. Three crates: `rusqlite` (SQLite
+built in, with FTS5), `serde`, `serde_json`; no network code at all.
+
+| Verb | What it does |
+|---|---|
+| `knowledge index [--rebuild] [<note>…]` | brings the index level with the vault: only changed notes are read |
+| `knowledge index --check [--json]` | notes on disk against rows: ghosts, missing, stale |
+| `knowledge find <words> [--limit n] [--json]` | ranked notes, each with its best passage |
+| `knowledge inject <prompt>` | what the prompt hook would add to a prompt |
+| `knowledge graph <note> [<note>]` | a note's links in and out, or the shortest path between two |
+| `knowledge hook prompt\|post-edit --harness claude` | the hooks themselves: JSON on stdin, always exit 0 |
+| `knowledge doctor --only portable [--json]` | names and paths that break on the other OS |
+
+The index is `vault-index.db` in `$KNOWLEDGE_HOME`, else the config's folder: per machine, never in
+git, rebuilt from the notes in about a second. Every target in CI builds the binary and runs
+`checks/stage-3.sh` on the template vault (x64 and ARM64: Windows, macOS, Linux glibc and musl). A
+target counts as verified once that run passes; until then it is built, not verified.
 
 ## Per-machine config
 
@@ -44,7 +69,8 @@ The hooks read their paths from one untracked file, written once per machine:
 
 - Every OS: `~/.config/knowledge/config.json` (or `$XDG_CONFIG_HOME/knowledge/config.json`);
   on Windows that is `%USERPROFILE%\.config\knowledge\`, never `%APPDATA%` (see INSTALL.md)
-- Any OS: `$KNOWLEDGE_CONFIG` overrides it
+- Any OS: `$KNOWLEDGE_HOME/config.json` when `KNOWLEDGE_HOME` is set, and `$KNOWLEDGE_CONFIG`
+  over both
 
 ```json
 { "vault": "/home/me/knowledge", "devRoot": "/home/me/dev", "os": "linux",
@@ -78,10 +104,11 @@ Every version bump in `package.json` is tagged `v<version>` on the commit that m
 
 Installed from their own upstreams, never vendored here:
 
-- [graphify](https://github.com/safishamsi/graphify) (`graphifyy[mcp]` on PyPI) - MIT. Builds the link graph
-  and serves it over MCP.
-- [context-mode](https://github.com/mksglu/context-mode) - Elastic License 2.0. Full-text index and
-  sandboxed tools. The hooks degrade without it; the doctor's index and retrieval checks need it.
+- [graphify](https://github.com/safishamsi/graphify) (`graphifyy[mcp]` on PyPI) - MIT. Builds each
+  repository's code graph and serves their merge over MCP. The vault's own links are the binary's.
+- [context-mode](https://github.com/mksglu/context-mode) - Elastic License 2.0. Sandboxed tools and a
+  full-text index of repo docs, and once a day of the vault, for `ctx_search`. The vault's retrieval
+  does not depend on it.
 - [gitleaks](https://github.com/gitleaks/gitleaks) - MIT. Scans every commit (`githooks/pre-commit`)
   and the records before they are pushed. Without it, nothing is committed.
 

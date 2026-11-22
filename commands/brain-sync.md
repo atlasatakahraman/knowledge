@@ -1,5 +1,5 @@
 ---
-description: Refresh the brain - rebuild graphs, re-index, prune phantoms, verify links
+description: Refresh the brain - re-index, merge repo graphs, prune phantoms, verify links
 ---
 
 Bring the brain's indexes back in step with what is on disk. The vault and checkout roots come from this machine's config:
@@ -10,35 +10,28 @@ CFG=~/.claude/hooks/skeleton-config.mjs; VAULT=$(bun --bun $CFG vault); DEV=$(bu
 
 Then run in order:
 
-1. **Rebuild the vault graph** — free, AST only, no LLM, no tokens:
+1. **Bring the vault index level** — the binary's, what the prompt hook and `knowledge find` read:
 
 ```bash
-cd "$VAULT" && graphify update . --force
+knowledge index && knowledge index --check
 ```
-
-`--force` is required whenever the rebuild is smaller than the stored graph; without it graphify
-refuses to shrink. See [[Conventions]].
 
 2. **Rebuild any repo graph you have touched, then re-merge.** The checkouts live at
    `$DEV/<remote-name>/` ([[0012-repos-leave-the-vault-index-stays]]) and each
-   carries its own `graphify-out/`, built on demand:
+   carries its own `graphify-out/`, built on demand. The vault is not in graphify: its links are
+   `knowledge graph`'s.
 
 ```bash
 cd "$DEV/<Repo>" && graphify update .
+bun --bun ~/.claude/hooks/brain-graph.mjs
 ```
 
-```bash
-cd "$VAULT" && graphify merge-graphs graphify-out/graph.json "$DEV"/*/graphify-out/graph.json --out graphify-out/merged-graph.json
-```
+**`merged-graph.json` is what the graphify MCP serves.** It is the repo graphs only.
 
-**`merged-graph.json` is what the graphify MCP serves — not `graph.json`.** Step 1 alone leaves the
-served graph stale. The `brain-reindex` hook re-merges automatically after each vault rebuild, so
-this step matters when a *repo* graph changed.
+3. **Re-index for full-text search:** `/context-mode:ctx-index <vault>` (the `$VAULT` path), for
+   `ctx_search` in a session launched in the vault; `brain-doctor --record` does it daily.
 
-3. **Re-index for full-text search:** `/context-mode:ctx-index <vault>` (the `$VAULT` path)
-
-   To make a repo's code searchable — and injectable by `brain-inject`, which iterates every
-   content DB:
+   To make a repo's code searchable through `ctx_search`:
 
 ```bash
 bun --bun ~/.claude/plugins/cache/context-mode/context-mode/1.0.169/cli.bundle.mjs index "$DEV/<Repo>" --source repo:<Repo> --ext .ts,.tsx,.rs,.md --max-depth 8 --max-files 800
@@ -86,7 +79,7 @@ link targets but not as vault notes.
 The deliberate-dangling allowlist lives in the vault — any MOC's **"Known gaps — don't chase
 these"** section — not in the script. Add a link there to silence it, with the reason.
 
-6. Report only what changed: node/edge delta, phantoms pruned, and any newly broken links.
+6. Report only what changed: notes reindexed, phantoms pruned, and any newly broken links.
 
 **Do not run `/graphify . --update`** unless the user explicitly asks — that is the semantic pass
 over docs and images, it dispatches subagents, and it costs real tokens. `graphify update .` is

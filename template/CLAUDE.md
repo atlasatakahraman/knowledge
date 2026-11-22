@@ -13,15 +13,15 @@ Index of everything: **[[00-MOC-Root]]**
 ## Retrieval order: do not skip tiers
 
 ```
-injected note names  ->  00-MOC-Root.md  ->  ctx_search  ->  graphify query  ->  raw Read (last resort)
+injected notes  ->  00-MOC-Root.md  ->  knowledge find  ->  knowledge graph  ->  raw Read (last resort)
 ```
 
-Tier 0 is the note names the `UserPromptSubmit` hook injects. They are vault notes only, and a
+Tier 0 is the notes the `UserPromptSubmit` hook injects. They are vault notes only, and a
 snippet is not the note, so follow the name into the file.
 
-`ctx_search` reaches the vault only from a session launched **in** the vault: its `project`
-parameter does not redirect it (context-mode 1.0.169). Anywhere else, use tier 0, then read the
-named note.
+`knowledge find "<q>"` and `knowledge graph <note> [<note>]` read the vault index from any folder.
+`ctx_search` searches only the project a session was launched in, so it is for repo docs and
+session memory, not a vault tier.
 
 Reading files to answer a question this vault already answers is the failure mode this whole
 system exists to prevent. If tier 4 was needed, the vault has a gap: say so, and fix it.
