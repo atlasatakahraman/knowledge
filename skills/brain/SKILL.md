@@ -17,7 +17,7 @@ Router for writing to the second brain. Its path is `vault` in the machine's con
 
 1. Read `00-Meta/Conventions.md` — frontmatter schema, naming, where things live.
 2. Read `00-Meta/Hard-Rules.md` if the change touches code, deps, components, or licensing.
-3. Check the target doesn't already exist: `ctx_search`, or `graphify query`.
+3. Check the target doesn't already exist: `knowledge find "<q>"`, or `graphify query`.
 
 **Never duplicate a repo's own docs into the vault.** A repo's `docs/` *is* its documentation;
 vault pages link inward.

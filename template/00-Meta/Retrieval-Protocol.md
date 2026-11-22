@@ -1,7 +1,7 @@
 ---
 type: rules
 project: knowledge
-tags: [retrieval, context, graphify, context-mode]
+tags: [retrieval, context, graphify]
 created: 2026-11-02
 updated: 2026-11-22
 status: active
@@ -44,8 +44,8 @@ notes; each comes with its best passage. `--json` for scripts, `--limit n` for m
 knowledge find "how does a request reach the cache"
 ```
 
-`ctx_search` (context-mode) is not a vault tier: it searches only the project the session was
-launched in. Use it for repo docs and session memory.
+`knowledge find "<q>" --repo [<name>]` searches the checkouts' docs, and `--captures` what was kept
+or fetched in the last 14 days. Neither is a vault tier.
 
 ### 3. `knowledge graph`: relationships
 
@@ -71,8 +71,8 @@ Use absolute paths with forward slashes. Verify by handshake, not by the binary 
 ### 4. `Read`
 
 Once a tier has **named** the file, `Read` is right: most notes are a few KB. Never a directory
-sweep. Above ~4 KB, when the content will be filtered or counted rather than edited,
-`ctx_execute_file` keeps the raw bytes out of context.
+sweep. When a large output will be filtered rather than edited, `<cmd> | knowledge keep "<label>"
+--q "<q>"` prints only the matching sections.
 
 ## Keeping it honest
 

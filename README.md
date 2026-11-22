@@ -14,7 +14,7 @@ commands/       brain-*.md    /brain-commits /brain-log /brain-sync /brain-usage
 template/                     the empty vault: folders, MOCs, conventions, system docs, Identity and
                               Hard-Rules stubs (`FILL:` marks each placeholder)
 install.ts                    sets a machine up: prerequisites, the binary (`cargo install`), graphify,
-                              context-mode, vault, config, links, hook block, CLAUDE.md imports, first index
+                              vault, config, links, hook block, CLAUDE.md imports, first index
 INSTALL.md                    the same steps by hand, for a person or an agent
 settings.hooks.json           the hook block install.ts merges into ~/.claude/settings.json
 ```
@@ -45,23 +45,41 @@ has the rest.
 
 One native program owns the vault's index and answers the hooks that run on every prompt and edit,
 so neither starts a JavaScript runtime. It is built from `src/` by `install.ts`
-(`cargo install --path . --locked`) into `~/.cargo/bin/knowledge`. Three crates: `rusqlite` (SQLite
-built in, with FTS5), `serde`, `serde_json`; no network code at all.
+(`cargo install --path . --locked`) into `~/.cargo/bin/knowledge`. Its crates: `rusqlite` (SQLite
+built in, with FTS5), `serde`, `serde_json`, and for `fetch` only `ureq` with `rustls` on `ring`,
+the OS trust store (`rustls-platform-verifier`, no bundled root list) and `htmd` (HTML to Markdown).
+`checks/crates.txt` lists every crate in the tree; CI fails on any other.
 
 | Verb | What it does |
 |---|---|
 | `knowledge index [--rebuild] [<note>…]` | brings the index level with the vault: only changed notes are read |
 | `knowledge index --check [--json]` | notes on disk against rows: ghosts, missing, stale |
+| `knowledge index --repo <checkout>` | a checkout's `docs/`, `CLAUDE.md` and `README.md` into the repo-docs index |
 | `knowledge find <words> [--limit n] [--json]` | ranked notes, each with its best passage |
+| `knowledge find <words> --captures \| --repo [<name>]` | what `keep` and `fetch` stored, or the checkouts' docs |
+| `knowledge keep <label> [--q <words>]…` | stores stdin and prints only the sections the queries match, 2,000 chars at most |
+| `knowledge fetch <url> [--q <words>]…` | one page as Markdown, stored and answered the way `keep` answers |
+| `knowledge events <transcript.jsonl> [--json]` | a session's decisions, constraints, plans and refusals, for `brain-flush` |
 | `knowledge inject <prompt>` | what the prompt hook would add to a prompt |
 | `knowledge graph <note> [<note>]` | a note's links in and out, or the shortest path between two |
 | `knowledge hook prompt\|post-edit --harness claude` | the hooks themselves: JSON on stdin, always exit 0 |
 | `knowledge doctor --only portable [--json]` | names and paths that break on the other OS |
 
-The index is `vault-index.db` in `$KNOWLEDGE_HOME`, else the config's folder: per machine, never in
-git, rebuilt from the notes in about a second. Every target in CI builds the binary and runs
-`checks/stage-3.sh` on the template vault (x64 and ARM64: Windows, macOS, Linux glibc and musl). A
-target counts as verified once that run passes; until then it is built, not verified.
+Three files in `$KNOWLEDGE_HOME`, else the config's folder, all per machine and never in git:
+`vault-index.db` (rebuilt from the notes in about a second), `repos-index.db` (repo docs, kept apart
+so a repo doc never reaches the prompt hook or the vault's link checks) and `captures.db` (what
+`keep` and `fetch` stored; a capture older than 14 days is deleted at the next write).
+
+`fetch` refuses, before it connects: anything but `http` and `https`, credentials in a URL, and any
+host that resolves to a loopback, private (RFC 1918), link-local, unique-local, CGNAT, multicast or
+unspecified address, IPv4 inside IPv6 included. It connects only to the addresses it checked, follows
+at most 5 redirects and checks each one again, stops at 20 s and 5 MB, reads no proxy from the
+environment, and stores only HTML (converted), other text and JSON. `--allow-private` lifts the
+address check and nothing else.
+
+Every target in CI builds the binary and runs `checks/stage-3.sh` and `checks/stage-4.sh` on the
+template vault (x64 and ARM64: Windows, macOS, Linux glibc and musl). A target counts as verified
+once that run passes; until then it is built, not verified.
 
 ## Per-machine config
 
@@ -106,9 +124,6 @@ Installed from their own upstreams, never vendored here:
 
 - [graphify](https://github.com/safishamsi/graphify) (`graphifyy[mcp]` on PyPI) - MIT. Builds each
   repository's code graph and serves their merge over MCP. The vault's own links are the binary's.
-- [context-mode](https://github.com/mksglu/context-mode) - Elastic License 2.0. Sandboxed tools and a
-  full-text index of repo docs, and once a day of the vault, for `ctx_search`. The vault's retrieval
-  does not depend on it.
 - [gitleaks](https://github.com/gitleaks/gitleaks) - MIT. Scans every commit (`githooks/pre-commit`)
   and the records before they are pushed. Without it, nothing is committed.
 

@@ -20,8 +20,7 @@ Tier 0 is the notes the `UserPromptSubmit` hook injects. They are vault notes on
 snippet is not the note, so follow the name into the file.
 
 `knowledge find "<q>"` and `knowledge graph <note> [<note>]` read the vault index from any folder.
-`ctx_search` searches only the project a session was launched in, so it is for repo docs and
-session memory, not a vault tier.
+`knowledge find "<q>" --repo` searches the checkouts' docs; it is not a vault tier.
 
 Reading files to answer a question this vault already answers is the failure mode this whole
 system exists to prevent. If tier 4 was needed, the vault has a gap: say so, and fix it.

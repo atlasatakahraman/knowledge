@@ -5,8 +5,8 @@
 ## new
 
 1. Invoke `update-config` with what should fire and when.
-2. **Preserve existing hooks.** `~/.claude/settings.json` already has a `SessionStart` hook running
-   `context-mode-cache-heal.mjs`. Add to the `hooks` object; never overwrite it.
+2. **Preserve existing hooks.** `~/.claude/settings.json` already holds the engine's hooks and
+   possibly a plugin's. Add to the `hooks` object; never overwrite it.
 3. Hook scripts live in `~/.claude/hooks/`.
 4. Document what it does in `20-Knowledge/Tooling/`, or it becomes unexplainable magic in six months.
 

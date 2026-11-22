@@ -23,8 +23,7 @@ is not followed. Grow the note; do not split it. Every `FILL:` comment marks a p
   `find` or `grep`: the MOC answers "where is X" in one hop.
 - **Every commit has a body that says why.** `brain-commit` copies the body into the commit's note;
   a subject-only commit leaves a note with no reason in it.
-- **All file writes are native `Write` / `Edit`.** context-mode's `ctx_execute` runs in a sandbox
-  and discards its filesystem.
+- **All file writes are native `Write` / `Edit`.**
 
 ## Tooling
 

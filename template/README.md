@@ -20,7 +20,7 @@ there in two hops, the vault has a gap.
    `retrieval` check runs them every day.
 4. Choose a licence for the notes, if they will ever be shared, and add it as `LICENSE.md`.
 
-Installing the engine itself (hooks, config, graphify, context-mode) is the knowledge-skeleton's
+Installing the engine itself (hooks, config, graphify) is the knowledge-skeleton's
 `INSTALL.md`.
 
 ## Layout
@@ -100,7 +100,7 @@ maintenance.
 | `!! BRAIN RECORDS FAILING since …` | The records commit or push failed: offline, a gitleaks finding, a rebase conflict | Follow the reason; `bun --bun ~/.claude/hooks/brain-records.mjs` retries |
 | `!! SKELETON x is behind the vault's pin y` | Another machine moved the vault to a newer skeleton; this one has not pulled it | `git -C <skeleton> pull --ff-only` |
 | `!! SKELETON x is ahead of the vault's pin y` | The skeleton moved on; the vault is still written for the older one | Read the skeleton's changes since `y` (`git -C <skeleton> log vy..`), adapt the vault, then set `.skeleton.json` to `x` and commit it |
-| `brain-doctor` FAIL in `vault-index` | Notes the index hasn't caught up with, or rows for files that are gone, or a CRLF note | `brain-doctor --repair`; `brain-prune.mjs --apply`; convert the note to LF |
+| `brain-doctor` FAIL in `vault-index` | Notes the index hasn't caught up with, or rows for files that are gone, or a CRLF note | `brain-doctor --repair`; convert the note to LF |
 | `brain-doctor` FAIL in `retrieval` | A question in `retrieval-cases.json` no longer returns its note | A renamed note, a CRLF note, or a search regression. `failed` lists each query and what it got |
 | `brain-doctor` FAIL in `frontmatter` | A note lacks `type:` or `created:` | Add them ([Conventions](00-Meta/Conventions.md)) |
 | `brain-doctor` FAIL in `links` | A `[[link]]` resolves to nothing | Fix it, or list it in `00-Meta/Forward-Links.md` |

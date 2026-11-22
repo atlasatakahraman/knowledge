@@ -130,13 +130,15 @@ junction needs neither. Move an existing `~/.claude/hooks` folder aside first ra
 
 ```bash
 cargo install --path <skeleton> --locked
-knowledge --version    # knowledge 0.7.0 / SQLite 3.x, FTS5 on
+knowledge --version    # knowledge 0.8.0 / SQLite 3.x, FTS5 on
 ```
 
 It lands in `~/.cargo/bin` (`%USERPROFILE%\.cargo\bin` on Windows). A release build takes about a
-minute. Rerun it after pulling a skeleton whose `src/` changed; `install.ts` does when the source is
-newer than the installed binary. Its index lives beside `config.json` unless `KNOWLEDGE_HOME` says
-otherwise.
+minute; the C compiler SQLite needs also builds `ring` for `fetch`'s TLS (no CMake, no NASM). Rerun
+it after pulling a skeleton whose `src/` changed; `install.ts` does when the source is newer than the
+installed binary. Its three files (`vault-index.db`, `repos-index.db`, `captures.db`) live beside
+`config.json` unless `KNOWLEDGE_HOME` says otherwise. `fetch` trusts the OS certificate store, so a
+machine whose store is out of date fails a TLS handshake rather than falling back to a bundled list.
 
 ### 5. The hook block in `~/.claude/settings.json`
 
@@ -194,16 +196,7 @@ uv tool install "graphifyy[mcp]"
 The `[mcp]` extra is required: without it `graphify-mcp` dies on import and Claude Code lists the
 server as failed, while every doctor check still passes.
 
-### 9. context-mode (Elastic License 2.0)
-
-Installed from its upstream marketplace, never copied into this repo:
-
-```bash
-claude plugin marketplace add mksglu/context-mode
-claude plugin install context-mode@context-mode
-```
-
-### 10. First index and graph
+### 9. First index and graph
 
 ```bash
 knowledge index
@@ -214,7 +207,7 @@ The first builds the vault index (about a second for 2,000 notes). The repair re
 outside Claude, regenerates the hub MOCs, brings the index level again and merges the repo graphs
 into `graphify-out/merged-graph.json`. All of it is derived; run it whenever a check fails.
 
-### 11. graphify MCP, local scope
+### 10. graphify MCP, local scope
 
 From inside the vault, so only sessions launched there see it:
 
@@ -223,7 +216,7 @@ cd <vault> && claude mcp add --scope local graphify -- "$(command -v graphify-mc
 claude mcp list    # graphify: ... ✔ Connected
 ```
 
-### 12. Check
+### 11. Check
 
 ```bash
 bun --bun ~/.claude/hooks/brain-doctor.mjs --pretty
@@ -289,7 +282,6 @@ the vault's `.skeleton.json`, adapt the vault and bump the pin. The tools never 
 
 ```bash
 uv tool upgrade graphifyy
-claude plugin update context-mode@context-mode
 ```
 
 ## Removing

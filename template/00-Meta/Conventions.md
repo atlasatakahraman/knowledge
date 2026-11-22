@@ -26,8 +26,8 @@ status: active | draft | superseded | in-progress | complete | done | legacy
 ---
 ```
 
-`type` and `created` are required: `brain-doctor`'s `frontmatter` check and the write-time check in
-`brain-reindex` fail without them. `project` is required for anything repo-scoped; the vault itself
+`type` and `created` are required: `brain-doctor`'s `frontmatter` check and the post-edit
+hook's write-time check fail without them. `project` is required for anything repo-scoped; the vault itself
 is `knowledge`. `updated` changes on every edit. A `status: superseded` note keeps a link to what
 replaced it.
 
