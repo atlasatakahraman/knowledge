@@ -17,9 +17,9 @@ import { join, basename, dirname, isAbsolute } from "node:path";
 import { homedir } from "node:os";
 import { execFileSync } from "node:child_process";
 import {
-  VAULT, DEV_ROOT, HOOKS, VAULT_LIKE, HOOK_EVENTS, FOLDERS, CONFIG,
-  openDb, ftsMatch, vaultSearch, failures, logicalDate, notePath,
-  repoList, recentCommits, recordedCommits, unrecorded, indexVault, pruneVaultIndex,
+  VAULT, DEV_ROOT, HOOKS, HOOK_EVENTS, FOLDERS, CONFIG,
+  failures, logicalDate, notePath,
+  repoList, recentCommits, recordedCommits, unrecorded,
   rebuildGraph, skeletonPin, PIN_FILE, isRecordPath,
   NOTE_EXEMPT as EXEMPT, walkVault as walk, linksOf, frontmatterOk, forwardLinks, brokenLinksIn,
   knowledgeBin, knowledge,
@@ -39,7 +39,7 @@ const GRACE_MS = 10 * 60_000; // compile and a pull index detached; a note writt
  */
 const CASES_FILE = join(VAULT, FOLDERS.meta, "retrieval-cases.json");
 
-// ---- the vault on disk (walk, links, frontmatter: shared with brain-reindex, in brain-lib) -------
+// ---- the vault on disk (walk, links, frontmatter: in brain-lib) ----------------------------------
 
 const rel = (p) => p.slice(VAULT.length + 1);
 const isRootFile = (p) => !rel(p).includes("\\") && !rel(p).includes("/");
@@ -436,10 +436,8 @@ function writeRecord(report) {
   // This write lands AFTER the checks and repairs, and a script write fires no reindex hook. Without
   // re-deriving here, a month's first file is an orphan and every day's line goes `stale` 10 min later.
   if (created) try { execFileSync(process.execPath, ["--bun", join(HOOKS, "brain-hubs.mjs")], { timeout: 60_000, stdio: "ignore", windowsHide: true }); } catch {}
-  // After the hubs, so a regenerated hub is indexed too. The binary's index for retrieval, and once
-  // a day context-mode's copy, which ctx_search reads in a session launched in the vault.
+  // After the hubs, so a regenerated hub is indexed too.
   try { knowledge(["index"]); } catch {}
-  try { pruneVaultIndex(); indexVault(); } catch {}
   return rel(file);
 }
 
@@ -457,7 +455,6 @@ const report = {
   at: new Date().toISOString(),
   checks,
   ...(repair ? { repairs, repaired: before.filter((b) => !b.ok && checks.find((c) => c.id === b.id)?.ok).map((b) => b.id) } : {}),
-  untestable: ["ctx_search (MCP) project scoping — a script cannot call an MCP tool"],
 };
 if (record) report.recorded = writeRecord(report);
 
@@ -473,6 +470,5 @@ if (pretty) {
     }
   }
   if (report.recorded) console.log(`\n  recorded: ${report.recorded}`);
-  console.log(`\n  untestable: ${report.untestable.join("; ")}`);
 } else process.stdout.write(JSON.stringify(report));
 process.exit(0);

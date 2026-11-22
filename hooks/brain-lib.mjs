@@ -188,22 +188,6 @@ export function knowledgeIndex() {
   } catch {}
 }
 
-/**
- * The context-mode CLI bundle, newest installed version. It ships as a plugin bundle, not on
- * PATH. Resolved rather than pinned: a pinned version path breaks silently on every update.
- */
-export function contextModeCli() {
-  const base = join(homedir(), ".claude", "plugins", "cache", "context-mode", "context-mode");
-  try {
-    const versions = readdirSync(base)
-      .filter((v) => existsSync(join(base, v, "cli.bundle.mjs")))
-      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-    return versions.length ? join(base, versions.at(-1), "cli.bundle.mjs") : null;
-  } catch {
-    return null;
-  }
-}
-
 /** The logical date `now` belongs to. Rollover is ROLLOVER_HOUR (default 05:00) - a 02:00 session is still yesterday. */
 export function logicalDate(now) {
   return new Date(now.getTime() - ROLLOVER_HOUR * 3600_000);
@@ -245,13 +229,11 @@ const dbs = (sub) => {
   }
 };
 
-/** The SAME session_id can appear in several DBs - always union across all of them. */
-export const sessionDbs = () => dbs("sessions");
 export const contentDbs = () => dbs("content");
 
 /**
  * Directories never indexed and never counted as notes - one list, shared by brain-reindex (what
- * gets indexed) and brain-doctor (what counts as a note). They used to be two lists, and they
+ * got indexed, until vault audit Stage 4 removed it) and brain-doctor (what counts as a note). They used to be two lists, and they
  * drifted: the index took in `.remember/` scratch buffers that the doctor ignored, so the first
  * clean rebuild reported 7 ghosts that were really a disagreement between the two walkers.
  * `.remember/` and `.claude/` are agent scratch and config, not notes - serving them as vault
@@ -643,61 +625,9 @@ export function recordedCommits() {
   return { hashes, maxOrdinal };
 }
 
-/**
- * Rebuild the vault's context-mode index, synchronously. The same arguments brain-reindex has
- * always used; one definition, so the Routine's repair and the edit-time reindex cannot diverge.
- * Throws on failure - callers decide whether that is fatal.
- */
-export function indexVault() {
-  const cli = contextModeCli();
-  if (!cli) throw new Error("context-mode CLI not found");
-  execFileSync(
-    process.execPath,
-    [
-      "--bun", cli, "index", VAULT,
-      "--source", "brain-vault",
-      "--max-depth", "4",
-      // Per-commit notes add 100+ files a month; at 500 the index truncated silently.
-      // brain-doctor's `unindexed` count is the tripwire.
-      "--max-files", "20000",
-      "--ext", ".md",
-      ...INDEX_EXCLUDES.flatMap((e) => ["--exclude", `**/${e}/**`]),
-    ],
-    { cwd: VAULT, timeout: 600_000, stdio: "ignore", windowsHide: true },
-  );
-}
-
-/**
- * Drop vault index rows that match no note on disk - brain-doctor's own `ghost` definition.
- * `context-mode index` adds and updates rows but never removes one, so every moved or deleted note
- * left a ghost that failed the daily sweep until a full rebuild (Stage 09). Rows are derived from
- * files, so nothing is lost; run it before indexVault, which restores any row a race dropped.
- */
-export function pruneVaultIndex() {
-  const { file } = vaultSearch(ftsMatch("vault notes"));
-  if (!file) return 0;
-  const { notes } = walkVault();
-  const db = new Database(file);
-  try {
-    db.run("PRAGMA busy_timeout = 5000");
-    const gone = db.prepare("SELECT id, file_path FROM sources WHERE file_path LIKE ?").all(VAULT_LIKE)
-      .filter((r) => !notes.has(String(r.file_path).toLowerCase()));
-    db.transaction(() => {
-      for (const { id } of gone) {
-        db.run("DELETE FROM chunks WHERE source_id = ?", [id]);
-        db.run("DELETE FROM chunks_trigram WHERE source_id = ?", [id]);
-        db.run("DELETE FROM sources WHERE id = ?", [id]);
-      }
-    })();
-    return gone.length;
-  } finally {
-    db.close();
-  }
-}
-
 // ---- Notes on disk --------------------------------------------------------------------------------
-// Moved from brain-doctor in Stage 07: brain-reindex's write-time check applies the same rules to
-// one note, and two copies of "what is a broken link" would disagree sooner or later.
+// Moved from brain-doctor in Stage 07, when brain-reindex's write-time check (removed in vault audit
+// Stage 4) applied the same rules to one note: two copies of "what is a broken link" would disagree.
 
 // Files whose top lines a tool or a reader consumes verbatim: no frontmatter, not notes to link.
 export const NOTE_EXEMPT = /^(LICENSE.*|CLAUDE|AGENTS|README)\.md$/i;

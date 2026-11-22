@@ -13,7 +13,7 @@
 // It never deletes: a real ~/.claude/hooks directory or a file where a link belongs moves to
 // ~/.claude/.pre-skeleton-<stamp>/<same path>, and settings.json before a change is kept beside
 // the original as `settings.json.pre-skeleton-<stamp>`.
-// It installs graphify and context-mode when missing and never updates either: updates are opt-in.
+// It installs graphify when missing and never updates it: updates are opt-in.
 import { cpSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { homedir } from "node:os";
@@ -421,27 +421,10 @@ else {
   else line("set", "graphify", `installed ${graphifyVersion()}`);
 }
 
-// ---- 10. context-mode (Elastic-2.0): installed from upstream, never vendored ---------------------
-
-{
-  const plugins = join(CLAUDE, "plugins");
-  const installed = readJson(join(plugins, "installed_plugins.json"))?.plugins?.["context-mode@context-mode"]?.[0];
-  if (installed) line("ok", "context-mode", `${installed.version}`);
-  else if (dry) line("would", "context-mode", "claude plugin marketplace add mksglu/context-mode; claude plugin install context-mode@context-mode");
-  else {
-    const known = readJson(join(plugins, "known_marketplaces.json"))?.["context-mode"];
-    const add = known ? { ok: true, err: "" } : sh(bin.claude, ["plugin", "marketplace", "add", "mksglu/context-mode"]);
-    const inst = add.ok ? sh(bin.claude, ["plugin", "install", "context-mode@context-mode"]) : add;
-    const version = readJson(join(plugins, "installed_plugins.json"))?.plugins?.["context-mode@context-mode"]?.[0]?.version;
-    if (inst.ok && version) line("set", "context-mode", `installed ${version}`);
-    else line("FAIL", "context-mode", (inst.err || "installed_plugins.json does not list it").split("\n").at(-1));
-  }
-}
-
-// ---- 11. first index and graph: brain-doctor, then --repair if it fails --------------------------
+// ---- 10. first index and graph: brain-doctor, then --repair if it fails --------------------------
 
 // The repair records commits made outside Claude (the template's first commit), regenerates the hubs,
-// indexes the vault into context-mode and builds the graph. All derived; safe to run again.
+// indexes the vault and builds the graph. All derived; safe to run again.
 let report: any = null;
 const doctor = (...a: string[]) => {
   const r = sh(process.execPath, ["--bun", join(HOOKS, "brain-doctor.mjs"), ...a], VAULT);
@@ -465,7 +448,7 @@ else if (report && (report = doctor("--repair"))) {
   line(bad.length ? "FAIL" : "set", "first index", bad.length ? bad.map((s: any) => `${s.step}: ${s.error}`).join("; ") : report.repairs.map((s: any) => s.step).join(", "));
 }
 
-// ---- 12. graphify MCP, local scope: only sessions in the vault see it ----------------------------
+// ---- 11. graphify MCP, local scope: only sessions in the vault see it ----------------------------
 
 {
   const which = Bun.which("graphify-mcp");
@@ -494,7 +477,7 @@ else if (report && (report = doctor("--repair"))) {
   }
 }
 
-// ---- 13. verdict ---------------------------------------------------------------------------------
+// ---- 12. verdict ---------------------------------------------------------------------------------
 
 if (report) {
   console.log(`\nbrain-doctor  ${report.ok ? "PASS" : "FAIL"}`);

@@ -7,13 +7,14 @@
 // The watermark replaces the old 60-second dedupe. That dedupe was keyed by session id and a wall
 // clock, so it could neither stop a second capture point from re-sending the same 20 turns nor
 // tell a real repeat from a new stretch of the same session. The watermark records how far each
-// session has been flushed: last event id per session DB, and transcript turn count.
+// session has been flushed: the count of `knowledge events` already sent, and transcript turn count.
 import { readFileSync, appendFileSync, openSync, closeSync, statSync, rmSync, mkdirSync } from "node:fs";
 import { basename, join } from "node:path";
 import { execFileSync } from "node:child_process";
 import {
-  sessionDbs, notePath, ensureNote, openDb, recordFailure, clearFailure,
+  notePath, ensureNote, recordFailure, clearFailure,
   logEvent, readWatermarks, writeWatermark, resolveTranscript, STATE_DIR, ledgerAdd, quoteDeadLinks, OS_TAG,
+  knowledge,
 } from "./brain-lib.mjs";
 
 const [, , rawSid = "", cwd = ""] = process.argv;
@@ -23,41 +24,35 @@ const opt = (k) => {
   return i !== -1 ? process.argv[i + 1] : null;
 };
 const dry = process.argv.includes("--dry-run");
+// The structured events come from `knowledge events`, which reads them from the transcript itself
+// (vault audit Stage 4; context-mode's session DBs before). `--from-start` (dry runs only) ignores
+// the watermark, so an already-flushed session can be summarised again.
+const fromStart = dry && process.argv.includes("--from-start");
 // A dry run writes nothing - not the watermark, not the note, and not the event log, which the
-// canary and brain-doctor read as the record of real flushes.
-const log = (e) => dry || logEvent(e);
+// canary and brain-doctor read as the record of real flushes. It prints the event to stderr instead,
+// so a dry run that failed (gate 3 got two blank summaries this way) says why.
+const log = (e) => (dry ? process.stderr.write(`[dry-run] ${JSON.stringify(e)}\n`) : logEvent(e));
 // `--date YYYY-MM-DD`: backfill a note a failed flush never wrote. Noon, so the 05:00 rollover
 // cannot move it to the previous day.
 const dateArg = opt("--date");
 const backfill = dateArg ? new Date(`${dateArg}T12:00:00`) : null;
-// `rule` and `error` are deliberately absent: context-mode tags injected CLAUDE.md paths and their
-// contents as `rule`, and successful Bash stdout as `error`. Forwarding them buried the real
-// signal and every flush answered FLUSH_OK - see 2026-09-06, ten silent days.
+// No `rule` or `error` kinds: when context-mode supplied the events, its `rule` was injected
+// CLAUDE.md text and its `error` successful Bash stdout, and forwarding them made every flush
+// answer FLUSH_OK (2026-09-06, ten silent days).
 const KEEP = ["decision", "rejected-approach", "constraint", "plan", "intent"];
 
-/** New structured events for this session, across EVERY session DB, above each DB's watermark. */
-function newEvents(mark) {
-  const rows = [];
-  const dbs = { ...(mark.dbs || {}) };
-  const q = `SELECT id, category, data FROM session_events
-             WHERE session_id = ? AND id > ? AND category IN (${KEEP.map(() => "?").join(",")})
-             ORDER BY id`;
-  for (const f of sessionDbs()) {
-    const key = basename(f);
-    let db;
-    try {
-      db = openDb(f);
-      const got = db.prepare(q).all(sid, dbs[key] ?? 0, ...KEEP);
-      rows.push(...got);
-      if (got.length) dbs[key] = got.at(-1).id;
-    } catch {
-    } finally {
-      try {
-        db?.close();
-      } catch {}
-    }
+/** This session's events from `knowledge events`: the transcript's events past the count already flushed. */
+function knowledgeEvents(mark, tp) {
+  if (!tp) return { rows: [], events: mark.events ?? 0 };
+  try {
+    const all = JSON.parse(knowledge(["events", tp, "--json"], { timeout: 30_000 })).filter((e) => KEEP.includes(e.category));
+    // A session last flushed from context-mode's events has `turns` and no `events`: those were sent
+    // already, so starting at 0 would write the day's note twice. Its new turns still go in the tail.
+    const from = mark.events ?? (mark.turns ? all.length : 0);
+    return { rows: all.slice(from), events: all.length };
+  } catch {
+    return { rows: [], events: mark.events };
   }
-  return { rows, dbs };
 }
 
 /**
@@ -138,18 +133,19 @@ try {
   process.on("exit", () => {
     if (!dry) try { rmSync(LOCK, { force: true }); } catch {}
   });
-  const mark = readWatermarks()[sid] || {};
+  const saved = readWatermarks()[sid] || {};
+  const mark = fromStart ? {} : saved;
   const tp = resolveTranscript(sid, opt("--transcript"));
   const asked = [];
   const times = [];
   const turns = tp ? turnsOf(tp, asked, times) : [];
   const fresh = turns.slice(mark.turns ?? 0);
-  const { rows, dbs } = newEvents(mark);
+  const { rows, events } = knowledgeEvents(mark, tp);
   // Tier 2 of the decision ledger (spec D13): the verbatim AskUserQuestion answer, exact and free.
   // Deduplicated by src, so a flush that fails and retries cannot append twice.
   if (!dry && asked.length) logEvent({ hook: "flush", sid, outcome: "ledger", added: ledgerAdd(asked) });
   const advance = () => {
-    if (!dry) writeWatermark(sid, { dbs, turns: turns.length, flushedAt: Date.now() });
+    if (!dry) writeWatermark(sid, { events, turns: turns.length, flushedAt: Date.now() });
   };
 
   if (!rows.length && !fresh.length) {

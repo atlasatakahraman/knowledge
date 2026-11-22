@@ -9,10 +9,10 @@
 // Runtime is bun (`bun --bun`), per 00-Meta/Hard-Rules.
 import { readFileSync, existsSync, readdirSync, statSync, openSync, readSync, closeSync } from "node:fs";
 import { join, basename } from "node:path";
-import { release } from "node:os";
+import { homedir, release } from "node:os";
 import { spawn, spawnSync } from "node:child_process";
 import {
-  VAULT, DEV_ROOT, HOOKS, sessionDbs, failures, HOOK_EVENTS, ledgerRead, logicalDate, FOLDERS, CONFIG,
+  VAULT, DEV_ROOT, HOOKS, failures, HOOK_EVENTS, ledgerRead, logicalDate, FOLDERS, CONFIG,
   PIN_FILE, skeletonPin, compareVersions, withLock, syncRecords, recordFailure, clearFailure,
   tipTrusted, UNTRUSTED_TIP, knowledgeIndex, knowledgeBin,
 } from "./brain-lib.mjs";
@@ -196,11 +196,18 @@ function flushCanary() {
   };
   walk(dir);
 
+  // A session's transcript is created in its project's folder, so the newest folder mtime is the
+  // newest session (context-mode's session DBs until vault audit Stage 4). Folders, not files: one
+  // stat per project instead of one per transcript.
   let newestCapture = 0;
-  for (const f of sessionDbs()) {
-    const t = statSync(f).mtimeMs;
-    if (t > newestCapture) newestCapture = t;
-  }
+  const projects = join(homedir(), ".claude", "projects");
+  try {
+    for (const d of readdirSync(projects, { withFileTypes: true })) {
+      if (!d.isDirectory()) continue;
+      const t = statSync(join(projects, d.name)).mtimeMs;
+      if (t > newestCapture) newestCapture = t;
+    }
+  } catch {}
   if (!newestCapture) return null;
 
   const quiet = days(newestNote);
@@ -406,14 +413,13 @@ try {
     `  3. ${kbin} graph <note> [<note>] - a note's links in and out, or the path between two`,
     "  4. Read one named file",
     "",
-    "Tiers 2 and 3 read the vault index, so they work from any folder. ctx_search reaches the vault",
-    "only in a session launched in it (its `project` parameter does not redirect it, measured",
-    `2026-09-21), and that copy is refreshed daily. Details: ${FOLDERS.meta}/Hard-Rules.md § Tooling.`,
+    `Tiers 2 and 3 read the vault index, so they work from any folder. Repo docs: ${kbin} find "<q>" --repo.`,
+    `Details: ${FOLDERS.meta}/Hard-Rules.md § Tooling.`,
     "Check retrieval any time, zero tokens: bun --bun ~/.claude/hooks/brain-doctor.mjs --pretty",
     "",
     `The vault is notes only - the checkouts moved to ${join(DEV_ROOT, "<remote-name>")} on 2026-09-06.`,
     `Do NOT sweep ${DEV_ROOT} blind: that is where node_modules and target/ live. Repo docs are indexed`,
-    "per repo (searchable via ctx_search in a session launched in that repo) and reachable through",
+    `per repo (${kbin} find "<q>" --repo [<name>]) and reachable through`,
     "the merged graph of repo graphs, so a blind sweep is the wrong tool there too.",
   ].join("\n");
 
