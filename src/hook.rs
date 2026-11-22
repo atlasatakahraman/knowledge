@@ -35,6 +35,10 @@ fn handle(raw: &[String]) -> Result<(), Fault> {
     std::io::stdin()
         .read_to_string(&mut input)
         .map_err(|e| Fault::Io("stdin".into(), e))?;
+    if args.words.first().map(String::as_str) == Some("pre-tool") {
+        crate::guard::run(&input);
+        return Ok(());
+    }
     let cfg = config::load()?;
     let (event, context) = match args.words.first().map(String::as_str) {
         Some("prompt") => ("UserPromptSubmit", prompt(&cfg, &input)?),

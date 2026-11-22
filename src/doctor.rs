@@ -108,9 +108,14 @@ pub fn portable(cfg: &config::Config) -> Result<(usize, Vec<(String, String)>), 
 }
 
 pub fn run(raw: &[String]) -> Result<u8, Fault> {
+    match raw.first().map(String::as_str) {
+        Some("budget") => return crate::budget::run(raw),
+        Some("profile") => return crate::budget::profile(raw),
+        _ => {}
+    }
     let args = Args::parse(raw, &["only"])?;
     if args.get("only") != Some("portable") {
-        return Err(Fault::Usage("knowledge doctor --only portable [--json] (the rest of the doctor is brain-doctor's until Stage 6)".into()));
+        return Err(Fault::Usage("knowledge doctor --only portable [--json] | budget [<transcript>] [--json] | profile <note> (the rest of the doctor is brain-doctor's until Stage 6)".into()));
     }
     let cfg = config::load()?;
     let (files, found) = portable(&cfg)?;

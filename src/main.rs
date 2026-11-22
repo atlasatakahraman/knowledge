@@ -2,14 +2,17 @@
 //! Stable Rust, no async runtime, arguments parsed by hand, and no `unsafe` anywhere in the crate.
 #![forbid(unsafe_code)]
 
+mod budget;
 mod capture;
 mod config;
 mod doctor;
 mod events;
 mod fetch;
 mod graph;
+mod guard;
 mod hook;
 mod index;
+mod rules;
 mod search;
 mod vault;
 
@@ -31,8 +34,12 @@ const USAGE: &str = "usage:
   knowledge events <transcript.jsonl> [--json]
   knowledge inject <text> [--format lines|tagged] [--no-passage | --passage-max N --passage-score S]
   knowledge graph <note> [<other note>] [--json]
-  knowledge hook prompt|post-edit --harness claude
-  knowledge doctor --only portable [--json]";
+  knowledge rules list [--json] | kernel | check [--staged] [--restore] | lock [--seed <file>]
+  knowledge rules enable|disable <pack>
+  knowledge hook prompt|post-edit|pre-tool --harness claude
+  knowledge doctor --only portable [--json]
+  knowledge doctor budget [<transcript.jsonl>] [--json]
+  knowledge doctor profile <note>";
 
 /// Every fallible function returns this ([[Hard-Rules]] § Working preferences: `Fault`, never
 /// `Result<_, String>`). Named `Fault` so it never collides with an `Error` already in scope.
@@ -162,6 +169,7 @@ fn main() -> ExitCode {
         "events" => events::run(rest),
         "inject" => search::run_inject(rest),
         "graph" => graph::run(rest),
+        "rules" => rules::run(rest),
         // A hook never fails the harness: whatever happens inside, it exits 0.
         "hook" => {
             hook::run(rest);
