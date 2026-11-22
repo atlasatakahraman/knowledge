@@ -2,8 +2,11 @@
 //! Stable Rust, no async runtime, arguments parsed by hand, and no `unsafe` anywhere in the crate.
 #![forbid(unsafe_code)]
 
+mod capture;
 mod config;
 mod doctor;
+mod events;
+mod fetch;
 mod graph;
 mod hook;
 mod index;
@@ -20,7 +23,12 @@ const USAGE: &str = "usage:
   knowledge --version
   knowledge index [--rebuild] [<note.md>...]
   knowledge index --check [--json]
+  knowledge index --repo <checkout>
   knowledge find <query> [--limit N] [--kind K|all] [--json]
+  knowledge find <query> --captures [--budget N] | --repo [<name>]
+  knowledge keep <label> [--q <query>]... [--budget N] < input
+  knowledge fetch <url> [--q <query>]... [--budget N] [--allow-private]
+  knowledge events <transcript.jsonl> [--json]
   knowledge inject <text> [--format lines|tagged] [--no-passage | --passage-max N --passage-score S]
   knowledge graph <note> [<other note>] [--json]
   knowledge hook prompt|post-edit --harness claude
@@ -35,6 +43,7 @@ pub enum Fault {
     Json(serde_json::Error),
     Config(String),
     Usage(String),
+    Net(String),
 }
 
 impl Fault {
@@ -49,7 +58,7 @@ impl fmt::Display for Fault {
             Fault::Io(path, e) => write!(f, "{path}: {e}"),
             Fault::Sql(e) => write!(f, "index: {e}"),
             Fault::Json(e) => write!(f, "json: {e}"),
-            Fault::Config(m) | Fault::Usage(m) => f.write_str(m),
+            Fault::Config(m) | Fault::Usage(m) | Fault::Net(m) => f.write_str(m),
         }
     }
 }
@@ -148,6 +157,9 @@ fn main() -> ExitCode {
         "--version" | "-V" | "version" => version(),
         "index" => index::run(rest),
         "find" => search::run_find(rest),
+        "keep" => capture::run_keep(rest),
+        "fetch" => fetch::run(rest),
+        "events" => events::run(rest),
         "inject" => search::run_inject(rest),
         "graph" => graph::run(rest),
         // A hook never fails the harness: whatever happens inside, it exits 0.

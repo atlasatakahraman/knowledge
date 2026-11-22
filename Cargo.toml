@@ -1,6 +1,6 @@
 [package]
 name = "knowledge"
-version = "0.7.0"
+version = "0.8.0"
 edition = "2024"
 rust-version = "1.100"
 license = "MIT"
@@ -8,14 +8,18 @@ description = "The knowledge engine: one binary that indexes, searches and links
 repository = "https://github.com/atlasatakahraman/knowledge-skeleton"
 publish = false
 
-# Exactly three crates (spec D22, D23). checks/crates.txt is the allowlist; checks/stage-3.sh fails
-# on anything else in the tree. A fourth is a question for the owner, never a quiet addition.
+# Each crate is the owner's pick (spec D22, D23; Stage 4, 2026-11-22: ureq with rustls on ring and
+# the OS trust store, htmd). checks/crates.txt lists the whole tree on CI's eight targets;
+# checks/stage-3.sh fails on anything else. A new one is a question for the owner, never quiet.
 [dependencies]
+htmd = "0.6.0"
 # default-features off: the default `cache` feature pulls hashlink, and nothing here needs a
 # statement cache beyond rusqlite's own prepare. `bundled` compiles SQLite with FTS5 into the binary.
 rusqlite = { version = "0.43.0", default-features = false, features = ["bundled"] }
+rustls = { version = "0.23.46", default-features = false, features = ["ring"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
+ureq = { version = "3.5.2", default-features = false, features = ["rustls-no-provider", "platform-verifier"] }
 
 [profile.release]
 opt-level = 3

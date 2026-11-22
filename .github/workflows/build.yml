@@ -43,6 +43,8 @@ jobs:
       - run: cargo build --release --locked --target ${{ matrix.target }}
       - run: bash checks/stage-3.sh target/${{ matrix.target }}/release/knowledge
         shell: bash
+      - run: bash checks/stage-4.sh target/${{ matrix.target }}/release/knowledge
+        shell: bash
 
   deny:
     runs-on: ubuntu-latest

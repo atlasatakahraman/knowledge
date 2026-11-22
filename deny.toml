@@ -8,15 +8,34 @@ yanked = "deny"
 [licenses]
 # Only the licences the tree has today; a new one is a decision. The skeleton is MIT, so no GPL.
 # Unicode-3.0 is unicode-ident's (a proc-macro
-# dependency of serde_derive; build time only).
-allow = ["MIT", "Apache-2.0", "Unicode-3.0"]
+# dependency of serde_derive; build time only). ISC and BSD-3-Clause came with the owner's fetch pick
+# (Stage 4, 2026-11-22: ureq + rustls on ring): ISC is ring's second half, rustls-webpki's,
+# untrusted's and htmd's ego-tree's; BSD-3-Clause is subtle's, which rustls always needs.
+allow = ["MIT", "Apache-2.0", "Unicode-3.0", "ISC", "BSD-3-Clause"]
 confidence-threshold = 0.9
 
 [bans]
 multiple-versions = "deny"
 wildcards = "deny"
+# ring 0.17 pins windows-sys 0.52; rustls-platform-verifier and schannel are on 0.61. Two copies of
+# Windows bindings, no second implementation of anything. Drop this once ring moves past 0.52.
+skip = [{ crate = "windows-sys@0.52.0", reason = "ring 0.17 pins it" }]
 
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+
+[graph]
+# The eight targets CI builds (spec D21). Without this cargo-deny walks every platform's tree,
+# including wasm32's, where rustls-platform-verifier pulls webpki-root-certs (CDLA-Permissive-2.0).
+targets = [
+  "x86_64-pc-windows-msvc",
+  "aarch64-pc-windows-msvc",
+  "x86_64-apple-darwin",
+  "aarch64-apple-darwin",
+  "x86_64-unknown-linux-gnu",
+  "aarch64-unknown-linux-gnu",
+  "x86_64-unknown-linux-musl",
+  "aarch64-unknown-linux-musl",
+]

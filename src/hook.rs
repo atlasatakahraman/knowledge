@@ -70,7 +70,13 @@ fn post_edit(cfg: &Config, input: &str) -> Result<Option<String>, Fault> {
     else {
         return Ok(None);
     };
-    let Some(rel) = cfg.rel_of(std::path::Path::new(&file)) else {
+    let path = std::path::Path::new(&file);
+    let Some(rel) = cfg.rel_of(path) else {
+        // A repo's docs are kept current the same way, without the vault's write-time rules.
+        let repos = cfg.repos();
+        if let Some(rel) = repos.rel_of(path).filter(|r| index::repo_doc(r)) {
+            index::one(&mut index::open_rw(&repos)?, &repos, &rel)?;
+        }
         return Ok(None);
     };
     if !vault::indexable(&rel) {

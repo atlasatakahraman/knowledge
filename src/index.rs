@@ -27,7 +27,7 @@ CREATE TABLE files (name TEXT PRIMARY KEY) WITHOUT ROWID;
 PRAGMA user_version = 1;";
 
 pub fn db_path(cfg: &Config) -> PathBuf {
-    cfg.home.join("vault-index.db")
+    cfg.db.clone()
 }
 
 fn remove_db(path: &Path) {
@@ -36,44 +36,54 @@ fn remove_db(path: &Path) {
     }
 }
 
-/// Open for writing, creating the file and the schema when needed.
-pub fn open_rw(cfg: &Config) -> Result<Connection, Fault> {
-    fs::create_dir_all(&cfg.home).map_err(|e| Fault::io(&cfg.home, e))?;
-    let path = db_path(cfg);
-    let mut conn = Connection::open(&path)?;
-    let version: i32 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
-    if version != SCHEMA_VERSION && version != 0 {
+/// Open a database for writing, creating the file and `schema` when needed. One from another
+/// `version` is deleted and created again: every row in these files is derived or disposable.
+pub fn open_db(path: &Path, schema: &str, version: i32) -> Result<Connection, Fault> {
+    if let Some(dir) = path.parent() {
+        fs::create_dir_all(dir).map_err(|e| Fault::io(dir, e))?;
+    }
+    let mut conn = Connection::open(path)?;
+    let found: i32 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
+    if found != version && found != 0 {
         drop(conn);
-        remove_db(&path);
-        conn = Connection::open(&path)?;
+        remove_db(path);
+        conn = Connection::open(path)?;
     }
     conn.busy_timeout(Duration::from_secs(5))?;
     conn.query_row("PRAGMA journal_mode = WAL", [], |_| Ok(()))?;
     conn.pragma_update(None, "synchronous", "NORMAL")?;
-    if version != SCHEMA_VERSION {
-        conn.execute_batch(SCHEMA)?;
+    if found != version {
+        conn.execute_batch(schema)?;
     }
     Ok(conn)
 }
 
-/// Open an index that must already exist, for reading.
-pub fn open_ro(cfg: &Config) -> Result<Connection, Fault> {
-    let path = db_path(cfg);
+/// Open a database that must already exist at `version`, for reading.
+pub fn open_existing(path: &Path, version: i32, how: &str) -> Result<Connection, Fault> {
     if !path.exists() {
         return Err(Fault::Config(format!(
-            "no index at {}: run `knowledge index`",
+            "no index at {}: run `{how}`",
             path.display()
         )));
     }
-    let conn = Connection::open(&path)?;
+    let conn = Connection::open(path)?;
     conn.busy_timeout(Duration::from_secs(5))?;
-    let version: i32 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
-    if version != SCHEMA_VERSION {
-        return Err(Fault::Config(
-            "the index is from another version: run `knowledge index --rebuild`".into(),
-        ));
+    let found: i32 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
+    if found != version {
+        return Err(Fault::Config(format!(
+            "{} is from another version: run `{how} --rebuild`",
+            path.display()
+        )));
     }
     Ok(conn)
+}
+
+pub fn open_rw(cfg: &Config) -> Result<Connection, Fault> {
+    open_db(&db_path(cfg), SCHEMA, SCHEMA_VERSION)
+}
+
+pub fn open_ro(cfg: &Config) -> Result<Connection, Fault> {
+    open_existing(&db_path(cfg), SCHEMA_VERSION, "knowledge index")
 }
 
 #[derive(Default)]
@@ -225,6 +235,54 @@ fn relink_all(tx: &Transaction) -> Result<(), Fault> {
 /// transaction. Size and mtime first, then the content hash.
 pub fn sync(conn: &mut Connection, cfg: &Config) -> Result<Stats, Fault> {
     let files = vault::walk(&cfg.vault)?;
+    sync_files(conn, cfg, &files, None)
+}
+
+/// A checkout's docs into the repo-docs index (`cfg` is `Config::repos()`): `docs/**.md`,
+/// `CLAUDE.md` and `README.md`, under the vault's excludes, stored as `<Name>/...`. Only that
+/// repo's rows are compared and removed.
+pub fn sync_repo(conn: &mut Connection, cfg: &Config, name: &str) -> Result<Stats, Fault> {
+    let root = cfg.vault.join(name);
+    let mut files = Vec::new();
+    let docs = root.join("docs");
+    if docs.is_dir() {
+        for f in vault::walk(&docs)? {
+            files.push(File {
+                rel: format!("{name}/docs/{}", f.rel),
+                ..f
+            });
+        }
+    }
+    for top in ["CLAUDE.md", "README.md"] {
+        if let Ok(meta) = fs::metadata(root.join(top))
+            && meta.is_file()
+        {
+            files.push(File {
+                rel: format!("{name}/{top}"),
+                size: meta.len() as i64,
+                mtime: vault::mtime(&meta),
+            });
+        }
+    }
+    sync_files(conn, cfg, &files, Some(&format!("{name}/")))
+}
+
+/// Whether a checkouts-relative path is a repo doc `sync_repo` would hold.
+pub fn repo_doc(rel: &str) -> bool {
+    let mut parts = rel.splitn(3, '/');
+    match (parts.next(), parts.next(), parts.next()) {
+        (Some(_), Some("CLAUDE.md" | "README.md"), None) => true,
+        (Some(_), Some("docs"), Some(rest)) => vault::indexable(rest),
+        _ => false,
+    }
+}
+
+fn sync_files(
+    conn: &mut Connection,
+    cfg: &Config,
+    files: &[File],
+    prefix: Option<&str>,
+) -> Result<Stats, Fault> {
     let tx = conn.transaction()?;
     let mut rows: HashMap<String, (i64, i64, i64, String)> = HashMap::new();
     for row in tx
@@ -233,8 +291,10 @@ pub fn sync(conn: &mut Connection, cfg: &Config) -> Result<Stats, Fault> {
             Ok((r.get(0)?, (r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)))
         })?
     {
-        let (path, v) = row?;
-        rows.insert(path, v);
+        let (path, v): (String, _) = row?;
+        if prefix.is_none_or(|p| path.starts_with(p)) {
+            rows.insert(path, v);
+        }
     }
     let mut stats = Stats::default();
     let mut changed = Vec::new();
@@ -272,7 +332,9 @@ pub fn sync(conn: &mut Connection, cfg: &Config) -> Result<Stats, Fault> {
         renamed = true;
         stats.removed += 1;
     }
-    put_files(&tx, &files)?;
+    if prefix.is_none() {
+        put_files(&tx, files)?;
+    }
     if renamed {
         relink_all(&tx)?;
     } else {
@@ -384,8 +446,32 @@ pub fn check(conn: &Connection, cfg: &Config) -> Result<Check, Fault> {
 }
 
 pub fn run(raw: &[String]) -> Result<u8, Fault> {
-    let args = Args::parse(raw, &[])?;
+    let args = Args::parse(raw, &["repo"])?;
     let cfg = config::load()?;
+    if let Some(root) = args.get("repo") {
+        let t0 = Instant::now();
+        let repos = cfg.repos();
+        let name = repos
+            .rel_of(Path::new(root))
+            .filter(|r| !r.contains('/'))
+            .ok_or_else(|| {
+                Fault::Usage(format!(
+                    "{root}: not a checkout directly under {}",
+                    repos.vault.display()
+                ))
+            })?;
+        let s = sync_repo(&mut open_rw(&repos)?, &repos, &name)?;
+        emit(&format!(
+            "{name}: {} docs: {} added, {} updated, {} removed, {} unchanged, in {} ms\n",
+            s.added + s.updated + s.unchanged,
+            s.added,
+            s.updated,
+            s.removed,
+            s.unchanged,
+            t0.elapsed().as_millis()
+        ));
+        return Ok(0);
+    }
     if args.has("check") {
         let c = check(&open_ro(&cfg)?, &cfg)?;
         if args.has("json") {

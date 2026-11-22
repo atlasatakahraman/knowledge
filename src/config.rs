@@ -12,11 +12,17 @@ use serde::Deserialize;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+#[derive(Clone)]
 pub struct Config {
-    /// The vault root, absolute, as written in config.json.
+    /// The root the index's paths are relative to: the vault, as written in config.json, or the
+    /// checkouts folder for the repo-docs index (`repos()`).
     pub vault: PathBuf,
-    /// Where the index lives: KNOWLEDGE_HOME, else the config's folder.
+    /// Where the indexes live: KNOWLEDGE_HOME, else the config's folder.
     pub home: PathBuf,
+    /// The checkouts folder (`devRoot`).
+    pub dev: PathBuf,
+    /// The index file this config reads and writes.
+    pub db: PathBuf,
 }
 
 /// The keys the bun hooks read, validated the same way. Only `vault` is used by the binary today;
@@ -64,7 +70,7 @@ pub fn load() -> Result<Config, Fault> {
         })
     };
     let vault = need(raw.vault, "vault")?;
-    need(raw.dev_root, "devRoot")?;
+    let dev = need(raw.dev_root, "devRoot")?;
     if let Some(h) = raw.rollover_hour
         && h.as_u64().is_none_or(|h| h > 23)
     {
@@ -83,11 +89,24 @@ pub fn load() -> Result<Config, Fault> {
         .unwrap_or_else(|| path.parent().map(Path::to_path_buf).unwrap_or_default());
     Ok(Config {
         vault: PathBuf::from(vault),
+        db: home.join("vault-index.db"),
+        dev: PathBuf::from(dev),
         home,
     })
 }
 
 impl Config {
+    /// The repo-docs index (Stage 4): the same schema and code as the vault's, in its own file,
+    /// with paths relative to the checkouts folder (`<Name>/docs/x.md`). Kept apart so the vault's
+    /// links, graph, checks and prompt injection never see a repo doc.
+    pub fn repos(&self) -> Config {
+        Config {
+            vault: self.dev.clone(),
+            db: self.home.join("repos-index.db"),
+            ..self.clone()
+        }
+    }
+
     /// A path's stored form: vault-relative, forward slashes, in the case it has on disk. None
     /// when it is outside the vault. Windows compares drive and folders case-insensitively.
     pub fn rel_of(&self, p: &Path) -> Option<String> {

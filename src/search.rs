@@ -100,6 +100,7 @@ pub fn search(
     text: &str,
     limit: usize,
     kind: &str,
+    scope: Option<&str>,
     t: &Tuning,
 ) -> Result<Vec<Hit>, Fault> {
     let rare = rarest(conn, tokens(text), t.tokens)?;
@@ -111,11 +112,22 @@ pub fn search(
         .map(|w| format!("\"{w}\""))
         .collect::<Vec<_>>()
         .join(" OR ");
-    let filter = match kind {
+    let mut filter = match kind {
         "" => format!("AND notes.kind NOT IN ({RECORD_KINDS})"),
         "all" => String::new(),
         _ => "AND notes.kind = ?6".to_string(),
     };
+    // A repo name, checked to be a plain folder name before it is written into the SQL.
+    if let Some(repo) = scope {
+        if repo.is_empty()
+            || !repo
+                .chars()
+                .all(|c| c.is_alphanumeric() || matches!(c, '-' | '_' | '.'))
+        {
+            return Err(Fault::Usage(format!("--repo {repo}: not a checkout name")));
+        }
+        filter.push_str(&format!(" AND notes.path LIKE '{repo}/%'"));
+    }
     let sql = format!(
         "SELECT notes.name, notes.path, chunks.heading, snippet(chunks, 2, '', '', '…', 26), chunks.body,
                 bm25(chunks, ?2, ?3, ?4) AS score
@@ -178,20 +190,63 @@ fn one_line(s: &str) -> String {
     s.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
+/// `--repo` takes an optional name: the next word when it is not a flag and a query is already
+/// given, so `find "q" --repo` and `find "q" --repo Name` both read as meant.
+fn repo_arg(raw: &[String]) -> (Vec<String>, Option<String>) {
+    let mut rest = Vec::new();
+    let mut repo = None;
+    let mut it = raw.iter().peekable();
+    while let Some(a) = it.next() {
+        if a == "--repo" {
+            let has_query = rest.iter().any(|w: &String| !w.starts_with("--"));
+            repo = Some(match it.peek() {
+                Some(n) if has_query && !n.starts_with("--") => {
+                    it.next().cloned().unwrap_or_default()
+                }
+                _ => String::new(),
+            });
+        } else {
+            rest.push(a.clone());
+        }
+    }
+    (rest, repo)
+}
+
 pub fn run_find(raw: &[String]) -> Result<u8, Fault> {
-    let args = Args::parse(raw, &[&["limit", "kind"][..], &KNOBS].concat())?;
+    let (raw, repo) = repo_arg(raw);
+    let args = Args::parse(&raw, &[&["limit", "kind", "budget"][..], &KNOBS].concat())?;
     let query = args.words.join(" ");
     if query.trim().is_empty() {
-        return Err(Fault::Usage("knowledge find <query>".into()));
+        return Err(Fault::Usage(
+            "knowledge find <query> [--captures | --repo [<name>]]".into(),
+        ));
     }
-    let cfg = config::load()?;
     let limit = args.num("limit", 6usize)?.clamp(1, 24);
+    if args.has("captures") {
+        let budget = args.num("budget", crate::capture::BUDGET)?.max(200);
+        emit(&crate::capture::find(&query, limit, budget)?);
+        return Ok(0);
+    }
+    let vault_cfg = config::load()?;
+    let cfg = if repo.is_some() {
+        vault_cfg.repos()
+    } else {
+        vault_cfg
+    };
+    let mut t = tuning(&args)?;
+    // The floor keeps "ok" prompts from injecting vault notes; an asked-for repo search has no such
+    // risk, and a floor tuned on 2,000 vault notes ranks nothing in a repo's handful of docs.
+    if repo.is_some() && args.get("floor").is_none() {
+        t.floor = f64::INFINITY;
+    }
     let hits = search(
         &index::open_ro(&cfg)?,
         &query,
         limit,
-        args.get("kind").unwrap_or(""),
-        &tuning(&args)?,
+        args.get("kind")
+            .unwrap_or(if repo.is_some() { "all" } else { "" }),
+        repo.as_deref().filter(|r| !r.is_empty()),
+        &t,
     )?;
     if args.has("json") {
         let items: Vec<_> = hits
@@ -259,7 +314,7 @@ pub fn inject(
     passage: Option<Passage>,
     t: &Tuning,
 ) -> Result<Option<String>, Fault> {
-    let hits = search(conn, text, 6, "", t)?;
+    let hits = search(conn, text, 6, "", None, t)?;
     if hits.is_empty() {
         return Ok(None);
     }

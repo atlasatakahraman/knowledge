@@ -1,21 +1,69 @@
-# Every crate `cargo tree -e normal` may list: the three the owner approved (spec D22, D23:
-# rusqlite, serde, serde_json) and what they pull in. checks/stage-3.sh fails on any other name.
-# A new name here is a dependency decision, made by the owner in a compared question (D18).
+# Every crate `cargo tree -e normal` may list on any of CI's eight targets: the crates the owner
+# approved (spec D22, D23: rusqlite, serde, serde_json; Stage 4, 2026-11-22: ureq with rustls on
+# ring and rustls-platform-verifier, htmd) and what they pull in. checks/stage-3.sh fails on any
+# other name. A new name here is a dependency decision, made by the owner in a compared question (D18).
+base64
 bitflags
+bytes
+cfg-if
+core-foundation
+core-foundation-sys
+ego-tree
 fallible-iterator
 fallible-streaming-iterator
+getrandom
+htmd
+html5ever
+http
+httparse
 itoa
 knowledge
+libc
 libsqlite3-sys
+lock_api
+log
+markup5ever
 memchr
+new_debug_unreachable
+once_cell
+openssl-probe
+parking_lot
+parking_lot_core
+percent-encoding
+phf
+phf_shared
+precomputed-hash
 proc-macro2
 quote
+ring
 rusqlite
+rustls
+rustls-native-certs
+rustls-pki-types
+rustls-platform-verifier
+rustls-webpki
+scopeguard
+security-framework
+security-framework-sys
 serde
 serde_core
 serde_derive
 serde_json
+siphasher
 smallvec
+string_cache
+subtle
 syn
+tendril
 unicode-ident
+untrusted
+ureq
+ureq-proto
+utf8-zero
+web_atoms
+windows-link
+windows-sys
+windows-targets
+windows_aarch64_msvc
+zeroize
 zmij
