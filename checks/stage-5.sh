@@ -127,7 +127,7 @@ mv "$VAULT/00-Meta/rules.lock" "$TMP/lock.bak"
 check "guard: no lock, an npm call is allowed silently on stdout" '[ -z "$(pre "$(bash_p "\"npm i\"")")" ]'
 mv "$TMP/lock.bak" "$VAULT/00-Meta/rules.lock"
 printf '{"broken' > "$TMP/broken.json"
-check "guard: a broken lock allows with one stderr line" 'cp "$VAULT/00-Meta/rules.lock" "$TMP/lock.bak" && cp "$TMP/broken.json" "$VAULT/00-Meta/rules.lock" && [ -z "$(pre "$(bash_p "\"npm i\"")")" ] && [ "$(printf "%s" "$(bash_p "\"npm i\"")" | k hook pre-tool --harness claude 2>&1 >/dev/null | wc -l)" = 1 ]'
+check "guard: a broken lock allows with one stderr line" 'cp "$VAULT/00-Meta/rules.lock" "$TMP/lock.bak" && cp "$TMP/broken.json" "$VAULT/00-Meta/rules.lock" && [ -z "$(pre "$(bash_p "\"npm i\"")")" ] && [ "$(printf "%s" "$(bash_p "\"npm i\"")" | k hook pre-tool --harness claude 2>&1 >/dev/null | wc -l)" -eq 1 ]'
 cp "$TMP/lock.bak" "$VAULT/00-Meta/rules.lock"
 
 if command -v bun >/dev/null 2>&1; then
