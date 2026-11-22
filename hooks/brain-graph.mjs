@@ -1,6 +1,6 @@
-// brain-graph.mjs - rebuild the served vault graph: graphify + wikilink bridge + repo merge. Runtime: bun --bun.
-// Use this, not a bare `graphify update .`, which drops every cross-folder [[wikilink]] and leaves
-// merged-graph.json (what .mcp.json serves) stale. `--force` passes through to graphify.
+// brain-graph.mjs - rebuild the served graph: every repo's graphify graph merged into the vault's
+// graphify-out/merged-graph.json, what .mcp.json serves. Runtime: bun --bun.
+// The vault itself is not in it since vault audit Stage 3: `knowledge graph` answers vault links.
 import { rebuildGraph } from "./brain-lib.mjs";
 
-rebuildGraph({ force: process.argv.includes("--force") });
+rebuildGraph();

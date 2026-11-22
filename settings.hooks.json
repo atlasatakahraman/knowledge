@@ -3,7 +3,7 @@
     { "hooks": [{ "type": "command", "command": "{BUN} --bun {HOOKS}/brain-session.mjs" }] }
   ],
   "UserPromptSubmit": [
-    { "hooks": [{ "type": "command", "command": "{BUN} --bun {HOOKS}/brain-inject.mjs" }] }
+    { "hooks": [{ "type": "command", "command": "{KNOWLEDGE} hook prompt --harness claude" }] }
   ],
   "SessionEnd": [
     { "hooks": [{ "type": "command", "command": "{BUN} --bun {HOOKS}/brain-capture.mjs", "timeout": 10 }] }
@@ -18,7 +18,10 @@
     { "hooks": [{ "type": "command", "command": "{BUN} --bun {HOOKS}/brain-capture.mjs", "timeout": 10, "async": true }] }
   ],
   "PostToolUse": [
-    { "matcher": "Edit|Write", "hooks": [{ "type": "command", "command": "{BUN} --bun {HOOKS}/brain-reindex.mjs" }] },
+    { "matcher": "Edit|Write", "hooks": [
+      { "type": "command", "command": "{KNOWLEDGE} hook post-edit --harness claude" },
+      { "type": "command", "command": "{BUN} --bun {HOOKS}/brain-reindex.mjs", "async": true }
+    ] },
     { "matcher": "Bash", "hooks": [{ "type": "command", "command": "{BUN} --bun {HOOKS}/brain-commit.mjs", "timeout": 15, "async": true }] }
   ],
   "PostToolUseFailure": [

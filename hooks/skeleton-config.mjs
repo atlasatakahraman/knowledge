@@ -7,12 +7,14 @@
 //
 // Read from, in order:
 //   1. $KNOWLEDGE_CONFIG, if set (a temp HOME for an install test, a second vault)
-//   2. $XDG_CONFIG_HOME/knowledge/config.json (default ~/.config/knowledge/config.json), on every
+//   2. $KNOWLEDGE_HOME/config.json, if set (D16: the folder that also holds the binary's index)
+//   3. $XDG_CONFIG_HOME/knowledge/config.json (default ~/.config/knowledge/config.json), on every
 //      OS. Untracked, written by the installer. Not %APPDATA% on Windows: a packaged (MSIX) app such
 //      as Claude desktop has its %APPDATA% writes redirected into its own LocalCache, so a config
 //      written from inside it is invisible to a plain terminal, and the hooks failed there.
-//   3. brain-paths.mjs beside this file - the per-branch file this replaces; kept until every
+//   4. brain-paths.mjs beside this file - the per-branch file this replaces; kept until every
 //      machine has a config.json.
+// The knowledge binary (src/config.rs) resolves 1-3 in the same order, so the two cannot disagree.
 //
 // A missing or invalid config throws at MODULE LOAD, on purpose: every hook imports this through
 // brain-lib, and a hook that cannot find the vault has nothing useful to do silently.
@@ -38,7 +40,11 @@ const IS_WINDOWS = process.platform === "win32";
 
 export const CONFIG_PATH =
   process.env.KNOWLEDGE_CONFIG ||
+  (process.env.KNOWLEDGE_HOME && join(process.env.KNOWLEDGE_HOME, "config.json")) ||
   join(process.env.XDG_CONFIG_HOME || join(homedir(), ".config"), "knowledge", "config.json");
+
+/** Where the binary keeps vault-index.db: KNOWLEDGE_HOME, else the config's folder (K7). */
+export const KNOWLEDGE_HOME = process.env.KNOWLEDGE_HOME || dirname(CONFIG_PATH);
 
 /** Where Windows kept it before 2026-11-04; named in the error so an old machine is told to move it. */
 const OLD_WINDOWS_PATH = IS_WINDOWS && process.env.APPDATA ? join(process.env.APPDATA, "knowledge", "config.json") : "";

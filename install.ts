@@ -14,7 +14,7 @@
 // ~/.claude/.pre-skeleton-<stamp>/<same path>, and settings.json before a change is kept beside
 // the original as `settings.json.pre-skeleton-<stamp>`.
 // It installs graphify and context-mode when missing and never updates either: updates are opt-in.
-import { cpSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { homedir } from "node:os";
 import { spawnSync } from "node:child_process";
@@ -95,6 +95,8 @@ const PREREQS: Record<string, { linux: string; windows: string }> = {
   claude: { linux: "curl -fsSL https://claude.ai/install.sh | bash", windows: "irm https://claude.ai/install.ps1 | iex" },
   // syncRecords commits nothing without it: records push on their own, never unscanned.
   gitleaks: { linux: "your package manager (pacman -S gitleaks, brew install gitleaks)", windows: "winget install Gitleaks.Gitleaks" },
+  // The knowledge binary is built from this checkout; rust-toolchain.toml pins the version rustup fetches.
+  cargo: { linux: "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh", windows: "winget install Rustlang.Rustup" },
 };
 const bin: Record<string, string> = {};
 const missing = Object.keys(PREREQS).filter((name) => !(bin[name] = Bun.which(name) ?? ""));
@@ -277,18 +279,39 @@ link(join(ROOT, "skills", "brain"), join(CLAUDE, "skills", "brain"), true);
 for (const f of readdirSync(join(ROOT, "commands")).filter((f) => f.endsWith(".md")))
   link(join(ROOT, "commands", f), join(CLAUDE, "commands", f), false);
 
+// ---- 5b. the knowledge binary, built from this checkout -------------------------------------------
+
+// `cargo install --path`, so the binary is the source beside this file. Rebuilt only when that
+// source is newer than the installed binary: a release build with fat LTO takes about a minute.
+const KNOWLEDGE = join(process.env.CARGO_HOME || join(homedir(), ".cargo"), "bin", WIN ? "knowledge.exe" : "knowledge");
+{
+  const newest = (dir: string): number =>
+    Math.max(...readdirSync(dir, { withFileTypes: true }).map((e) => (e.isDirectory() ? newest(join(dir, e.name)) : statSync(join(dir, e.name)).mtimeMs)));
+  const source = Math.max(newest(join(ROOT, "src")), ...["Cargo.toml", "Cargo.lock", "rust-toolchain.toml"].map((f) => statSync(join(ROOT, f)).mtimeMs));
+  const version = () => sh(KNOWLEDGE, ["--version"]).out.split("\n").join(", ");
+  if (existsSync(KNOWLEDGE) && statSync(KNOWLEDGE).mtimeMs >= source) line("ok", "knowledge", version());
+  else if (dry) line("would", "knowledge", `cargo install --path ${ROOT} --locked`);
+  else {
+    const r = sh(bin.cargo, ["install", "--path", ROOT, "--locked", "--force"]);
+    // The hook block below points at this binary: without it every prompt hook would fail.
+    if (!r.ok || !existsSync(KNOWLEDGE)) die(`cargo install --path ${ROOT} --locked: ${r.err.split("\n").at(-1)}`);
+    line("set", "knowledge", version());
+  }
+}
+
 // ---- 6. hook block in ~/.claude/settings.json ----------------------------------------------------
 
 {
   const file = join(CLAUDE, "settings.json");
   const quote = (t: string) => (/\s/.test(t) ? `"${t}"` : t);
   const fill = (cmd: string) =>
-    cmd.split(" ").map((t) => quote(t.replace("{BUN}", fwd(process.execPath)).replace("{HOOKS}", fwd(HOOKS)))).join(" ");
+    cmd.split(" ").map((t) => quote(t.replace("{BUN}", fwd(process.execPath)).replace("{HOOKS}", fwd(HOOKS)).replace("{KNOWLEDGE}", fwd(KNOWLEDGE)))).join(" ");
   const block = JSON.parse(readFileSync(join(ROOT, "settings.hooks.json"), "utf8"));
   for (const groups of Object.values<any[]>(block)) for (const g of groups) for (const h of g.hooks) h.command = fill(h.command);
 
-  // Ours are the brain-* commands under ~/.claude/hooks; every other hook (a plugin's, the user's) stays.
-  const OURS = /[\\/]\.claude[\\/]hooks[\\/]brain-[\w-]+\.mjs/;
+  // Ours are the brain-* commands under ~/.claude/hooks and the knowledge binary's `hook` verb;
+  // every other hook (a plugin's, the user's) stays.
+  const OURS = /[\\/]\.claude[\\/]hooks[\\/]brain-[\w-]+\.mjs|[\\/]knowledge(\.exe)?"? hook /;
   const sig = (hooks: Record<string, any[]> = {}) =>
     Object.entries(hooks)
       .flatMap(([ev, gs]) => (gs ?? []).flatMap((g) => (g.hooks ?? []).filter((h: any) => OURS.test(h.command ?? ""))
@@ -429,7 +452,12 @@ const doctor = (...a: string[]) => {
     return null;
   }
 };
-if (dry) line("would", "first index", "brain-doctor --repair: commit notes, hubs, context-mode index, graph");
+if (dry) line("would", "vault index", `${fwd(KNOWLEDGE)} index`);
+else {
+  const r = sh(KNOWLEDGE, ["index"]);
+  line(!r.ok ? "FAIL" : / 0 added, 0 updated, 0 removed/.test(r.out) ? "ok" : "set", "vault index", r.ok ? r.out : r.err.split("\n").at(-1));
+}
+if (dry) line("would", "first index", "brain-doctor --repair: commit notes, hubs, vault index, repo graphs");
 else if (failed) line("skip", "first index", "a step above failed");
 else if ((report = doctor())?.ok) line("ok", "first index", "index and graph are current");
 else if (report && (report = doctor("--repair"))) {

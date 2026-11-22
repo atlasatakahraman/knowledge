@@ -10,10 +10,9 @@
 // Every failure of this system so far was SILENT - the retrieval hook never returned a vault note
 // for as long as it existed, and nothing noticed. Each check below exists because of one.
 // A `fail` check makes the report FAIL; a `warn` check is reported and does not.
-// --repair runs only what is safe to run twice and cannot lose data (spec D9): prune ghost index
-// rows, re-index, graph rebuild, hub regeneration. It never edits, moves or deletes a note.
-// A plain run writes one derived artifact too: the graph, when `graph-links` finds it stale.
-import { readdirSync, readFileSync, existsSync, writeFileSync, mkdirSync, realpathSync } from "node:fs";
+// --repair runs only what is safe to run twice and cannot lose data (spec D9): commit notes, hubs,
+// `knowledge index`, the repo-graph merge. It never edits, moves or deletes a note.
+import { readdirSync, readFileSync, existsSync, writeFileSync, mkdirSync, realpathSync, statSync } from "node:fs";
 import { join, basename, dirname, isAbsolute } from "node:path";
 import { homedir } from "node:os";
 import { execFileSync } from "node:child_process";
@@ -21,8 +20,9 @@ import {
   VAULT, DEV_ROOT, HOOKS, VAULT_LIKE, HOOK_EVENTS, FOLDERS, CONFIG,
   openDb, ftsMatch, vaultSearch, failures, logicalDate, notePath,
   repoList, recentCommits, recordedCommits, unrecorded, indexVault, pruneVaultIndex,
-  rebuildGraph, missingLinkEdges, wikilinkPairs, MERGED_GRAPH, skeletonPin, PIN_FILE, isRecordPath,
+  rebuildGraph, skeletonPin, PIN_FILE, isRecordPath,
   NOTE_EXEMPT as EXEMPT, walkVault as walk, linksOf, frontmatterOk, forwardLinks, brokenLinksIn,
+  knowledgeBin, knowledge,
 } from "./brain-lib.mjs";
 
 const pretty = process.argv.includes("--pretty");
@@ -30,8 +30,7 @@ const repair = process.argv.includes("--repair");
 const record = process.argv.includes("--record");
 const onlyAt = process.argv.indexOf("--only");
 const only = onlyAt === -1 ? null : new Set((process.argv[onlyAt + 1] || "").split(",").filter(Boolean));
-const FLOOR = -6; // must match brain-inject: a hit it would not show is a miss here too
-const GRACE_MS = 10 * 60_000; // brain-reindex is debounced; a note written a minute ago is fine
+const GRACE_MS = 10 * 60_000; // compile and a pull index detached; a note written a minute ago is fine
 
 /**
  * Ground truth, owned by the vault: [{ "query": "...", "note": "<basename>" }]. Keyed by basename,
@@ -47,49 +46,38 @@ const isRootFile = (p) => !rel(p).includes("\\") && !rel(p).includes("/");
 
 // ---- checks -------------------------------------------------------------------------------------
 
-function checkIndex({ notes }) {
-  const { file } = vaultSearch(ftsMatch("vault notes"));
-  if (!file) return { id: "vault-index", level: "fail", ok: false, detail: { reason: "no content DB holds any vault source" } };
-  let rows = [];
-  let dead = 0;
-  let db;
-  try {
-    db = openDb(file);
-    rows = db.prepare(`SELECT file_path, indexed_at FROM sources WHERE file_path LIKE ?`).all(VAULT_LIKE);
-    dead = db.prepare(`SELECT count(*) c FROM sources WHERE file_path LIKE '%00-Brain%'`).get().c;
-  } finally {
-    try { db?.close(); } catch {}
-  }
-  const indexed = new Map(rows.map((r) => [String(r.file_path).toLowerCase(), Date.parse(`${r.indexed_at.replace(" ", "T")}Z`)]));
-  const unindexed = [];
-  const pending = []; // unindexed but younger than GRACE_MS: brain-reindex's debounce has not fired yet
-  const stale = [];
-  // context-mode's chunker splits on "\n" and its heading regex fails on a trailing "\r": a CRLF
-  // note is indexed as ONE chunk and loses every ranking. Found 2026-09-22 (retrieval fell to 5/6).
-  const crlf = [];
-  for (const [key, n] of notes) {
-    const at = indexed.get(key);
-    if (at === undefined) (Date.now() - n.mtime < GRACE_MS ? pending : unindexed).push(n.path);
-    else if (n.mtime > at + GRACE_MS) stale.push(n.path);
-    if (readFileSync(n.path, "utf8").includes("\r\n")) crlf.push(n.path);
-  }
-  const ghosts = rows.map((r) => String(r.file_path)).filter((p) => !/00-Brain/i.test(p) && !notes.has(p.toLowerCase()));
+/**
+ * The binary's index (D11) against the disk: a row for every note, no ghost, none stale. A note
+ * written in the last GRACE_MS by a detached writer (compile, a pull) is pending, not a failure.
+ */
+function checkIndex() {
+  if (!knowledgeBin()) return { id: "vault-index", level: "fail", ok: false, detail: { reason: "knowledge binary not installed: run install.ts" } };
+  const r = JSON.parse(knowledge(["index", "--check", "--json"], { ok: [0, 1] }));
+  const fresh = (p) => {
+    try {
+      return Date.now() - statSync(join(VAULT, p)).mtimeMs < GRACE_MS;
+    } catch {
+      return false;
+    }
+  };
+  const missing = r.missing.filter((p) => !fresh(p));
+  const stale = r.stale.filter((p) => !fresh(p));
   return {
     id: "vault-index", level: "fail",
-    ok: !unindexed.length && !stale.length && !dead && !ghosts.length && !crlf.length,
+    ok: !missing.length && !stale.length && !r.ghosts.length,
     detail: {
-      db: basename(file), notes: notes.size, rows: rows.length, deadRows: dead, ghostRows: ghosts.length,
-      unindexed: unindexed.length, pending: pending.length, stale: stale.length, crlf: crlf.length,
+      notes: r.notes, rows: r.rows, ghosts: r.ghosts.length, missing: missing.length, stale: stale.length,
+      pending: r.missing.length + r.stale.length - missing.length - stale.length,
       samples: [
-        ...unindexed.slice(0, 5).map((p) => `unindexed: ${rel(p)}`),
-        ...stale.slice(0, 5).map((p) => `stale: ${rel(p)}`),
-        ...ghosts.slice(0, 5).map((p) => `ghost: ${rel(p)}`),
-        ...crlf.slice(0, 5).map((p) => `crlf: ${rel(p)}`),
+        ...missing.slice(0, 5).map((p) => `missing: ${p}`),
+        ...stale.slice(0, 5).map((p) => `stale: ${p}`),
+        ...r.ghosts.slice(0, 5).map((p) => `ghost: ${p}`),
       ],
     },
   };
 }
 
+/** Each case's note is among the six the prompt hook would inject, asked through the binary. */
 function checkRetrieval() {
   let cases;
   try {
@@ -99,10 +87,11 @@ function checkRetrieval() {
   }
   if (!Array.isArray(cases) || !cases.length || !cases.every((c) => c?.query && c?.note))
     return { id: "retrieval", level: "fail", ok: false, detail: { reason: `${rel(CASES_FILE)}: want a non-empty array of {"query", "note"}` } };
+  if (!knowledgeBin()) return { id: "retrieval", level: "fail", ok: false, detail: { reason: "knowledge binary not installed: run install.ts" } };
   const failed = [];
   for (const { query: q, note: want } of cases) {
-    const got = vaultSearch(ftsMatch(q)).rows.filter((r) => r.rank < FLOOR).map((r) => basename(String(r.path), ".md"));
-    if (!got.includes(want)) failed.push({ q, want, got: [...new Set(got)].slice(0, 4) });
+    const got = JSON.parse(knowledge(["find", q, "--json", "--limit", "6"])).map((h) => h.name);
+    if (!got.includes(want)) failed.push({ q, want, got: got.slice(0, 4) });
   }
   return { id: "retrieval", level: "fail", ok: !failed.length, detail: { passed: cases.length - failed.length, total: cases.length, failed } };
 }
@@ -138,6 +127,20 @@ function checkSessions() {
 function checkAuth() {
   const f = failures();
   return { id: "auth", level: "fail", ok: !Object.keys(f).length, detail: Object.fromEntries(Object.entries(f).map(([k, v]) => [k, v.reason])) };
+}
+
+/**
+ * Portability (D16): the traps that break the vault on the other boot, checked by the binary
+ * (`knowledge doctor --only portable`). Before the binary is installed this is a WARN, not a FAIL.
+ */
+function checkPortable() {
+  if (!knowledgeBin()) return { id: "portable", level: "warn", ok: false, detail: { reason: "knowledge binary not installed" } };
+  try {
+    const r = JSON.parse(knowledge(["doctor", "--only", "portable", "--json"], { ok: [0, 1] }));
+    return { id: "portable", level: "fail", ok: r.ok, detail: { files: r.files, findings: r.findings } };
+  } catch (e) {
+    return { id: "portable", level: "fail", ok: false, detail: { reason: e.message } };
+  }
 }
 
 /** Pull trust (0039): unset is a WARN, the rollout's last step. Set, every piece it needs must be there. */
@@ -299,24 +302,6 @@ function checkSkeletonVersion() {
   };
 }
 
-/** Every [[wikilink]] between two notes is an edge in the served graph (graphify drops cross-folder links). */
-function checkGraphLinks() {
-  const scan = () => missingLinkEdges(JSON.parse(readFileSync(MERGED_GRAPH, "utf8")), "root::");
-  let missing = scan();
-  // A link written since the last rebuild is a stale graph, not a broken bridge: rebuild once and
-  // re-check, so only an edge the rebuild still drops fails (2026-10-10, a fresh session-log link).
-  // Only when something is missing, so a clean graph costs nothing. --repair skips it: its own graph
-  // step rebuilds before the after-check, and the before-check should report the stale state.
-  let rebuilt = false;
-  if (missing.length && !repair) {
-    try { rebuildGraph(); rebuilt = true; missing = scan(); } catch {}
-  }
-  return {
-    id: "graph-links", level: "fail", ok: !missing.length,
-    detail: { pairs: wikilinkPairs().size, missing: missing.length, rebuilt, samples: missing.slice(0, 5).map(({ from, to }) => `${from} -> ${to}`) },
-  };
-}
-
 /** Reported, not failed: normal mid-day, but worth seeing every day. */
 function checkHygiene() {
   const out = {};
@@ -365,8 +350,9 @@ function checkHygiene() {
 const CHECKS = {
   "vault-index": checkIndex, retrieval: checkRetrieval, sessions: checkSessions, auth: checkAuth,
   frontmatter: checkFrontmatter, links: checkLinks, reach: checkReach, ignores: checkIgnores,
-  commits: checkCommits, priming: checkPriming, "graph-links": checkGraphLinks,
+  commits: checkCommits, priming: checkPriming,
   "skeleton-version": checkSkeletonVersion, hygiene: checkHygiene, "pull-trust": checkPullTrust,
+  portable: checkPortable,
 };
 if (only) {
   const unknown = [...only].filter((id) => !(id in CHECKS));
@@ -400,12 +386,11 @@ function runRepairs() {
     // Commits made outside a Claude Bash call (terminal, PowerShell, other hooks) get no PostToolUse
     // note; the sweep records them here, before reindex so the new notes are indexed.
     ["commits", () => execFileSync(process.execPath, ["--bun", join(HOOKS, "brain-commit.mjs"), "--backfill", since], { timeout: 120_000, stdio: "ignore", windowsHide: true })],
-    // Hubs read the filesystem only, and write MOC links (a new day's [[YYYY-MM-DD]]) that reindex and
-    // graph must see. Run after them and the graph misses those links: graph-links FAIL, 2026-10-10.
+    // Hubs read the filesystem only, and write MOC links (a new day's [[YYYY-MM-DD]]) that the index
+    // must see, so the reindex runs after them.
     ["hubs", () => execFileSync(process.execPath, ["--bun", join(HOOKS, "brain-hubs.mjs")], { timeout: 60_000, stdio: "ignore", windowsHide: true })],
-    ["prune", () => pruneVaultIndex()],
-    ["reindex", () => indexVault()],
-    ["graph", () => rebuildGraph()], // graphify + wikilink bridge + merge into the served graph
+    ["reindex", () => knowledge(["index"])],
+    ["graph", () => rebuildGraph()], // the repo graphs, merged into the served graph
   ];
   return steps.map(([step, fn]) => {
     const t = Date.now();
@@ -451,7 +436,10 @@ function writeRecord(report) {
   // This write lands AFTER the checks and repairs, and a script write fires no reindex hook. Without
   // re-deriving here, a month's first file is an orphan and every day's line goes `stale` 10 min later.
   if (created) try { execFileSync(process.execPath, ["--bun", join(HOOKS, "brain-hubs.mjs")], { timeout: 60_000, stdio: "ignore", windowsHide: true }); } catch {}
-  try { indexVault(); } catch {} // after the hubs, so a regenerated hub is indexed too
+  // After the hubs, so a regenerated hub is indexed too. The binary's index for retrieval, and once
+  // a day context-mode's copy, which ctx_search reads in a session launched in the vault.
+  try { knowledge(["index"]); } catch {}
+  try { pruneVaultIndex(); indexVault(); } catch {}
   return rel(file);
 }
 

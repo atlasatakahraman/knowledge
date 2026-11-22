@@ -14,7 +14,7 @@ import { spawn, spawnSync } from "node:child_process";
 import {
   VAULT, DEV_ROOT, HOOKS, sessionDbs, failures, HOOK_EVENTS, ledgerRead, logicalDate, FOLDERS, CONFIG,
   PIN_FILE, skeletonPin, compareVersions, withLock, syncRecords, recordFailure, clearFailure,
-  tipTrusted, UNTRUSTED_TIP,
+  tipTrusted, UNTRUSTED_TIP, knowledgeIndex, knowledgeBin,
 } from "./brain-lib.mjs";
 
 /**
@@ -109,14 +109,14 @@ function vaultPull() {
   if (process.env.CLAUDE_INVOKED_BY || process.argv.includes("--dry")) return null;
   const r = ffPull(VAULT);
   const n = pulledByRecords + (r.n || 0);
-  if (n) spawn(process.execPath, ["--bun", join(HOOKS, "brain-reindex.mjs"), "--vault"], { detached: true, stdio: "ignore", windowsHide: true }).unref();
+  if (n) knowledgeIndex();
   if (r.busy) return null;
   if (r.skipped) return "!! VAULT PULL skipped: uncommitted changes. Commit or stash, then `git pull --ff-only`.";
   if (r.failed) return `!! VAULT PULL failed: ${r.failed}. Pull by hand before editing.`;
   if (r.refused) return refused("pull-vault", "VAULT");
   clearFailure("pull-vault");
   if (!n) return null;
-  return `Vault pulled ${n} commit${n === 1 ? "" : "s"} from origin (the other OS may have written since). Reindex scheduled.`;
+  return `Vault pulled ${n} commit${n === 1 ? "" : "s"} from origin (the other OS may have written since). Reindexed.`;
 }
 
 /**
@@ -384,6 +384,7 @@ try {
       "Tell the user in the first reply; a `claude -p` auth failure needs them to run `claude` and /login.",
   );
 
+  const kbin = (knowledgeBin() || "knowledge").replace(/\\/g, "/");
   const ctx = [
     ...failing.flatMap((l) => [l, ""]),
     ...(records ? [records, ""] : []),
@@ -399,22 +400,21 @@ try {
     "through ~/.claude/CLAUDE.md imports and are authoritative about who the user is and the rules.",
     "",
     "Retrieval order for anything else - do not skip tiers:",
-    "  0. Note names injected on each prompt by brain-inject - vault notes only. Follow one into the file.",
+    "  0. Note names injected on each prompt by the knowledge hook - vault notes only. Follow one into the file.",
     "  1. 00-MOC-Root -> the 00-MOC-* it points to -> the note",
-    "  2. ctx_search - see the warning below",
-    '  3. graphify query "<q>" --budget 1500 - how things connect',
+    `  2. ${kbin} find "<q>" - ranked notes, each with its best passage`,
+    `  3. ${kbin} graph <note> [<note>] - a note's links in and out, or the path between two`,
     "  4. Read one named file",
     "",
-    "ctx_search reaches the vault ONLY in a session launched in the vault. Its `project` parameter",
-    "does not redirect it (measured 2026-09-21, context-mode v1.0.169): from anywhere else it returns",
-    "this session's own events, never vault notes - even though the index is complete. Outside the",
-    `vault, tier 0 then tier 4 is the working path. Details: ${FOLDERS.meta}/Hard-Rules.md § Tooling.`,
+    "Tiers 2 and 3 read the vault index, so they work from any folder. ctx_search reaches the vault",
+    "only in a session launched in it (its `project` parameter does not redirect it, measured",
+    `2026-09-21), and that copy is refreshed daily. Details: ${FOLDERS.meta}/Hard-Rules.md § Tooling.`,
     "Check retrieval any time, zero tokens: bun --bun ~/.claude/hooks/brain-doctor.mjs --pretty",
     "",
     `The vault is notes only - the checkouts moved to ${join(DEV_ROOT, "<remote-name>")} on 2026-09-06.`,
     `Do NOT sweep ${DEV_ROOT} blind: that is where node_modules and target/ live. Repo docs are indexed`,
     "per repo (searchable via ctx_search in a session launched in that repo) and reachable through",
-    "the merged graph, so a blind sweep is the wrong tool there too.",
+    "the merged graph of repo graphs, so a blind sweep is the wrong tool there too.",
   ].join("\n");
 
   process.stdout.write(

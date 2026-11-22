@@ -10,7 +10,7 @@ import { readFileSync, writeFileSync, existsSync, readdirSync } from "node:fs";
 import { join, basename } from "node:path";
 import { createHash } from "node:crypto";
 import { execFileSync, spawn } from "node:child_process";
-import { notePath, VAULT, DEV_ROOT, HOOKS, STATE_DIR, recordFailure, clearFailure, linksOf, FOLDERS } from "./brain-lib.mjs";
+import { notePath, VAULT, DEV_ROOT, HOOKS, STATE_DIR, recordFailure, clearFailure, linksOf, FOLDERS, knowledgeIndex } from "./brain-lib.mjs";
 
 const STATE = join(VAULT, FOLDERS.ops, "brain-compile-state.json");
 const SESSIONS = join(VAULT, FOLDERS.sessions);
@@ -251,17 +251,10 @@ try {
   }
 
   // F2: this compiler is the vault's largest writer, and it writes through a guard()ed
-  // `claude -p` whose PostToolUse hooks exit immediately - so brain-reindex never saw a single
-  // one of its writes, and everything it produced was unsearchable until some unrelated edit
-  // happened to trigger a reindex. Schedule it here, and only when something was actually written.
-  // brain-reindex does not call guard(), so inheriting CLAUDE_INVOKED_BY is harmless.
-  if (mine.length) {
-    spawn(process.execPath, ["--bun", join(HOOKS, "brain-reindex.mjs"), "--vault"], {
-      detached: true,
-      stdio: "ignore",
-      windowsHide: true,
-    }).unref();
-  }
+  // `claude -p` whose PostToolUse hooks exit immediately - so the post-edit hook never sees a
+  // single one of its writes, and everything it produced was unsearchable until some unrelated
+  // edit happened to trigger a reindex. Index here, and only when something was actually written.
+  if (mine.length) knowledgeIndex();
 
   // Re-hash AFTER the run: the compiler sometimes edits the log it just read, and storing the
   // pre-run hash would make that log look uncompiled forever.

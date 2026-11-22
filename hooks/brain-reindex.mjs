@@ -1,14 +1,12 @@
-// brain-reindex.mjs - PostToolUse(Edit|Write). Trailing-debounce rebuild of both indexes.
-// Runtime is bun (`bun --bun`), per 00-Meta/Hard-Rules.
-// Spec: [[2026-08-22-brain-memory-compiler]] (vault plan).
+// brain-reindex.mjs - PostToolUse(Edit|Write), async. Trailing-debounce reindex of repo docs into
+// context-mode. Runtime is bun (`bun --bun`), per 00-Meta/Hard-Rules.
+// Spec: [[2026-08-22-brain-memory-compiler]] (vault plan). The vault half (its index, the write-time
+// check, graphify) moved to the knowledge binary in vault audit Stage 3: `knowledge hook post-edit`.
 import { readFileSync, writeFileSync, unlinkSync, existsSync, readdirSync } from "node:fs";
-import { join, sep, basename } from "node:path";
+import { join, sep } from "node:path";
 import { tmpdir } from "node:os";
 import { spawn, execFileSync } from "node:child_process";
-import {
-  readStdin, normDir, VAULT, HOOKS, DEV_ROOT, contextModeCli, INDEX_EXCLUDES, indexVault, pruneVaultIndex,
-  NOTE_EXEMPT, walkVault, frontmatterOk, brokenLinksIn, rebuildGraph, FOLDERS,
-} from "./brain-lib.mjs";
+import { readStdin, normDir, HOOKS, DEV_ROOT, contextModeCli, INDEX_EXCLUDES } from "./brain-lib.mjs";
 
 const STAMP = join(tmpdir(), "brain-reindex.json");
 const DEBOUNCE_MS = 90_000;
@@ -67,29 +65,14 @@ function indexRepoDocs(root) {
   } catch {}
 }
 
-/**
- * Record what changed and start a settler if none is running. `vault` and `repos` accumulate
- * across edits inside one debounce window, so a vault edit and a repo edit settle together.
- */
-function schedule({ vault = false, repo = null }) {
+/** Record the repo and start a settler if none is running; repos accumulate across one window. */
+function schedule(repo) {
   const prev = read();
   const lockLive = prev?.lock && Date.now() - prev.lock < LOCK_STALE_MS;
-  const repos = [...new Set([...(prev?.repos ?? []), ...(repo ? [repo] : [])])];
   // Always refresh `at` so a live settler extends its wait instead of firing early.
-  write({
-    at: Date.now(),
-    lock: lockLive ? prev.lock : Date.now(),
-    // A stamp from before this field existed meant "the vault changed".
-    vault: vault || (prev ? prev.vault !== false : false),
-    repos,
-  });
-  if (!lockLive) {
-    const c = spawn(process.execPath, ["--bun", join(HOOKS, "brain-reindex.mjs"), "--settle"], {
-      detached: true,
-      ...QUIET,
-    });
-    c.unref();
-  }
+  write({ at: Date.now(), lock: lockLive ? prev.lock : Date.now(), repos: [...new Set([...(prev?.repos ?? []), repo])] });
+  if (!lockLive)
+    spawn(process.execPath, ["--bun", join(HOOKS, "brain-reindex.mjs"), "--settle"], { detached: true, ...QUIET }).unref();
 }
 
 /**
@@ -111,29 +94,6 @@ function repoRoot(path) {
   }
 }
 
-/**
- * Write-time check for a vault note: frontmatter `type` + `created`, and every [[link]] resolves
- * (or is in 00-Meta/Forward-Links.md). The same rules as brain-doctor's `frontmatter` and `links`,
- * from brain-lib. Reported to the agent as context - never blocks the write.
- * Lives here, not in a separate hook, because this hook already runs on every vault Edit|Write:
- * a second hook on the same matcher would cost a second bun start (~330 ms) per write.
- */
-function validateNote(file) {
-  const name = basename(file);
-  if (!name.endsWith(".md") || NOTE_EXEMPT.test(name)) return null;
-  let text;
-  try {
-    text = readFileSync(file, "utf8");
-  } catch {
-    return null;
-  }
-  const problems = [];
-  if (!frontmatterOk(text)) problems.push("frontmatter needs `type` and `created`");
-  const broken = [...new Set(brokenLinksIn(walkVault())(text))];
-  if (broken.length) problems.push(`links to nothing: ${broken.map((b) => `[[${b}]]`).join(", ")} — fix, or list as intentional in ${FOLDERS.meta}/Forward-Links.md`);
-  return problems.length ? `brain-validate ${name}: ${problems.join("; ")}. Conventions: ${FOLDERS.meta}/Conventions.md.` : null;
-}
-
 if (process.argv.includes("--settle")) {
   // Trailing debounce: keep waiting while edits are still arriving, then run once.
   (async () => {
@@ -146,24 +106,7 @@ if (process.argv.includes("--settle")) {
           await sleep(DEBOUNCE_MS - quiet);
           continue; // re-check: more edits may have landed while sleeping
         }
-        // Repo docs first: cheap, and the reason this hook fires most days now.
         for (const repo of s.repos ?? []) indexRepoDocs(repo);
-        if (s.vault === false) break; // only repo docs changed; the vault indexes are current
-        // The FTS index before graphify: it takes seconds, and it is what retrieval and brain-doctor
-        // read. After graphify it waited on the slow graph rebuild, so fresh notes stayed unindexed
-        // longer. Prune first: indexing never drops a row, so a note deleted or moved outside
-        // Edit|Write stayed a ghost (doctor FAIL) until the daily sweep (2026-11-03).
-        try {
-          pruneVaultIndex();
-        } catch {}
-        try {
-          indexVault();
-        } catch {}
-        // graphify, the wikilink bridge, and the re-merge into merged-graph.json (what .mcp.json
-        // serves) - one shared function, so every rebuild path gets all three.
-        try {
-          rebuildGraph();
-        } catch {}
         break;
       }
     } catch {}
@@ -175,32 +118,9 @@ if (process.argv.includes("--settle")) {
     // `--repo <root>`: brain-commit's entry, for markdown committed by any means — an edit made
     // through a shell script never reaches the Edit|Write matcher.
     const flag = process.argv.indexOf("--repo");
-    if (flag !== -1) {
-      const root = process.argv[flag + 1];
-      if (root && repoRoot(normDir(root))) schedule({ repo: repoRoot(normDir(root)) });
-      process.exit(0);
-    }
-
-    // `--vault`: brain-compile's entry. The compiler writes through a guard()ed `claude -p`, so
-    // its Writes never reach this hook's PostToolUse matcher - the vault's largest writer was
-    // invisible to reindexing by construction (F2). It now schedules the reindex itself.
-    if (process.argv.includes("--vault")) {
-      schedule({ vault: true });
-      process.exit(0);
-    }
-
-    const input = readStdin();
-    const path = normDir(input.tool_input?.file_path || "");
-    if (!path) process.exit(0);
-    if (EXCLUDES.some((e) => path.includes(`${sep}${e}${sep}`))) process.exit(0);
-
-    if (path.startsWith(normDir(VAULT))) {
-      schedule({ vault: true });
-      const problem = validateNote(String(input.tool_input?.file_path || ""));
-      if (problem)
-        process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: "PostToolUse", additionalContext: problem } }));
-    }
-    else if (path.endsWith(".md") && repoRoot(path)) schedule({ repo: repoRoot(path) });
+    const path = normDir(flag !== -1 ? process.argv[flag + 1] || "" : readStdin().tool_input?.file_path || "");
+    const root = path && repoRoot(path);
+    if (root && (flag !== -1 || (path.endsWith(".md") && !EXCLUDES.some((e) => path.includes(`${sep}${e}${sep}`))))) schedule(root);
   } catch {}
   process.exit(0);
 }

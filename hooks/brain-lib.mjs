@@ -4,7 +4,7 @@
 import { readFileSync, existsSync, mkdirSync, writeFileSync, readdirSync, appendFileSync, statSync, copyFileSync, realpathSync, openSync, closeSync, rmSync } from "node:fs";
 import { join, dirname, basename, relative } from "node:path";
 import { homedir, tmpdir } from "node:os";
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { Database } from "bun:sqlite";
 
 /**
@@ -150,6 +150,42 @@ export function normDir(p) {
   const s = String(p || "");
   if (!IS_WINDOWS) return s.replace(/\/+$/, "");
   return s.replace(/\//g, "\\").replace(/\\+$/, "").toLowerCase();
+}
+
+/**
+ * The knowledge binary: $KNOWLEDGE_BIN, else where `cargo install` puts it. Not looked up on
+ * PATH: a hook runs with the harness's PATH, and whether ~/.cargo/bin is on it is not assumed.
+ */
+export function knowledgeBin() {
+  const exe = IS_WINDOWS ? "knowledge.exe" : "knowledge";
+  const cargo = join(process.env.CARGO_HOME || join(homedir(), ".cargo"), "bin", exe);
+  return [process.env.KNOWLEDGE_BIN, cargo].find((p) => p && existsSync(p)) || "";
+}
+
+/**
+ * Run the binary synchronously: its stdout, or a throw (missing binary, an unexpected exit code).
+ * `ok` lists the exit codes that are an answer rather than a failure (a doctor check's 1).
+ */
+export function knowledge(args, { ok = [0], timeout = 60_000 } = {}) {
+  const bin = knowledgeBin();
+  if (!bin) throw new Error("knowledge binary not found: run install.ts");
+  const r = spawnSync(bin, args, { encoding: "utf8", timeout, windowsHide: true });
+  if (r.error) throw r.error;
+  if (!ok.includes(r.status)) throw new Error(`knowledge ${args.join(" ")}: exit ${r.status}: ${r.stderr.trim()}`);
+  return r.stdout;
+}
+
+/**
+ * Bring the binary's vault index level with the disk, detached (about 0.2 s, 1 s for a rebuild).
+ * For writers that never reach `knowledge hook post-edit`: a pull, brain-compile's `claude -p`,
+ * brain-commit's notes. No binary: nothing; the doctor's `vault-index` check says so.
+ */
+export function knowledgeIndex() {
+  const bin = knowledgeBin();
+  if (!bin) return;
+  try {
+    spawn(bin, ["index"], { detached: true, stdio: "ignore", windowsHide: true }).unref();
+  } catch {}
 }
 
 /**
@@ -796,89 +832,24 @@ export function ledgerSet(src, patch) {
   return true;
 }
 
-// ---- graph: the wikilinks graphify drops -----------------------------------------------------------
+// ---- graph: the repo graphs, merged for the graphify MCP --------------------------------------------
 
-const GRAPH = join(VAULT, "graphify-out", "graph.json");
 export const MERGED_GRAPH = join(VAULT, "graphify-out", "merged-graph.json");
 
 /**
- * Note pairs the vault's [[wikilinks]] connect, resolved by note name anywhere in the vault, the way
- * Obsidian does. graphify 0.9.47 (extractors/markdown.py `_resolve_md_link`) resolves `[[Note]]` as
- * a sibling file only, so every cross-folder link was dropped: 3680 of 4346 (2026-10-10).
- * Keyed by the two vault-relative paths, sorted - the graph is undirected.
+ * The served graph is the repo graphs only, merged into merged-graph.json, what .mcp.json serves.
+ * The vault left graphify in vault audit Stage 3: its links are the binary's (`knowledge graph`),
+ * read from the index, so no 54 s rebuild and no wikilink bridge. Repo graphs are built on demand;
+ * a repo with no graphify-out yet is absent from the merge.
  */
-export function wikilinkPairs() {
-  const { notes } = walkVault();
-  const rel = (p) => relative(VAULT, p).split(/[\\/]/).join("/");
-  const byName = new Map();
-  for (const n of notes.values()) {
-    const k = basename(n.path, ".md").toLowerCase();
-    byName.set(k, [...(byName.get(k) ?? []), n.path]);
-  }
-  // A name used twice: the note in the linking note's folder, else the shortest path (Obsidian's order).
-  const resolve = (from, name) => {
-    const c = byName.get(name.toLowerCase());
-    return c && (c.find((p) => dirname(p) === dirname(from)) ?? [...c].sort((a, b) => a.length - b.length)[0]);
-  };
-  const pairs = new Map();
-  for (const n of notes.values())
-    for (const name of linksOf(readFileSync(n.path, "utf8"))) {
-      const to = resolve(n.path, name);
-      if (!to || to === n.path) continue;
-      const ends = [rel(n.path), rel(to)].sort();
-      pairs.set(ends.join("|"), { from: rel(n.path), to: rel(to) });
-    }
-  return pairs;
-}
-
-/** Page-node ids by vault-relative path, and every connected id pair, of a graph file. */
-function graphIndex(g, prefix = "") {
-  const page = new Map(
-    g.nodes.filter((n) => n.node_kind === "page" && String(n.id).startsWith(prefix)).map((n) => [n.source_file, n.id]),
-  );
-  const has = new Set(g.links.flatMap((e) => [`${e.source}|${e.target}`, `${e.target}|${e.source}`]));
-  return { page, has };
-}
-
-/** Wikilink pairs with both notes in the graph but no edge between them. `prefix`: "root::" in the merge. */
-export function missingLinkEdges(g, prefix = "") {
-  const { page, has } = graphIndex(g, prefix);
-  return [...wikilinkPairs().values()].filter(({ from, to }) => {
-    const [s, t] = [page.get(from), page.get(to)];
-    return s && t && !has.has(`${s}|${t}`);
-  });
-}
-
-/** Adds the wikilink edges graphify dropped to the vault's graph.json, in place. Idempotent. */
-export function bridgeWikilinks(file = GRAPH) {
-  const raw = readFileSync(file, "utf8");
-  const g = JSON.parse(raw);
-  const { page } = graphIndex(g);
-  const add = missingLinkEdges(g);
-  for (const { from, to } of add)
-    g.links.push({
-      source: page.get(from), target: page.get(to), relation: "references", _origin: "wikilink-bridge",
-      confidence: "EXTRACTED", confidence_score: 1, context: "wikilink", source_file: from, source_location: "L1", weight: 1,
-    });
-  if (add.length) writeFileSync(file, JSON.stringify(g, null, raw.startsWith("{\n") ? 2 : 0), "utf8");
-  return add.length;
-}
-
-/**
- * The one way the served graph is rebuilt: graphify, the wikilink bridge, then the merge with every
- * repo graph into merged-graph.json - what .mcp.json serves. A bare `graphify update .` skips the
- * last two; brain-doctor's `graph-links` check catches that.
- */
-export function rebuildGraph({ force = false } = {}) {
-  const q = { cwd: VAULT, timeout: 600_000, stdio: "ignore", windowsHide: true };
-  execFileSync("graphify", ["update", ".", ...(force ? ["--force"] : [])], q);
-  bridgeWikilinks();
-  // Repo graphs are built on demand: a repo with no graphify-out yet is absent from the merge.
+export function rebuildGraph() {
   const repoGraphs = readdirSync(DEV_ROOT, { withFileTypes: true })
     .filter((e) => e.isDirectory())
     .map((e) => join(DEV_ROOT, e.name, "graphify-out", "graph.json"))
     .filter((p) => existsSync(p));
-  // No repo graph yet (a fresh machine): the vault graph alone is what gets served.
-  if (repoGraphs.length) execFileSync("graphify", ["merge-graphs", GRAPH, ...repoGraphs, "--out", MERGED_GRAPH], q);
-  else copyFileSync(GRAPH, MERGED_GRAPH);
+  mkdirSync(dirname(MERGED_GRAPH), { recursive: true });
+  if (repoGraphs.length > 1)
+    execFileSync("graphify", ["merge-graphs", ...repoGraphs, "--out", MERGED_GRAPH], { cwd: VAULT, timeout: 600_000, stdio: "ignore", windowsHide: true });
+  else if (repoGraphs.length) copyFileSync(repoGraphs[0], MERGED_GRAPH);
+  else writeFileSync(MERGED_GRAPH, JSON.stringify({ directed: false, multigraph: false, graph: {}, nodes: [], links: [] }));
 }

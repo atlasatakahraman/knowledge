@@ -14,7 +14,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync } from 
 import { join, basename } from "node:path";
 import { execFileSync } from "node:child_process";
 import {
-  readStdin, logicalDate, VAULT, HOOKS, repoList, recentCommits, recordedCommits, quoteDeadLinks, unrecorded, OS_TAG, FOLDERS, isRecordPath,
+  readStdin, logicalDate, VAULT, HOOKS, repoList, recentCommits, recordedCommits, quoteDeadLinks, unrecorded, OS_TAG, FOLDERS, isRecordPath, knowledgeIndex,
 } from "./brain-lib.mjs";
 
 const dry = process.argv.includes("--dry-run");
@@ -214,18 +214,16 @@ try {
   }
   for (const m of months) writeIndex(m);
 
-  // These notes are written by this script, not by the Edit/Write tools, so brain-reindex's
-  // PostToolUse matcher never sees them — the same blind spot F2 fixed for the compiler.
-  // Sequential, not spawned in parallel: two `schedule()` calls racing on the reindex state file
-  // can drop one of them.
+  // These notes are written by this script, not by the Edit/Write tools, so the PostToolUse hooks
+  // never see them — the same blind spot F2 fixed for the compiler. The vault index is the
+  // binary's; repo docs go through brain-reindex. Sequential, not spawned in parallel: two
+  // `schedule()` calls racing on the reindex state file can drop one of them.
   if (written) {
-    const reindex = (...a) => {
+    knowledgeIndex();
+    for (const r of mdRepos)
       try {
-        execFileSync(process.execPath, ["--bun", join(HOOKS, "brain-reindex.mjs"), ...a], { stdio: "ignore", windowsHide: true, timeout: 10_000 });
+        execFileSync(process.execPath, ["--bun", join(HOOKS, "brain-reindex.mjs"), "--repo", r], { stdio: "ignore", windowsHide: true, timeout: 10_000 });
       } catch {}
-    };
-    reindex("--vault");
-    for (const r of mdRepos) reindex("--repo", r);
   }
 } catch {
   /* a logging hook must never break a session */
