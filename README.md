@@ -62,8 +62,13 @@ the OS trust store (`rustls-platform-verifier`, no bundled root list) and `htmd`
 | `knowledge events <transcript.jsonl> [--json]` | a session's decisions, constraints, plans and refusals, for `brain-flush` |
 | `knowledge inject <prompt>` | what the prompt hook would add to a prompt |
 | `knowledge graph <note> [<note>]` | a note's links in and out, or the shortest path between two |
-| `knowledge hook prompt\|post-edit --harness claude` | the hooks themselves: JSON on stdin, always exit 0 |
+| `knowledge hook prompt\|post-edit\|pre-tool --harness claude` | the hooks themselves: JSON on stdin, always exit 0 |
+| `knowledge rules list [--json] \| kernel` | the packs, rules and guards in the lock; the rules that are code, not text |
+| `knowledge rules check [--staged] [--restore]` | Hard-Rules against the lock; the staged copy and the guards' backstops; a changed rule back from `HEAD` |
+| `knowledge rules lock [--seed <file>] \| enable\|disable <pack>` | re-stamps the lock after the owner edits Hard-Rules; turns a pack's guards on or off |
 | `knowledge doctor --only portable [--json]` | names and paths that break on the other OS |
+| `knowledge doctor budget [<transcript>] [--json]` | what a session's start cost, by source, and listings unused in 30 days |
+| `knowledge doctor profile <note>` | the per-project settings that leave unlisted connectors off |
 
 Three files in `$KNOWLEDGE_HOME`, else the config's folder, all per machine and never in git:
 `vault-index.db` (rebuilt from the notes in about a second), `repos-index.db` (repo docs, kept apart
@@ -77,8 +82,33 @@ at most 5 redirects and checks each one again, stops at 20 s and 5 MB, reads no 
 environment, and stores only HTML (converted), other text and JSON. `--allow-private` lifts the
 address check and nothing else.
 
-Every target in CI builds the binary and runs `checks/stage-3.sh` and `checks/stage-4.sh` on the
-template vault (x64 and ARM64: Windows, macOS, Linux glibc and musl). A target counts as verified
+### Rules and the guard
+
+`00-Meta/Hard-Rules.md` stays one note, loaded whole. Each `##` section is a pack. Each rule is a
+bullet that opens with a bold line, and that line's slug is the rule's id. `00-Meta/rules.lock`
+(JSON, tracked) holds what the text cannot: each rule's pack, kind, enforcement points and the hash
+of its whole text, and the guards. Nothing is added to the primed text. The owner edits the note,
+then runs `knowledge rules lock` in their own terminal.
+
+- **The guard** (`hook pre-tool`, on PreToolUse for shell, edit and MCP calls) splits a shell line
+  into segments and words, and answers `deny` or `ask` with the rule's id. It reads only
+  `rules.lock`. It prints nothing when it allows, and on a missing or broken lock it allows with
+  one stderr line.
+- **The backstop** is `githooks/pre-commit`. It runs the repo's own hook, gitleaks, then
+  `rules check --staged`, which fails a commit holding a guard's staged names (`package-lock.json`)
+  or a Hard-Rules that disagrees with the lock. `install.ts` sets it in the vault, the skeleton and
+  each checkout a `10-Repos` page names.
+- **The restore.** Each session start runs `rules check --restore`. A rule that differs from the
+  lock comes back from `HEAD` when `HEAD` matches the lock, and one line says so. Otherwise the
+  doctor FAILs until the owner relocks or reverts.
+
+**What it cannot stop.** An agent that runs code as the user can change any file the user can. The
+guard puts the plain forms to the owner: an Edit, `sed -i`, a redirect, `Set-Content`. It cannot
+judge a wrapper (`bun -e`, a substitution, an escape). That case is caught afterwards, by the next
+start's restore and the doctor.
+
+Every target in CI builds the binary and runs `checks/stage-3.sh`, `checks/stage-4.sh` and
+`checks/stage-5.sh` on the template vault (x64 and ARM64: Windows, macOS, Linux glibc and musl). A target counts as verified
 once that run passes; until then it is built, not verified.
 
 ## Per-machine config

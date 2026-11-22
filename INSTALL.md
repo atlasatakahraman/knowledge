@@ -130,7 +130,7 @@ junction needs neither. Move an existing `~/.claude/hooks` folder aside first ra
 
 ```bash
 cargo install --path <skeleton> --locked
-knowledge --version    # knowledge 0.8.0 / SQLite 3.x, FTS5 on
+knowledge --version    # knowledge 0.9.0 / SQLite 3.x, FTS5 on
 ```
 
 It lands in `~/.cargo/bin` (`%USERPROFILE%\.cargo\bin` on Windows). A release build takes about a
@@ -167,6 +167,23 @@ Both load whole into every session. Add, one import per line:
 
 Never move either behind a link or into a hook: a hook's context is cut to a 2,000-char preview past
 10,000 chars. `brain-doctor`'s `priming` check guards it.
+
+### 6b. The rules lock and the guard
+
+The first lock is written once, by the owner, in their own terminal. A seed supplies what the text
+cannot (each rule's kind, enforcement points and the guards):
+
+```bash
+cd <vault> && knowledge rules lock --seed <seed.json>   # later edits: knowledge rules lock
+knowledge rules check                                   # rules: N units match 00-Meta/rules.lock
+```
+
+Commit `00-Meta/rules.lock` with Hard-Rules: the session-start restore takes a changed rule back
+from `HEAD` only when `HEAD` matches the lock. The PreToolUse entry in step 5's block is the guard.
+Without a lock it allows everything, with one stderr line. `install.ts` points `core.hooksPath` at
+`githooks/` in the vault, this clone and each checkout a `10-Repos` page names. A checkout's own
+`core.hooksPath` is kept as `knowledge.ownHooksPath` and runs first. The hook needs `gitleaks` and
+`knowledge` on `PATH`, and refuses the commit without either.
 
 ### 7. Compile state
 
