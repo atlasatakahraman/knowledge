@@ -17,6 +17,11 @@
   "SubagentStop": [
     { "hooks": [{ "type": "command", "command": "{BUN} --bun {HOOKS}/brain-capture.mjs", "timeout": 10, "async": true }] }
   ],
+  "PreToolUse": [
+    { "matcher": "Bash|PowerShell|Edit|Write|MultiEdit|NotebookEdit|mcp__.*", "hooks": [
+      { "type": "command", "command": "{KNOWLEDGE} hook pre-tool --harness claude", "timeout": 5 }
+    ] }
+  ],
   "PostToolUse": [
     { "matcher": "Edit|Write", "hooks": [
       { "type": "command", "command": "{KNOWLEDGE} hook post-edit --harness claude" }

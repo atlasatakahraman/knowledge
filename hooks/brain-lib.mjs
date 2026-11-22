@@ -429,7 +429,9 @@ export function syncRecords() {
       });
     const out = (...a) => git(...a).stdout?.trim() ?? "";
     const list = (...a) => out(...a).split("\n").filter(Boolean);
-    const why = (r) => (r.stderr || r.error?.message || "timeout").trim().split("\n")[0];
+    // The last line, colours stripped: a refusing pre-commit hook prints its reason after gitleaks'
+    // INF lines, and the first line once recorded "0 commits scanned" as the failure (2026-11-22).
+    const why = (r) => (r.stderr || r.error?.message || "timeout").replace(/\x1b\[[0-9;]*m/g, "").trim().split("\n").at(-1);
     const gitDir = join(VAULT, ".git");
     if (git("symbolic-ref", "-q", "HEAD").status !== 0) return { skipped: "detached HEAD" };
     if (["rebase-merge", "rebase-apply", "MERGE_HEAD"].some((f) => existsSync(join(gitDir, f))))
@@ -457,7 +459,11 @@ export function syncRecords() {
         "commit", "-q", "-m", `chore(brain): records from the ${OS_TAG} boot`,
         "-m", `Written by the hooks after the last commit, committed by syncRecords so the other boot\npulls them:\n${staged.map((f) => `- ${f}`).join("\n")}`,
       );
-      if (c.status !== 0) return { ...res, committed: 0, failed: `commit: ${why(c)}` };
+      if (c.status !== 0) {
+        // Left staged, the records would ride along in the owner's next commit by hand.
+        git("reset", "-q", "--", ...paths);
+        return { ...res, committed: 0, failed: `commit: ${why(c)}` };
+      }
     }
 
     if (git("rev-parse", "--abbrev-ref", "@{u}").status !== 0) return { ...res, skipped: "no upstream" };

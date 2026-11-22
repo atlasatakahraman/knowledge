@@ -15,7 +15,7 @@
 import { readdirSync, readFileSync, existsSync, writeFileSync, mkdirSync, realpathSync, statSync } from "node:fs";
 import { join, basename, dirname, isAbsolute } from "node:path";
 import { homedir } from "node:os";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import {
   VAULT, DEV_ROOT, HOOKS, HOOK_EVENTS, FOLDERS, CONFIG,
   failures, logicalDate, notePath,
@@ -238,13 +238,18 @@ function checkCommits() {
  * it, Claude gets a file path and a 2,000-char preview). The old in-hook cap dropped the rules
  * kernel instead, and nothing noticed (2026-10-09).
  */
-function checkPriming() {
-  const LIMIT = 10_000;
+function primed() {
   const md = join(homedir(), ".claude", "CLAUDE.md");
-  const norm = (p) => p.replace(/\\/g, "/").toLowerCase();
   const imports = [...readFileSync(md, "utf8").matchAll(/^@(\S+)\s*$/gm)]
     .map((m) => m[1].replace(/^~(?=[\\/])/, homedir()))
     .map((p) => (isAbsolute(p) ? p : join(dirname(md), p)));
+  return { md, imports };
+}
+
+function checkPriming() {
+  const LIMIT = 10_000;
+  const norm = (p) => p.replace(/\\/g, "/").toLowerCase();
+  const { imports } = primed();
   const missing = imports.filter((p) => !existsSync(p));
   const unimported = ["Identity.md", "Hard-Rules.md"]
     .map((f) => join(VAULT, FOLDERS.meta, f))
@@ -259,6 +264,37 @@ function checkPriming() {
     ok: !missing.length && !unimported.length && hookChars >= 0 && hookChars <= LIMIT,
     detail: { imports: imports.length, missing, unimported: unimported.map(rel), hookChars, limit: LIMIT },
   };
+}
+
+/**
+ * What a vault session loads whole before the first prompt: ~/.claude/CLAUDE.md, its imports and the
+ * vault's CLAUDE.md. The merge left 64,691 bytes (vault audit spec item 21); the ceiling is that +15%,
+ * so growth is seen before it costs every session. A WARN: the owner decides what to condense.
+ */
+function checkPrimingSize() {
+  const CEILING = 74_395;
+  const { md, imports } = primed();
+  const files = [md, ...imports, join(VAULT, "CLAUDE.md")].filter(existsSync);
+  const bytes = files.reduce((n, f) => n + statSync(f).size, 0);
+  return { id: "priming-size", level: "warn", ok: bytes <= CEILING, detail: { bytes, ceiling: CEILING, files: files.length } };
+}
+
+/** `knowledge rules check`: Hard-Rules against 00-Meta/rules.lock. A missing, broken or disagreeing lock FAILs (K40). */
+function checkRules() {
+  const bin = knowledgeBin();
+  if (!bin) return { id: "rules", level: "fail", ok: false, detail: { error: "knowledge binary not found: run install.ts" } };
+  const r = spawnSync(bin, ["rules", "check"], { encoding: "utf8", timeout: 30_000, windowsHide: true });
+  const out = `${r.stdout ?? ""}${r.stderr ?? ""}`.trim().split("\n").slice(0, 6);
+  return { id: "rules", level: "fail", ok: r.status === 0, detail: { exit: r.status, out } };
+}
+
+/**
+ * `knowledge doctor budget`: the newest vault session's start cost by owner. WARNs for a plugin or
+ * connector whose listing costs over 1,000 tokens a session and had no call in 30 days (D10).
+ */
+function checkBudget() {
+  const b = JSON.parse(knowledge(["doctor", "budget", "--json"]));
+  return { id: "budget", level: "warn", ok: b.ok, detail: { transcript: b.transcript, tokens: b.tokens, idle: b.idle.map((i) => `${i.name}: ${i.tokens} tokens, no call in 30 days`) } };
 }
 
 /**
@@ -350,7 +386,7 @@ function checkHygiene() {
 const CHECKS = {
   "vault-index": checkIndex, retrieval: checkRetrieval, sessions: checkSessions, auth: checkAuth,
   frontmatter: checkFrontmatter, links: checkLinks, reach: checkReach, ignores: checkIgnores,
-  commits: checkCommits, priming: checkPriming,
+  commits: checkCommits, priming: checkPriming, "priming-size": checkPrimingSize, rules: checkRules, budget: checkBudget,
   "skeleton-version": checkSkeletonVersion, hygiene: checkHygiene, "pull-trust": checkPullTrust,
   portable: checkPortable,
 };

@@ -171,13 +171,27 @@ if (existsSync(join(VAULT, ".git")) || (dry && mode === "template")) {
   }
 } else line("WARN", "core.fileMode", `${VAULT} is not a git repository; sync between machines needs one`);
 
-// The pre-commit secret scan (githooks/pre-commit) guards every commit in the vault and in this clone.
+// githooks/pre-commit (the secret scan, then the rules' commit-time backstops) guards every commit
+// in the vault, this clone, and each checkout a 10-Repos page names with `checkout:` (owner, Stage 5:
+// per checkout, never a global core.hooksPath). A checkout's own hooks folder is kept in
+// knowledge.ownHooksPath, and the hook runs that repo's pre-commit first.
 const HOOKS_DIR = fwd(join(ROOT, "githooks"));
-for (const repo of [VAULT, ROOT].filter((d) => existsSync(join(d, ".git")))) {
-  if (sh(bin.git, ["-C", repo, "config", "core.hooksPath"]).out === HOOKS_DIR) line("ok", "hooksPath", `${repo} -> ${HOOKS_DIR}`);
+const reposDir = join(VAULT, "10-Repos");
+const pages = (d: string): string[] =>
+  existsSync(d) ? readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? pages(join(d, e.name)) : e.name.endsWith(".md") ? [join(d, e.name)] : [])) : [];
+const checkouts = [...new Set(pages(reposDir).flatMap((p) => {
+  const m = readFileSync(p, "utf8").match(/^checkout:\s*(\S+)\s*$/m);
+  return m ? [join(DEV, m[1].replace(/^["']|["']$/g, ""))] : [];
+}))];
+for (const repo of [VAULT, ROOT, ...checkouts].filter((d) => existsSync(join(d, ".git")))) {
+  const was = sh(bin.git, ["-C", repo, "config", "core.hooksPath"]).out;
+  if (was === HOOKS_DIR) line("ok", "hooksPath", `${repo} -> ${HOOKS_DIR}`);
   else {
+    // A previous path that no longer exists (a checkout moved since) has no hook to keep.
+    const own = was && existsSync(resolve(repo, was)) ? was : "";
+    if (!dry && own) sh(bin.git, ["-C", repo, "config", "knowledge.ownHooksPath", own]);
     if (!dry) sh(bin.git, ["-C", repo, "config", "core.hooksPath", HOOKS_DIR]);
-    line(changed(), "hooksPath", `${repo} -> ${HOOKS_DIR} (pre-commit secret scan)`);
+    line(changed(), "hooksPath", `${repo} -> ${HOOKS_DIR} (secret scan, rules backstops${own ? `; its own ${own} runs first` : was ? `; the old ${was} is gone` : ""})`);
   }
 }
 

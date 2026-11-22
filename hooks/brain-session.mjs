@@ -120,6 +120,20 @@ function vaultPull() {
 }
 
 /**
+ * A rule edited around the PreToolUse guard (a `bun -e` rewrite) comes back from HEAD here, after
+ * the pull so HEAD is current; the restore also re-adds a missing Identity or Hard-Rules import
+ * (K40). Silent when the rules match. No lock: not set up yet, and the doctor's `rules` check says so.
+ */
+function rulesRestore() {
+  if (process.env.CLAUDE_INVOKED_BY || process.argv.includes("--dry")) return null;
+  if (!existsSync(join(VAULT, FOLDERS.meta, "rules.lock"))) return null;
+  const r = spawnSync(knowledgeBin() || "knowledge", ["rules", "check", "--restore"], { encoding: "utf8", timeout: 10_000, windowsHide: true });
+  const out = `${r.stdout ?? ""}${r.stderr ?? ""}`.trim();
+  if (r.status === 0) return out || null;
+  return out.startsWith("!!") ? out : `!! RULES check failed (exit ${r.status}): ${out || r.error?.message}`;
+}
+
+/**
  * Fast-forward the engine the hooks run from, so both machines run the skeleton the vault pins.
  * This hook is already loaded; the next hook to start runs the pulled code. A detached HEAD is a
  * checkout pinned on purpose (a tag), left alone and silent. The hook block in settings.json is
@@ -355,6 +369,10 @@ try {
   try {
     pulled = vaultPull();
   } catch {}
+  let rules = null;
+  try {
+    rules = rulesRestore();
+  } catch {}
   let skeleton = null;
   try {
     skeleton = skeletonPull();
@@ -396,6 +414,7 @@ try {
     ...failing.flatMap((l) => [l, ""]),
     ...(records ? [records, ""] : []),
     ...(pulled ? [pulled, ""] : []),
+    ...(rules ? [rules, ""] : []),
     ...(skeleton ? [skeleton, ""] : []),
     ...(pinned ? [pinned, ""] : []),
     ...(canary ? [canary, ""] : []),
