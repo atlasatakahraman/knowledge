@@ -1,0 +1,25 @@
+[package]
+name = "knowledge"
+version = "0.7.0"
+edition = "2024"
+rust-version = "1.100"
+license = "MIT"
+description = "The knowledge engine: one binary that indexes, searches and links an Obsidian vault for coding agents"
+repository = "https://github.com/atlasatakahraman/knowledge-skeleton"
+publish = false
+
+# Exactly three crates (spec D22, D23). checks/crates.txt is the allowlist; checks/stage-3.sh fails
+# on anything else in the tree. A fourth is a question for the owner, never a quiet addition.
+[dependencies]
+# default-features off: the default `cache` feature pulls hashlink, and nothing here needs a
+# statement cache beyond rusqlite's own prepare. `bundled` compiles SQLite with FTS5 into the binary.
+rusqlite = { version = "0.43.0", default-features = false, features = ["bundled"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true

@@ -1,0 +1,55 @@
+# Builds the knowledge binary on every target the engine supports (spec D21) and runs
+# checks/stage-3.sh on each. No secrets, read-only token, nothing published: a target is "built"
+# when its job is green, and "verified" only once its checks ran on a real install.
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-latest, target: x86_64-pc-windows-msvc }
+          - { os: windows-11-arm, target: aarch64-pc-windows-msvc }
+          - { os: macos-15-intel, target: x86_64-apple-darwin }
+          - { os: macos-latest, target: aarch64-apple-darwin }
+          - { os: ubuntu-latest, target: x86_64-unknown-linux-gnu, lint: true }
+          - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu }
+          - { os: ubuntu-latest, target: x86_64-unknown-linux-musl, musl: true }
+          - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-musl, musl: true }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # rustup reads rust-toolchain.toml, so the pinned toolchain is what builds.
+      - run: rustup show active-toolchain || rustup toolchain install
+        shell: bash
+      - run: rustup target add ${{ matrix.target }}
+      - if: matrix.musl
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+      - if: matrix.lint
+        run: cargo fmt --check && cargo clippy --all-targets --locked -- -D warnings
+      - run: cargo build --release --locked --target ${{ matrix.target }}
+      - run: bash checks/stage-3.sh target/${{ matrix.target }}/release/knowledge
+        shell: bash
+
+  deny:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Installed from crates.io by cargo itself, so no third-party action runs.
+      - run: cargo install cargo-deny --locked --version 0.22.0
+      - run: cargo deny check

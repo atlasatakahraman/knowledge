@@ -1,0 +1,22 @@
+# cargo-deny 0.22.0 (owner's pick, 2026-11-22), run by CI's `deny` job. Never a Cargo dependency.
+# The crates themselves are approved by the owner (spec D22, D23); this file keeps their trees
+# honest: no advisory, no licence outside the list, no second registry, no git source.
+
+[advisories]
+yanked = "deny"
+
+[licenses]
+# Only the licences the tree has today; a new one is a decision. The skeleton is MIT, so no GPL.
+# Unicode-3.0 is unicode-ident's (a proc-macro
+# dependency of serde_derive; build time only).
+allow = ["MIT", "Apache-2.0", "Unicode-3.0"]
+confidence-threshold = 0.9
+
+[bans]
+multiple-versions = "deny"
+wildcards = "deny"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

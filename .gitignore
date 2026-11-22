@@ -10,3 +10,6 @@ hooks/context-mode-cache-heal.mjs
 
 node_modules/
 package-lock.json
+
+# Cargo build output.
+/target/

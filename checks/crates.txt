@@ -1,0 +1,21 @@
+# Every crate `cargo tree -e normal` may list: the three the owner approved (spec D22, D23:
+# rusqlite, serde, serde_json) and what they pull in. checks/stage-3.sh fails on any other name.
+# A new name here is a dependency decision, made by the owner in a compared question (D18).
+bitflags
+fallible-iterator
+fallible-streaming-iterator
+itoa
+knowledge
+libsqlite3-sys
+memchr
+proc-macro2
+quote
+rusqlite
+serde
+serde_core
+serde_derive
+serde_json
+smallvec
+syn
+unicode-ident
+zmij
