@@ -93,7 +93,15 @@ trap_fails "a name not in NFC" "touch \"\$VAULT/90-Inbox/\$(printf 'cafe\\xcc\\x
 trap_fails "a path over 240 chars" 'mkdir -p "$VAULT/90-Inbox/$(printf "%0120d" 0)" && touch "$VAULT/90-Inbox/$(printf "%0120d" 0)/$(printf "%0120d" 1).md"' 'rm -r "$VAULT/90-Inbox/$(printf "%0120d" 0)"'
 trap_fails ".gitattributes without LF" 'mv "$VAULT/.gitattributes" "$TMP/ga"' 'mv "$TMP/ga" "$VAULT/.gitattributes"'
 if [ "$WINDOWS" = 0 ]; then
-  trap_fails "names differing only by case" 'touch "$VAULT/90-Inbox/Case.md" "$VAULT/90-Inbox/case.md"' 'rm "$VAULT/90-Inbox/Case.md" "$VAULT/90-Inbox/case.md"'
+  # Probe the filesystem, not the OS: macOS's default APFS is case-insensitive, so the second
+  # touch lands on the first file and there is no pair to catch.
+  touch "$VAULT/90-Inbox/CaseProbe"
+  if [ -e "$VAULT/90-Inbox/caseprobe" ]; then
+    skip "names differing only by case: this filesystem is case-insensitive (Linux CI runs it)"
+  else
+    trap_fails "names differing only by case" 'touch "$VAULT/90-Inbox/Case.md" "$VAULT/90-Inbox/case.md"' 'rm "$VAULT/90-Inbox/Case.md" "$VAULT/90-Inbox/case.md"'
+  fi
+  rm "$VAULT/90-Inbox/CaseProbe"
   trap_fails "a reserved name" 'touch "$VAULT/90-Inbox/aux.md"' 'rm "$VAULT/90-Inbox/aux.md"'
   trap_fails "a forbidden character" 'touch "$VAULT/90-Inbox/a?b.md"' 'rm "$VAULT/90-Inbox/a?b.md"'
   trap_fails "a trailing dot" 'touch "$VAULT/90-Inbox/note."' 'rm "$VAULT/90-Inbox/note."'
