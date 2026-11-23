@@ -32,13 +32,15 @@ fn handle(raw: &[String]) -> Result<(), Fault> {
     if verb == "record" {
         return Ok(());
     }
-    // The Codex plugin's hooks name the version they were reviewed at (`--pin`). A binary of another
-    // version stands down: the one session start says why, so the owner knows to update the plugin.
+    // The Codex and opencode plugins name the version they were written for (`--pin`). A binary of
+    // another version stands down: the one session start says why, so the owner knows to update.
     if let Some(pin) = args.get("pin").filter(|p| *p != env!("CARGO_PKG_VERSION")) {
         if verb == "session" {
             let line = format!(
-                "knowledge-skeleton: this binary is {}, but the plugin's hooks were reviewed at {pin}, so they stand down. Update the plugin (codex plugin add knowledge@knowledge-skeleton), then review its hooks in the Codex CLI.",
-                env!("CARGO_PKG_VERSION")
+                "knowledge-skeleton: this binary is {}, but the {} plugin's hooks were written for {pin}, so they stand down. Update the plugin: knowledge setup --harness {} --plan, then --apply.",
+                env!("CARGO_PKG_VERSION"),
+                adapter.name,
+                adapter.id
             );
             emit(&t.context(&adapter, Event::SessionStart, &line));
         }

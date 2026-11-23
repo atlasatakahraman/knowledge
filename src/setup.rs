@@ -10,6 +10,7 @@
 //! and settings.json is copied beside itself before a change. `--remove` never touches the vault.
 //! `--harness codex` (S7.4) adds Codex beside Claude Code: its plugin, its AGENTS.md block, the
 //! `knowledge mcp` retrieval server and the graphify server, from the config.json the Claude setup wrote. It never writes hook trust.
+//! `--harness opencode` (S7.5): its plugin file, compiled into this binary, and its AGENTS.md block.
 use crate::config::{self, Config};
 use crate::instructions::{self, Form};
 use crate::state::{self, J};
@@ -24,7 +25,8 @@ const USAGE: &str = "usage:
   knowledge setup --apply <id> [the same options]
   knowledge setup --remove --plan | --remove --apply <id>
   knowledge setup --harness codex --plan | --apply <id> [--skeleton <checkout>]   (after the Claude setup)
-  knowledge setup --harness codex --remove --plan | --remove --apply <id>";
+  knowledge setup --harness codex --remove --plan | --remove --apply <id>
+  knowledge setup --harness opencode [--remove] --plan | --apply <id>";
 
 const GIT: Duration = Duration::from_secs(20);
 /// graphify-mcp imports `mcp`, which only the [mcp] extra brings: without it the server dies on
@@ -1835,40 +1837,13 @@ fn plan_codex(args: &Args) -> Plan {
         );
         return p;
     }
-    let ver = env!("CARGO_PKG_VERSION");
     // The plugin's hooks run `knowledge` from PATH: no option carries an absolute path in Codex.
-    let this = std::env::current_exe().ok().and_then(|e| real(&e));
-    let bin = match (which("knowledge").and_then(|k| real(&k)), &this) {
-        (Some(k), Some(t)) if same(&k, t) => {
-            p.say("ok", "knowledge", format!("{} on PATH ({ver})", fwd(&k)));
-            k
-        }
-        (Some(k), _) => {
-            p.say("WARN", "knowledge", format!("the hooks run the knowledge on PATH, {}, not this binary; its version must be {ver}", fwd(&k)));
-            k
-        }
-        (None, _) => {
-            p.say("FAIL", "knowledge", "knowledge is not on PATH, and the Codex hooks find it there: `cargo install --path <checkout> --locked`, then plan again");
-            return p;
-        }
-    };
-    let existing = read_obj(&config::config_path()).unwrap_or(J::Obj(Vec::new()));
-    let str_of = |k: &str| {
-        existing
-            .get(k)
-            .and_then(J::str)
-            .filter(|s| !s.is_empty())
-            .map(expand)
-    };
-    let Some(vault) = str_of("vault") else {
-        p.say(
-            "FAIL",
-            "config",
-            "config.json names no vault: run `knowledge setup --plan` (Claude Code) first",
-        );
+    let Some(bin) = on_path(&mut p, "Codex") else {
         return p;
     };
-    let dev = str_of("devRoot").unwrap_or_else(|| expand("~/dev"));
+    let Some((vault, dev)) = configured(&mut p) else {
+        return p;
+    };
     let Some(root) = skeleton(args, &dev) else {
         p.say(
             "FAIL",
@@ -1952,37 +1927,7 @@ fn plan_codex(args: &Args) -> Plan {
     }
 
     // The AGENTS.md block, Identity and Hard-Rules whole (Codex cannot import).
-    let adapter = crate::harness::adapter("codex");
-    match adapter.as_ref().and_then(|a| a.instructions()) {
-        None => p.say(
-            "FAIL",
-            "AGENTS.md",
-            "the codex adapter names no instructions file",
-        ),
-        Some((path, form)) => match instructions::block(&vault, form) {
-            None => p.say(
-                "FAIL",
-                "AGENTS.md",
-                format!(
-                    "cannot read Identity.md and Hard-Rules.md in {}",
-                    fwd(&vault.join(state::META))
-                ),
-            ),
-            Some(want) => {
-                let text = state::read(&path);
-                match instructions::section(&text) {
-                    Some((a, e)) if text[a..e] == want => p.say("ok", "AGENTS.md", format!("{}: the block is current", fwd(&path))),
-                    found => p.act(
-                        if found.is_some() { "update" } else { "create" },
-                        "AGENTS.md",
-                        format!("{}: Identity and Hard-Rules written whole between the markers; text outside them kept", fwd(&path)),
-                        seen_file(&path),
-                        vec![Act::Write { path: path.clone(), text: instructions::splice(&text, &want), backup: None }],
-                    ),
-                }
-            }
-        },
-    }
+    block_step(&mut p, "codex", &vault);
 
     // Retrieval as an MCP server: Codex's Windows sandbox denies its shell `~/.config/knowledge`,
     // where the index and config live, and an MCP server runs as the user, outside the sandbox.
@@ -2084,32 +2029,7 @@ fn plan_codex_remove() -> Plan {
     let config = codex.join("config.toml");
     let st = codex_state(&codex);
 
-    if let Some((path, _)) = crate::harness::adapter("codex").and_then(|a| a.instructions()) {
-        let text = state::read(&path);
-        match instructions::section(&text) {
-            None => p.say("ok", "AGENTS.md", "no knowledge block"),
-            Some((a, e)) => {
-                let rest = format!("{}{}", &text[..a], &text[e..]);
-                let rest = rest.trim();
-                let act = if rest.is_empty() {
-                    Act::Unlink(path.clone())
-                } else {
-                    Act::Write {
-                        path: path.clone(),
-                        text: format!("{rest}\n"),
-                        backup: None,
-                    }
-                };
-                p.act(
-                    "remove",
-                    "AGENTS.md",
-                    format!("{}: the knowledge block, text outside it kept", fwd(&path)),
-                    seen_file(&path),
-                    vec![act],
-                );
-            }
-        }
-    }
+    block_remove(&mut p, "codex");
 
     // Ours when it serves a merged graph; a graphify server of the owner's own stays.
     match &st.mcp {
@@ -2199,6 +2119,213 @@ fn plan_codex_remove() -> Plan {
     p
 }
 
+// ---- shared by the harness plans ----------------------------------------------------------------
+
+/// The `knowledge` a harness's hooks find on PATH; None, with a FAIL, when there is none.
+fn on_path(p: &mut Plan, harness: &str) -> Option<PathBuf> {
+    let ver = env!("CARGO_PKG_VERSION");
+    let this = std::env::current_exe().ok().and_then(|e| real(&e));
+    match (which("knowledge").and_then(|k| real(&k)), &this) {
+        (Some(k), Some(t)) if same(&k, t) => {
+            p.say("ok", "knowledge", format!("{} on PATH ({ver})", fwd(&k)));
+            Some(k)
+        }
+        (Some(k), _) => {
+            p.say("WARN", "knowledge", format!("the hooks run the knowledge on PATH, {}, not this binary; its version must be {ver}", fwd(&k)));
+            Some(k)
+        }
+        (None, _) => {
+            p.say("FAIL", "knowledge", format!("knowledge is not on PATH, and the {harness} hooks find it there: `cargo install --path <checkout> --locked`, then plan again"));
+            None
+        }
+    }
+}
+
+/// The vault and checkouts folder config.json names: the Claude setup writes it first.
+fn configured(p: &mut Plan) -> Option<(PathBuf, PathBuf)> {
+    let existing = read_obj(&config::config_path()).unwrap_or(J::Obj(Vec::new()));
+    let str_of = |k: &str| {
+        existing
+            .get(k)
+            .and_then(J::str)
+            .filter(|s| !s.is_empty())
+            .map(expand)
+    };
+    let Some(vault) = str_of("vault") else {
+        p.say(
+            "FAIL",
+            "config",
+            "config.json names no vault: run `knowledge setup --plan` (Claude Code) first",
+        );
+        return None;
+    };
+    Some((vault, str_of("devRoot").unwrap_or_else(|| expand("~/dev"))))
+}
+
+/// The adapter's inline block (Identity and Hard-Rules whole) in its global instructions file.
+fn block_step(p: &mut Plan, id: &str, vault: &Path) {
+    let Some((path, form)) = crate::harness::adapter(id).and_then(|a| a.instructions()) else {
+        p.say(
+            "FAIL",
+            "AGENTS.md",
+            format!("the {id} adapter names no instructions file"),
+        );
+        return;
+    };
+    let Some(want) = instructions::block(vault, form) else {
+        p.say(
+            "FAIL",
+            "AGENTS.md",
+            format!(
+                "cannot read Identity.md and Hard-Rules.md in {}",
+                fwd(&vault.join(state::META))
+            ),
+        );
+        return;
+    };
+    let text = state::read(&path);
+    match instructions::section(&text) {
+        Some((a, e)) if text[a..e] == want => p.say("ok", "AGENTS.md", format!("{}: the block is current", fwd(&path))),
+        found => p.act(
+            if found.is_some() { "update" } else { "create" },
+            "AGENTS.md",
+            format!("{}: Identity and Hard-Rules written whole between the markers; text outside them kept", fwd(&path)),
+            seen_file(&path),
+            vec![Act::Write { path: path.clone(), text: instructions::splice(&text, &want), backup: None }],
+        ),
+    }
+}
+
+/// The block out of the adapter's instructions file, the owner's text kept; the file goes when
+/// nothing else is left in it.
+fn block_remove(p: &mut Plan, id: &str) {
+    let Some((path, _)) = crate::harness::adapter(id).and_then(|a| a.instructions()) else {
+        return;
+    };
+    let text = state::read(&path);
+    match instructions::section(&text) {
+        None => p.say("ok", "AGENTS.md", "no knowledge block"),
+        Some((a, e)) => {
+            let rest = format!("{}{}", &text[..a], &text[e..]);
+            let rest = rest.trim();
+            let act = if rest.is_empty() {
+                Act::Unlink(path.clone())
+            } else {
+                Act::Write {
+                    path: path.clone(),
+                    text: format!("{rest}\n"),
+                    backup: None,
+                }
+            };
+            p.act(
+                "remove",
+                "AGENTS.md",
+                format!("{}: the knowledge block, text outside it kept", fwd(&path)),
+                seen_file(&path),
+                vec![act],
+            );
+        }
+    }
+}
+
+// ---- opencode (S7.5) -----------------------------------------------------------------------------
+
+/// The plugin, compiled in: a changed shim is a new binary, and setup writes exactly this text.
+const OPENCODE_PLUGIN: &str = include_str!("../opencode/knowledge.ts");
+
+/// `~/.config/opencode/plugins/knowledge.ts`: opencode loads every file there, with no config entry.
+fn opencode_plugin() -> PathBuf {
+    state::home().join(".config/opencode/plugins/knowledge.ts")
+}
+
+/// Ours when it is the skeleton's shim, at any version.
+fn opencode_ours(text: &str) -> bool {
+    text.starts_with("// knowledge-skeleton's opencode plugin")
+}
+
+/// `setup --harness opencode`: the plugin file and the AGENTS.md block. Retrieval is the shell's
+/// `knowledge find`: opencode has no sandbox between its shell and `~/.config/knowledge`.
+fn plan_opencode() -> Plan {
+    let mut p = Plan::default();
+    if which("opencode").is_none() {
+        p.say(
+            "FAIL",
+            "prerequisites",
+            "opencode is not on PATH. Install opencode, then plan again",
+        );
+        return p;
+    }
+    if on_path(&mut p, "opencode").is_none() {
+        return p;
+    }
+    let Some((vault, _)) = configured(&mut p) else {
+        return p;
+    };
+    let path = opencode_plugin();
+    let have = state::read(&path);
+    let ver = env!("CARGO_PKG_VERSION");
+    if have.replace("\r\n", "\n") == OPENCODE_PLUGIN.replace("\r\n", "\n") {
+        p.say("ok", "plugin", format!("{} ({ver})", fwd(&path)));
+    } else if !have.is_empty() && !opencode_ours(&have) {
+        p.say(
+            "FAIL",
+            "plugin",
+            format!(
+                "{} is not the skeleton's: move it, then plan again",
+                fwd(&path)
+            ),
+        );
+        return p;
+    } else {
+        p.act(
+            if have.is_empty() { "create" } else { "update" },
+            "plugin",
+            format!(
+                "{}: the hooks shim, pinned to {ver}; opencode loads it at its next start",
+                fwd(&path)
+            ),
+            seen_file(&path),
+            vec![Act::Write {
+                path: path.clone(),
+                text: OPENCODE_PLUGIN.to_string(),
+                backup: None,
+            }],
+        );
+        p.next.push(
+            "opencode service restart: plugins load in opencode's background service, at its start"
+                .into(),
+        );
+    }
+    block_step(&mut p, "opencode", &vault);
+    p
+}
+
+/// `setup --harness opencode --remove`: the block, then the plugin file if it is ours.
+fn plan_opencode_remove() -> Plan {
+    let mut p = Plan::default();
+    block_remove(&mut p, "opencode");
+    let path = opencode_plugin();
+    let have = state::read(&path);
+    if have.is_empty() {
+        p.say("ok", "plugin", "not installed");
+    } else if opencode_ours(&have) {
+        p.act(
+            "remove",
+            "plugin",
+            fwd(&path),
+            seen_file(&path),
+            vec![Act::Unlink(path.clone())],
+        );
+    } else {
+        p.say(
+            "ok",
+            "plugin",
+            "a knowledge.ts not written by setup: left as it is",
+        );
+    }
+    p
+}
+
 // ---- the verb ------------------------------------------------------------------------------------
 
 /// The options again, for the apply line: `--apply` must be given the plan's own inputs.
@@ -2236,9 +2363,11 @@ pub fn run(raw: &[String]) -> Result<u8, Fault> {
         ("claude", true) => plan_remove(&args),
         ("codex", false) => plan_codex(&args),
         ("codex", true) => plan_codex_remove(),
+        ("opencode", false) => plan_opencode(),
+        ("opencode", true) => plan_opencode_remove(),
         (h, _) => {
             return Err(Fault::Usage(format!(
-                "setup: no harness `{h}` (claude, codex)\n{USAGE}"
+                "setup: no harness `{h}` (claude, codex, opencode)\n{USAGE}"
             )));
         }
     };

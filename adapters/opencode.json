@@ -1,4 +1,20 @@
 {
   "id": "opencode",
-  "instructions": { "global": "~/.config/opencode/AGENTS.md", "form": "inline" }
+  "name": "opencode",
+  "translator": "opencode",
+  "instructions": { "global": "~/.config/opencode/AGENTS.md", "form": "inline" },
+  "events": {
+    "session-start": ["session.created"],
+    "prompt": ["prompt"],
+    "pre-tool": ["execute.before"],
+    "post-tool": ["execute.after"],
+    "pre-compact": ["session.compaction.started"],
+    "stop": ["session.execution.succeeded"],
+    "session-end": ["session.deleted"]
+  },
+  "runner": {
+    "argv": ["opencode", "run", "--standalone", "-m", "opencode/tidepool-alpha-free", "--format", "json"],
+    "reply": "opencode-json"
+  },
+  "export": ["opencode", "session", "export", "--standalone"]
 }

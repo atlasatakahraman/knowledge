@@ -149,10 +149,11 @@ pub fn native(p: &Path) -> String {
     }
 }
 
-/// Session ids are UUIDs: anything else is dropped before an id names a file.
+/// Session ids are UUIDs, or opencode's `ses_<base62>`: anything else is dropped before an id
+/// names a file or an argument.
 pub fn clean_sid(s: &str) -> String {
     s.chars()
-        .filter(|c| c.is_ascii_alphanumeric() || *c == '-')
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
         .collect()
 }
 

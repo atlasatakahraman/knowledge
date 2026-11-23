@@ -32,7 +32,6 @@ k index >/dev/null
 P='{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"ls"},"cwd":"/"}'
 check "hook: an unknown harness is silent" '[ -z "$(printf "%s" "$P" | k hook pre-tool --harness nope 2>&1)" ]'
 check "hook: generic has no hooks, silent" '[ -z "$(printf "{\"prompt\":\"retrieval\"}" | k hook prompt --harness generic 2>&1)" ]'
-check "hook: opencode has no translator yet, silent" '[ -z "$(printf "{\"prompt\":\"retrieval\"}" | k hook prompt --harness opencode 2>&1)" ]'
 
 # --- S7.2: the instructions generator and the restore --------------------------------------------
 BEGIN='<!-- knowledge-skeleton:begin -->'
@@ -149,7 +148,7 @@ check "codex: a patch on an ordinary note prints nothing" '[ -z "$(cx "$(cpatch 
 check "codex: a pin mismatch stands the guard down" '[ -z "$(cx "$(cbash "npm i")" pre-tool 0.0.0)" ]'
 out=$(printf '{"hook_event_name":"SessionStart","cwd":"%s"}' "$V" | k hook session --harness codex --pin 0.0.0 2>/dev/null)
 check "codex: a pin mismatch says so once at session start, naming both versions and the update" \
-  'printf "%s" "$out" | grep -q "\"hookEventName\":\"SessionStart\"" && printf "%s" "$out" | grep -q "binary is $VER.*reviewed at 0.0.0.*codex plugin add knowledge@knowledge-skeleton" && [ "$(printf "%s" "$out" | wc -l)" -le 1 ]'
+  'printf "%s" "$out" | grep -q "\"hookEventName\":\"SessionStart\"" && printf "%s" "$out" | grep -q "binary is $VER.*Codex plugin.*written for 0.0.0.*knowledge setup --harness codex --plan" && [ "$(printf "%s" "$out" | wc -l)" -le 1 ]'
 out=$(printf '{"hook_event_name":"SessionStart","cwd":"%s"}' "$V" | k hook session --harness codex --pin "$VER" 2>/dev/null)
 check "codex: session start names AGENTS.md, not CLAUDE.md imports" \
   'printf "%s" "$out" | grep -q "additionalContext" && printf "%s" "$out" | grep -q "AGENTS.md" && ! printf "%s" "$out" | grep -q "CLAUDE.md imports"'
@@ -224,6 +223,61 @@ ctrust() { k doctor --json --only codex-trust 2>/dev/null; }
 check "doctor codex-trust WARNs while the plugin's hooks are not all reviewed" 'ctrust | grep -q "\"ok\":false" && ctrust | grep -q "\"trusted\":1"'
 rm -f "$CT"
 check "doctor codex-trust passes with no plugin installed" 'ctrust | grep -q "\"ok\":true"'
+
+# --- S7.5: opencode ------------------------------------------------------------------------------
+# The plugin sends canonical payloads: opencode's own tool names, its tool input as it passed it.
+oc() { printf '%s' "$1" | k hook "$2" --harness opencode --pin "${3:-$VER}" 2>/dev/null; }
+otool() { printf '{"hook_event_name":"execute.before","session_id":"ses_check","tool_name":"%s","tool_input":%s,"cwd":"%s"}' "$1" "$2" "$V"; }
+check "opencode: npm i is denied, as {decision, reason}" 'oc "$(otool shell "{\"command\":\"npm i\"}")" pre-tool | grep -q "^{\"decision\":\"deny\",\"reason\":\"no-npm"'
+check "opencode: an ask rule goes out as a deny, saying why" 'oc "$(otool shell "{\"command\":\"git push\"}")" pre-tool | grep -q "cannot ask, so it is a deny"'
+check "opencode: git log prints nothing" '[ -z "$(oc "$(otool shell "{\"command\":\"git log\"}")" pre-tool)" ]'
+check "opencode: edit on Hard-Rules (relative to cwd) is stopped" 'oc "$(otool edit "{\"path\":\"00-Meta/Hard-Rules.md\",\"oldString\":\"a\",\"newString\":\"b\"}")" pre-tool | grep -q "\"decision\":\"deny\""'
+check "opencode: write on the lock is stopped" 'oc "$(otool write "{\"path\":\"$V/00-Meta/rules.lock\",\"content\":\"x\"}")" pre-tool | grep -q "\"decision\":\"deny\""'
+check "opencode: a patch naming two files is stopped by its second" 'oc "$(otool patch "{\"patchText\":\"*** Begin Patch\\n*** Add File: notes/x.md\\n+x\\n*** Update File: 00-Meta/Hard-Rules.md\\n*** End Patch\"}")" pre-tool | grep -q "\"decision\":\"deny\""'
+check "opencode: an edit on an ordinary note prints nothing" '[ -z "$(oc "$(otool edit "{\"path\":\"notes/x.md\",\"oldString\":\"a\",\"newString\":\"b\"}")" pre-tool)" ]'
+check "opencode: a read is not judged" '[ -z "$(oc "$(otool read "{\"path\":\"00-Meta/Hard-Rules.md\"}")" pre-tool)" ]'
+check "opencode: a pin mismatch stands the guard down" '[ -z "$(oc "$(otool shell "{\"command\":\"npm i\"}")" pre-tool 0.0.0)" ]'
+out=$(oc "{\"hook_event_name\":\"session.created\",\"session_id\":\"ses_check\",\"cwd\":\"$V\"}" session 0.0.0)
+check "opencode: a pin mismatch says so once at session start, as {context}" \
+  'printf "%s" "$out" | grep -q "^{\"context\":\"knowledge-skeleton: this binary is $VER, but the opencode plugin.*knowledge setup --harness opencode --plan"'
+out=$(oc "{\"hook_event_name\":\"session.created\",\"session_id\":\"ses_check\",\"cwd\":\"$V\"}" session)
+check "opencode: session start is context naming AGENTS.md" 'printf "%s" "$out" | grep -q "^{\"context\":" && printf "%s" "$out" | grep -q "AGENTS.md"'
+out=$(oc "{\"hook_event_name\":\"capture\",\"session_id\":\"ses_check\",\"cwd\":\"$V\"}" capture)
+check "opencode: capture with no transcript file prints nothing" '[ -z "$out" ]'
+
+OTS="$ROOT/opencode/knowledge.ts"
+check "the opencode plugin is pinned to the binary's version" 'grep -q "^const PIN = \"$VER\";$" "$OTS"'
+check "the opencode plugin handles every event its adapter maps" \
+  '(for e in $(tr -d "\n" < "$ROOT/adapters/opencode.json" | sed "s/.*\"events\": *{\([^}]*\)}.*/\1/" | grep -o "\[\"[a-z.]*\"\]" | tr -d "[]\""); do grep -qF "\"$e\"" "$OTS" || exit 1; done)'
+check "the opencode flush runner and export run a private server, on the free model" \
+  'grep -q "\"opencode\", \"run\", \"--standalone\", \"-m\", \"opencode/tidepool-alpha-free\"" "$ROOT/adapters/opencode.json" && grep -q "\"export\": \[\"opencode\", \"session\", \"export\", \"--standalone\"\]" "$ROOT/adapters/opencode.json"'
+if command -v bun >/dev/null 2>&1; then
+  check "the opencode plugin builds with bun" 'bun build "$OTS" --target=bun --outdir "$TMP/ocbuild" >/dev/null 2>&1 && [ -s "$TMP/ocbuild/knowledge.js" ]'
+else
+  echo "SKIP  bun build of the opencode plugin: no bun on PATH"
+fi
+
+# setup --harness opencode: the plugin is a file, so the fixture HOME takes a real apply.
+OP="$HOME/.config/opencode/plugins/knowledge.ts"
+if command -v opencode >/dev/null 2>&1 && command -v knowledge >/dev/null 2>&1; then
+  out=$(k setup --harness opencode --plan 2>&1)
+  check "opencode setup plan: creates the plugin and the AGENTS.md block, writes nothing" \
+    'printf "%s" "$out" | grep -q "create  plugin .*knowledge.ts: the hooks shim, pinned to $VER" && printf "%s" "$out" | grep -q "create  AGENTS.md" && [ ! -e "$OP" ]'
+  k setup --harness opencode --apply "$(printf "%s" "$out" | sed -n "s/^plan //p")" >/dev/null 2>&1
+  check "opencode setup apply: the plugin is the shim byte for byte, the block written, the owner's text kept" \
+    'cmp -s "$OP" "$OTS" && grep -qF "$BEGIN" "$OPEN" && grep -q "^No block here.$" "$OPEN"'
+  check "opencode setup plan again: nothing to change" 'k setup --harness opencode --plan 2>&1 | grep -q "^Nothing to change.$"'
+else
+  echo "SKIP  opencode setup apply: no opencode or knowledge on PATH"
+  mkdir -p "$(dirname "$OP")" && cp "$OTS" "$OP"
+fi
+out=$(k setup --harness opencode --remove --plan 2>&1)
+k setup --harness opencode --remove --apply "$(printf "%s" "$out" | sed -n "s/^plan //p")" >/dev/null 2>&1
+check "opencode remove: the plugin file gone, the owner's AGENTS.md text kept" \
+  '[ ! -e "$OP" ] && ! grep -qF "$BEGIN" "$OPEN" && grep -q "^No block here.$" "$OPEN"'
+printf '// my own plugin\n' > "$OP"
+check "opencode remove: a knowledge.ts not written by setup stays" \
+  'k setup --harness opencode --remove --plan 2>&1 | grep -q "not written by setup: left as it is"'
 
 rm -rf "$TMP"
 if [ "$fails" -eq 0 ]; then echo "stage 7: all checks pass"; else echo "stage 7: $fails check(s) FAIL"; exit 1; fi

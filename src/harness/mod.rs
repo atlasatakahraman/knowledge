@@ -16,6 +16,7 @@ use std::path::PathBuf;
 
 mod claude;
 mod codex;
+mod opencode;
 
 const ADAPTERS: [&str; 4] = [
     include_str!("../../adapters/claude.json"),
@@ -39,6 +40,10 @@ pub struct Adapter {
     instructions: Option<Instructions>,
     /// The headless run the flush summarizes through; none for a harness without one.
     pub runner: Option<Runner>,
+    /// For a harness that keeps no transcript file: the command that prints a session as the
+    /// translator's `turns` reads it, the session id appended (opencode's `session export`).
+    #[serde(default)]
+    pub export: Vec<String>,
 }
 
 /// A one-shot model call: the prompt goes in on stdin, and `reply` says how to read stdout.
@@ -55,6 +60,8 @@ pub enum Reply {
     Text,
     /// `codex exec --json`: the last `item.completed` whose item is an `agent_message`.
     CodexJsonl,
+    /// `opencode run --format json`: the last line of type `text`, its `part.text`.
+    OpencodeJson,
 }
 
 #[derive(Deserialize)]
@@ -152,6 +159,13 @@ impl Reply {
                 .filter_map(|v| v["item"]["text"].as_str().map(str::to_string))
                 .next_back()
                 .unwrap_or_default(),
+            Reply::OpencodeJson => stdout
+                .lines()
+                .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+                .filter(|v| v["type"] == "text")
+                .filter_map(|v| v["part"]["text"].as_str().map(str::to_string))
+                .next_back()
+                .unwrap_or_default(),
         }
     }
 }
@@ -181,6 +195,7 @@ impl Adapter {
         match self.translator.as_deref()? {
             "claude" => Some(&claude::Claude),
             "codex" => Some(&codex::Codex),
+            "opencode" => Some(&opencode::Opencode),
             _ => None,
         }
     }

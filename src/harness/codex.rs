@@ -125,8 +125,9 @@ fn turn(o: &Value) -> Option<Turn> {
     })
 }
 
-/// The files an `apply_patch` text names, made absolute against the call's `cwd`.
-fn patch_paths(patch: &str, cwd: &str) -> Vec<String> {
+/// The files an `apply_patch` text names, made absolute against the call's `cwd`. opencode's
+/// `patch` tool takes the same format.
+pub(super) fn patch_paths(patch: &str, cwd: &str) -> Vec<String> {
     const HEADS: [&str; 4] = [
         "*** Add File: ",
         "*** Update File: ",

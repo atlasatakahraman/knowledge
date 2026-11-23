@@ -132,9 +132,11 @@ pub fn hook(p: &Payload, dry: bool) {
     let given = p.transcript.as_deref();
     let tp = state::resolve_transcript(&sid, given);
     let tp_j = tp.as_ref().map_or(J::Null, |t| J::s(state::native(t)));
+    // A harness that keeps no transcript file (opencode) has its session exported by the flush.
+    let exported = crate::harness::adapter(&p.harness).is_some_and(|a| !a.export.is_empty());
 
     if dry {
-        let flush = tp.is_some() && !sid.is_empty();
+        let flush = (tp.is_some() || exported) && !sid.is_empty();
         emit(&format!(
             "{}\n",
             obj([
@@ -164,24 +166,16 @@ pub fn hook(p: &Payload, dry: bool) {
             state::detach(&["usage".into(), "--month".into(), month], "brain_usage");
         }
     }
-    let Some(tp) = tp else { return };
-    if sid.is_empty() {
+    if (tp.is_none() && !exported) || sid.is_empty() {
         return;
     }
     state::write_watermark(&sid, vec![("triedAt".into(), J::n(now))]);
-    let cwd = p.cwd.clone();
-    state::detach(
-        &[
-            "flush".into(),
-            sid.clone(),
-            cwd,
-            "--transcript".into(),
-            state::native(&tp),
-            "--harness".into(),
-            p.harness.clone(),
-        ],
-        "brain_flush",
-    );
+    let mut argv = vec!["flush".into(), sid.clone(), p.cwd.clone()];
+    if let Some(tp) = &tp {
+        argv.extend(["--transcript".into(), state::native(tp)]);
+    }
+    argv.extend(["--harness".into(), p.harness.clone()]);
+    state::detach(&argv, "brain_flush");
     // SessionEnd's flush is the session's last write: once it finishes, records commit and push.
     if p.event == Some(Event::SessionEnd) {
         state::detach(&["records".into(), sid], "brain_records");
@@ -194,6 +188,46 @@ struct Turns {
     turns: Vec<String>,
     times: Vec<Option<String>>,
     asked: Vec<J>,
+}
+
+/// A session its harness keeps in its own store, written out for this flush: the adapter's
+/// `export` command with the session id appended, to `.state/exports/<sid>.json`. Each flush
+/// writes it again, since the session keeps growing; exports untouched for 30 days are pruned.
+fn export(argv: &[String], sid: &str) -> Option<PathBuf> {
+    let (program, rest) = argv.split_first()?;
+    if sid.is_empty() {
+        return None;
+    }
+    let mut args: Vec<&str> = rest.iter().map(String::as_str).collect();
+    args.push(sid);
+    let o = state::run(
+        Path::new(program),
+        &args,
+        None,
+        None,
+        &[],
+        Duration::from_secs(30),
+    );
+    if !o.ok() || o.stdout.trim().is_empty() {
+        return None;
+    }
+    let dir = state::state_dir().join("exports");
+    fs::create_dir_all(&dir).ok()?;
+    let month = Duration::from_secs(30 * 86_400);
+    for e in fs::read_dir(&dir).ok()?.flatten() {
+        let old = e
+            .metadata()
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|t| t.elapsed().ok())
+            .is_some_and(|age| age > month);
+        if old {
+            let _ = fs::remove_file(e.path());
+        }
+    }
+    let path = dir.join(format!("{sid}.json"));
+    fs::write(&path, o.stdout).ok()?;
+    Some(path)
 }
 
 /// Real conversation turns (`user: …`, `assistant: …`), and every AskUserQuestion answer as a
@@ -408,7 +442,8 @@ fn flush(cfg: &Config, args: &Args, sid: &str, cwd: &str, dry: bool) {
     let (Some(t9r), Some(runner)) = (adapter.translator(), adapter.runner.as_ref()) else {
         return;
     };
-    let tp: Option<PathBuf> = state::resolve_transcript(sid, args.get("transcript"));
+    let tp: Option<PathBuf> = state::resolve_transcript(sid, args.get("transcript"))
+        .or_else(|| export(&adapter.export, sid));
     let t = tp
         .as_deref()
         .map(|p| turns_of(p, sid, t9r))
