@@ -231,10 +231,16 @@ otool() { printf '{"hook_event_name":"execute.before","session_id":"ses_check","
 check "opencode: npm i is denied, as {decision, reason}" 'oc "$(otool shell "{\"command\":\"npm i\"}")" pre-tool | grep -q "^{\"decision\":\"deny\",\"reason\":\"no-npm"'
 check "opencode: an ask rule goes out as a deny, saying why" 'oc "$(otool shell "{\"command\":\"git push\"}")" pre-tool | grep -q "cannot ask, so it is a deny"'
 check "opencode: git log prints nothing" '[ -z "$(oc "$(otool shell "{\"command\":\"git log\"}")" pre-tool)" ]'
-check "opencode: edit on Hard-Rules (relative to cwd) is stopped" 'oc "$(otool edit "{\"path\":\"00-Meta/Hard-Rules.md\",\"oldString\":\"a\",\"newString\":\"b\"}")" pre-tool | grep -q "\"decision\":\"deny\""'
-check "opencode: write on the lock is stopped" 'oc "$(otool write "{\"path\":\"$V/00-Meta/rules.lock\",\"content\":\"x\"}")" pre-tool | grep -q "\"decision\":\"deny\""'
+# A tool input with more than one key is set here, not inline: macOS's bash 3.2 mangled the
+# comma-holding literal inside the nested "$(… "…")" quoting, so the payload never parsed and the
+# guard allowed it (both Mac jobs, 6ef7e04).
+o_edit_hr='{"path":"00-Meta/Hard-Rules.md","oldString":"a","newString":"b"}'
+o_write_lock="{\"path\":\"$V/00-Meta/rules.lock\",\"content\":\"x\"}"
+o_edit_note='{"path":"notes/x.md","oldString":"a","newString":"b"}'
+check "opencode: edit on Hard-Rules (relative to cwd) is stopped" 'oc "$(otool edit "$o_edit_hr")" pre-tool | grep -q "\"decision\":\"deny\""'
+check "opencode: write on the lock is stopped" 'oc "$(otool write "$o_write_lock")" pre-tool | grep -q "\"decision\":\"deny\""'
 check "opencode: a patch naming two files is stopped by its second" 'oc "$(otool patch "{\"patchText\":\"*** Begin Patch\\n*** Add File: notes/x.md\\n+x\\n*** Update File: 00-Meta/Hard-Rules.md\\n*** End Patch\"}")" pre-tool | grep -q "\"decision\":\"deny\""'
-check "opencode: an edit on an ordinary note prints nothing" '[ -z "$(oc "$(otool edit "{\"path\":\"notes/x.md\",\"oldString\":\"a\",\"newString\":\"b\"}")" pre-tool)" ]'
+check "opencode: an edit on an ordinary note prints nothing" '[ -z "$(oc "$(otool edit "$o_edit_note")" pre-tool)" ]'
 check "opencode: a read is not judged" '[ -z "$(oc "$(otool read "{\"path\":\"00-Meta/Hard-Rules.md\"}")" pre-tool)" ]'
 check "opencode: a pin mismatch stands the guard down" '[ -z "$(oc "$(otool shell "{\"command\":\"npm i\"}")" pre-tool 0.0.0)" ]'
 out=$(oc "{\"hook_event_name\":\"session.created\",\"session_id\":\"ses_check\",\"cwd\":\"$V\"}" session 0.0.0)
