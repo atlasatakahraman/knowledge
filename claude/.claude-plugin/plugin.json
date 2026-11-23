@@ -1,21 +1,15 @@
 {
   "name": "knowledge",
-  "version": "0.11.1",
-  "description": "The knowledge vault's hooks and MCP server for Claude Code and the Claude desktop app. Each hook runs the knowledge binary's hook verb, and the server is `knowledge mcp` (find, graph, read, note); knowledge setup installs this plugin and sets knowledge_bin.",
+  "version": "0.11.2",
+  "description": "The knowledge vault's hooks for Claude Code. Each one runs the knowledge binary's hook verb; knowledge setup installs this plugin and sets knowledge_bin.",
   "author": { "name": "atlasatakahraman" },
   "license": "MIT",
   "repository": "https://github.com/atlasatakahraman/knowledge-skeleton",
-  "mcpServers": {
-    "knowledge": {
-      "command": "${user_config.knowledge_bin}",
-      "args": ["mcp"]
-    }
-  },
   "userConfig": {
     "knowledge_bin": {
       "type": "string",
       "title": "knowledge binary",
-      "description": "Absolute path of the knowledge binary the hooks and the MCP server run. knowledge setup writes it."
+      "description": "Absolute path of the knowledge binary the hooks run. knowledge setup writes it."
     }
   }
 }
