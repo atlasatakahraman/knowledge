@@ -301,8 +301,9 @@ fn check_auth() -> Check {
 }
 
 /// The Codex plugin's hooks run only once the owner has reviewed them in the Codex CLI (C1), and
-/// the ChatGPT app skips them silently until then. WARNs when fewer are trusted than the plugin
-/// has; passes when the plugin is not installed.
+/// the ChatGPT app skips them silently until then. Codex itself says which are trusted (its
+/// `hooks/list`, once a day in the sweep). WARNs when fewer are trusted than the plugin has, or
+/// when Codex does not answer; passes when the plugin is not installed.
 fn check_codex_trust() -> Check {
     match crate::setup::codex_trust() {
         None => warn(
@@ -310,9 +311,20 @@ fn check_codex_trust() -> Check {
             true,
             J::s("the Codex plugin is not installed"),
         ),
-        Some((trusted, hooks)) => warn(
+        Some(None) => warn(
             "codex-trust",
-            trusted >= hooks,
+            false,
+            obj([
+                ("trusted", J::s("unknown: Codex did not answer hooks/list")),
+                (
+                    "fix",
+                    J::s("review the plugin's hooks in the Codex CLI (/hooks)"),
+                ),
+            ]),
+        ),
+        Some(Some((trusted, hooks))) => warn(
+            "codex-trust",
+            hooks > 0 && trusted == hooks,
             obj([
                 ("trusted", n(trusted)),
                 ("hooks", n(hooks)),

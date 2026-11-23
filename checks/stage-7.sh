@@ -219,8 +219,12 @@ check "codex remove: the AGENTS.md block is gone, the owner's text kept" \
 mkdir -p "$HOME/.codex/plugins/cache/knowledge-skeleton/knowledge/$VER/hooks"
 cp "$CHJ" "$HOME/.codex/plugins/cache/knowledge-skeleton/knowledge/$VER/hooks/"
 printf '[plugins."knowledge@knowledge-skeleton"]\nenabled = true\n\n[hooks.state."knowledge@knowledge-skeleton:stop:0:0"]\ntrusted_hash = "c"\n' > "$CT"
-ctrust() { k doctor --json --only codex-trust 2>/dev/null; }
-check "doctor codex-trust WARNs while the plugin's hooks are not all reviewed" 'ctrust | grep -q "\"ok\":false" && ctrust | grep -q "\"trusted\":1"'
+# Codex alone judges trust (its hooks/list), so with no codex on PATH, as on CI, the doctor cannot
+# count a table as trusted: a stale one like this used to read as reviewed.
+NOCODEX=$(printf '%s' "$PATH" | tr ':' '\n' | while IFS= read -r d; do [ -e "$d/codex" ] || [ -e "$d/codex.exe" ] || [ -e "$d/codex.cmd" ] || printf '%s\n' "$d"; done | paste -sd: -)
+ctrust() { PATH="$NOCODEX" k doctor --json --only codex-trust 2>/dev/null; }
+check "doctor codex-trust WARNs when Codex cannot say the hooks are trusted, whatever tables exist" \
+  'ctrust | grep -q "\"ok\":false" && ctrust | grep -q "Codex did not answer hooks/list"'
 rm -f "$CT"
 check "doctor codex-trust passes with no plugin installed" 'ctrust | grep -q "\"ok\":true"'
 

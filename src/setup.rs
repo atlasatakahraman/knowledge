@@ -1825,32 +1825,75 @@ fn codex_state(codex: &Path) -> CodexState {
     }
 }
 
-/// How many hook handlers a hooks.json declares: Codex trusts each one on its own.
-fn hook_count(file: &Path) -> usize {
-    let v: serde_json::Value = serde_json::from_str(&state::read(file)).unwrap_or_default();
-    v["hooks"].as_object().map_or(0, |events| {
-        events
-            .values()
-            .filter_map(serde_json::Value::as_array)
-            .flatten()
-            .map(|g| g["hooks"].as_array().map_or(0, Vec::len))
-            .sum()
-    })
+/// Our hooks as Codex itself judges them: (trusted, all of ours), from `codex app-server`'s
+/// `hooks/list`. Codex trusts a hook by a hash of its definition and of the plugin's content, by a
+/// rule it does not document, so only Codex can say whether a trust entry still matches: counting
+/// our `[hooks.state]` tables read "9 of 9" after an update had made every one `modified` (S7.7).
+/// None when Codex is not on PATH or did not answer within 15 s.
+fn codex_hooks() -> Option<(usize, usize)> {
+    use std::io::{BufRead, BufReader, Write};
+    use std::process::{Command, Stdio};
+    let mut c = Command::new(which("codex")?);
+    c.arg("app-server")
+        .current_dir(state::home())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+    state::hide(&mut c);
+    let mut child = c.spawn().ok()?;
+    let cwd = state::home().to_string_lossy().into_owned();
+    let asks = [
+        serde_json::json!({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"clientInfo": {"name": "knowledge", "version": env!("CARGO_PKG_VERSION")}}}),
+        serde_json::json!({"jsonrpc": "2.0", "method": "initialized"}),
+        serde_json::json!({"jsonrpc": "2.0", "id": 2, "method": "hooks/list", "params": {"cwds": [cwd]}}),
+    ];
+    // stdin stays open until the answer is in: the server exits on EOF before answering.
+    let mut stdin = child.stdin.take()?;
+    for a in &asks {
+        if writeln!(stdin, "{a}").is_err() {
+            let _ = child.kill();
+            return None;
+        }
+    }
+    let out = child.stdout.take()?;
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        for line in BufReader::new(out).lines().map_while(Result::ok) {
+            let v: serde_json::Value = serde_json::from_str(&line).unwrap_or_default();
+            if v["id"] == 2 {
+                let _ = tx.send(v);
+                return;
+            }
+        }
+    });
+    let reply = rx.recv_timeout(Duration::from_secs(15));
+    // Closing stdin ends the server (`codex` may be a launcher whose kill would orphan it); the
+    // kill is only for one that did not answer.
+    drop(stdin);
+    if reply.is_err() {
+        let _ = child.kill();
+    }
+    let _ = child.wait();
+    let reply = reply.ok()?;
+    let ours: Vec<&serde_json::Value> = reply["result"]["data"]
+        .as_array()?
+        .iter()
+        .filter_map(|d| d["hooks"].as_array())
+        .flatten()
+        .filter(|h| h["pluginId"] == PLUGIN)
+        .collect();
+    let trusted = ours
+        .iter()
+        .filter(|h| h["trustStatus"] == "trusted")
+        .count();
+    Some((trusted, ours.len()))
 }
 
-/// The doctor's `codex-trust`: (our trust tables, the installed plugin's hooks), or None when the
-/// plugin is not installed.
-pub fn codex_trust() -> Option<(usize, usize)> {
-    let codex = state::home().join(".codex");
-    let st = codex_state(&codex);
-    let (name, _) = PLUGIN.split_once('@').unwrap_or((PLUGIN, ""));
-    let cache = codex.join("plugins").join("cache").join(MARKET).join(name);
-    let hooks = st
-        .versions
-        .iter()
-        .map(|v| hook_count(&cache.join(v).join("hooks").join("hooks.json")))
-        .max()?;
-    Some((st.trusted, hooks))
+/// The doctor's `codex-trust`: None when the plugin is not installed, else what Codex answered
+/// ([`codex_hooks`]), itself None when it did not.
+pub fn codex_trust() -> Option<Option<(usize, usize)>> {
+    let st = codex_state(&state::home().join(".codex"));
+    (!st.versions.is_empty()).then(codex_hooks)
 }
 
 /// Whether a TOML body names `path`, in any of the spellings a Windows path takes there.
@@ -1940,28 +1983,23 @@ fn plan_codex(args: &Args, at: Option<&Place>) -> Plan {
         p.next.push(review.into());
     }
 
-    // Trust: counted, never written.
-    let n = hook_count(&root.join("codex/hooks/hooks.json"));
-    if !st.versions.is_empty() {
-        if st.trusted >= n {
-            p.say(
+    // Trust: as Codex judges it, never written. Only for the version already installed: an update
+    // in this plan makes Codex ask again anyway, and the review line above says so.
+    if st.versions.contains(&want) {
+        match codex_hooks() {
+            Some((t, n)) if n > 0 && t == n => p.say(
                 "ok",
                 "hook trust",
-                format!(
-                    "{} of {n} hooks reviewed in Codex (a changed plugin needs review again)",
-                    st.trusted
-                ),
-            );
-        } else {
-            p.say(
-                "WARN",
-                "hook trust",
-                format!(
-                    "{} of {n} hooks reviewed; the rest never run. setup never writes trust",
-                    st.trusted
-                ),
-            );
-            p.next.push(review.into());
+                format!("{t} of {n} hooks trusted in Codex"),
+            ),
+            Some((t, n)) => {
+                p.say("WARN", "hook trust", format!("{t} of {n} hooks trusted in Codex; it reads the rest as new or modified, and they never run. setup never writes trust"));
+                p.next.push(review.into());
+            }
+            None => {
+                p.say("WARN", "hook trust", "Codex did not answer hooks/list, so trust is unknown. setup never writes trust");
+                p.next.push(review.into());
+            }
         }
     }
 

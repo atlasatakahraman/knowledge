@@ -342,14 +342,14 @@ impl Out {
 }
 
 #[cfg(windows)]
-fn hide(c: &mut Command) {
+pub fn hide(c: &mut Command) {
     use std::os::windows::process::CommandExt;
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
     c.creation_flags(CREATE_NO_WINDOW);
 }
 
 #[cfg(not(windows))]
-fn hide(_: &mut Command) {}
+pub fn hide(_: &mut Command) {}
 
 /// Run a program to its end or its timeout, with no console window. stdout and stderr are read on
 /// their own threads, so a chatty child cannot fill a pipe and stall; the wait polls, starting at
