@@ -16,8 +16,11 @@ native() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else pri
 TMP=$(mktemp -d)
 VAULT="$TMP/vault"
 export KNOWLEDGE_HOME="$TMP/home"
+# `rules check --restore` repairs the instructions blocks under HOME: a fixture vault must never
+# reach the real ~/.claude/CLAUDE.md or ~/.codex/AGENTS.md (Stage 7).
+export HOME="$TMP/user" USERPROFILE="$TMP/user"
 unset KNOWLEDGE_CONFIG
-mkdir -p "$KNOWLEDGE_HOME" "$TMP/bin"
+mkdir -p "$KNOWLEDGE_HOME" "$TMP/bin" "$HOME"
 cp -R "$ROOT/template" "$VAULT"
 printf '{"vault": "%s", "devRoot": "%s"}\n' "$(native "$VAULT")" "$(native "$TMP")" > "$KNOWLEDGE_HOME/config.json"
 # The pre-commit hook calls `knowledge` from PATH: this build, not the installed one. On Windows

@@ -1,0 +1,14 @@
+{
+  "id": "claude",
+  "translator": "claude",
+  "instructions": { "global": "~/.claude/CLAUDE.md", "form": "imports" },
+  "events": {
+    "session-start": ["SessionStart"],
+    "prompt": ["UserPromptSubmit"],
+    "pre-tool": ["PreToolUse"],
+    "post-tool": ["PostToolUse", "PostToolUseFailure"],
+    "pre-compact": ["PreCompact"],
+    "stop": ["Stop", "SubagentStop"],
+    "session-end": ["SessionEnd"]
+  }
+}

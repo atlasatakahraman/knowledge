@@ -1,0 +1,4 @@
+{
+  "id": "codex",
+  "instructions": { "global": "~/.codex/AGENTS.md", "form": "inline" }
+}

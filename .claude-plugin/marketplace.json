@@ -1,0 +1,12 @@
+{
+  "name": "knowledge-skeleton",
+  "owner": { "name": "atlasatakahraman" },
+  "description": "The knowledge-skeleton engine's Claude Code plugin. Install it with knowledge setup, which also sets the binary path.",
+  "plugins": [
+    {
+      "name": "knowledge",
+      "source": "./claude",
+      "description": "The knowledge vault's hooks for Claude Code: priming, retrieval, the guard and capture."
+    }
+  ]
+}

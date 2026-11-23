@@ -9,7 +9,6 @@
 //! whole, and a hook's context over 10,000 chars is cut to a 2,000-char preview (2026-10-09).
 //! `--dry` (the doctor measuring this output) pulls, commits and spawns nothing.
 use crate::config::Config;
-use crate::emit;
 use crate::records;
 use crate::state::{self, DECISIONS, J, META, OPS, SESSIONS};
 use std::fs;
@@ -287,7 +286,7 @@ fn skeleton_pull(cfg: &Config) -> Option<String> {
                     "--name-only",
                     &format!("{before}..HEAD"),
                     "--",
-                    "settings.hooks.json",
+                    "claude",
                 ],
                 Duration::from_secs(8),
             );
@@ -296,7 +295,7 @@ fn skeleton_pull(cfg: &Config) -> Option<String> {
                 if n == 1 { "" } else { "s" }
             );
             if !hooks.out().is_empty() {
-                line.push_str(" settings.hooks.json changed: run `knowledge setup --plan`, then `--apply` its id, so settings.json carries the new hook block.");
+                line.push_str(" The Claude plugin changed: run `claude plugin update knowledge@knowledge-skeleton`, then /reload-plugins (an update is never automatic, K14).");
             }
             Some(line)
         }
@@ -650,21 +649,9 @@ fn reflush_orphans(cfg: &Config) {
     }
 }
 
-fn out(context: String) {
-    let o = state::obj([(
-        "hookSpecificOutput",
-        state::obj([
-            ("hookEventName", J::s("SessionStart")),
-            ("additionalContext", J::s(context)),
-        ]),
-    )]);
-    emit(&o.text());
-}
-
-pub fn hook(dry: bool) {
-    let Ok(cfg) = crate::config::load() else {
-        return;
-    };
+/// The session start's context, for the harness's translator to word; None without a config.
+pub fn hook(dry: bool) -> Option<String> {
+    let cfg = crate::config::load().ok()?;
     let os = std::thread::spawn(os_now);
     let current = |os: std::thread::JoinHandle<String>| {
         os.join().unwrap_or_else(|_| std::env::consts::OS.into())
@@ -672,12 +659,11 @@ pub fn hook(dry: bool) {
     // The OS line matters most when the vault is missing: that is how a fresh boot into the other
     // OS usually looks.
     if !cfg.vault.exists() {
-        out(format!(
+        return Some(format!(
             "{}\n\nThe vault is not at {} on this OS.",
             machine(&cfg, &current(os)),
             cfg.vault.display()
         ));
-        return;
     }
     // A `claude -p` this engine started opens a session too: no pulls, commits or spawns there.
     let live = !dry && !state::invoked();
@@ -765,5 +751,5 @@ pub fn hook(dry: bool) {
         format!("per repo ({kbin} find \"<q>\" --repo [<name>]) and reachable through"),
         "the merged graph of repo graphs, so a blind sweep is the wrong tool there too.".into(),
     ]);
-    out(ctx.join("\n"));
+    Some(ctx.join("\n"))
 }

@@ -350,6 +350,12 @@ pub fn run(raw: &[String]) -> Result<u8, Fault> {
                     .unwrap_or_default(),
                 None => String::new(),
             };
+            // The engine's own hooks come through its `knowledge` plugin since S7.3: still ours.
+            let plugin = if plugin == "knowledge" {
+                String::new()
+            } else {
+                plugin
+            };
             hooks.push((
                 shown,
                 plugin,
@@ -417,7 +423,8 @@ pub fn run(raw: &[String]) -> Result<u8, Fault> {
             name: format!("MCP server instructions ({})", arr(&mi["addedNames"]).len()),
             ch: arr(&mi["addedBlocks"]).iter().map(len).sum(),
         },
-        // A hook no plugin's files name is one settings.json registers: the engine's own.
+        // A hook no plugin's files name is one settings.json registers. With the `knowledge`
+        // plugin's, those are the engine's own.
         Slice {
             owner: "plugins",
             name: format!(
@@ -429,7 +436,7 @@ pub fn run(raw: &[String]) -> Result<u8, Fault> {
         Slice {
             owner: "ours",
             name: format!(
-                "SessionStart, settings.json hooks ({})",
+                "SessionStart, knowledge hooks ({})",
                 hooks.iter().filter(|h| h.1.is_empty()).count()
             ),
             ch: hooks.iter().filter(|h| h.1.is_empty()).map(|h| h.2).sum(),

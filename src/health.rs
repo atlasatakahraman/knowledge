@@ -597,16 +597,32 @@ fn check_priming(cfg: &Config) -> Result<Check, Fault> {
                 .map(|s| s.encode_utf16().count() as i64)
         })
         .unwrap_or(-1);
+    // One branch per instructions target that holds a block: it must be the one the vault
+    // generates now. A machine with no block keeps the check's old shape.
+    let blocks = crate::instructions::blocks(&cfg.vault);
+    let stale: Vec<String> = blocks
+        .iter()
+        .filter(|(_, current)| !current)
+        .map(|(p, _)| state::native(p))
+        .collect();
+    let mut detail = obj([
+        ("imports", n(imports.len())),
+        ("missing", strs(&missing)),
+        ("unimported", strs(&unimported)),
+        ("hookChars", J::n(hook_chars)),
+        ("limit", J::n(HOOK_LIMIT)),
+    ]);
+    if !blocks.is_empty() {
+        detail.set("blocks", n(blocks.len()));
+        detail.set("staleBlocks", strs(&stale));
+    }
     Ok(fail(
         "priming",
-        missing.is_empty() && unimported.is_empty() && (0..=HOOK_LIMIT).contains(&hook_chars),
-        obj([
-            ("imports", n(imports.len())),
-            ("missing", strs(&missing)),
-            ("unimported", strs(&unimported)),
-            ("hookChars", J::n(hook_chars)),
-            ("limit", J::n(HOOK_LIMIT)),
-        ]),
+        missing.is_empty()
+            && unimported.is_empty()
+            && (0..=HOOK_LIMIT).contains(&hook_chars)
+            && stale.is_empty(),
+        detail,
     ))
 }
 

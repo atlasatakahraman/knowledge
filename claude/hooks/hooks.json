@@ -1,0 +1,37 @@
+{
+  "description": "Exec form: the binary's absolute path comes from the knowledge_bin option, so no shell starts and no PATH lookup can pick another knowledge.",
+  "hooks": {
+    "SessionStart": [
+      { "hooks": [{ "type": "command", "command": "${user_config.knowledge_bin}", "args": ["hook", "session", "--harness", "claude"] }] }
+    ],
+    "UserPromptSubmit": [
+      { "hooks": [{ "type": "command", "command": "${user_config.knowledge_bin}", "args": ["hook", "prompt", "--harness", "claude"] }] }
+    ],
+    "SessionEnd": [
+      { "hooks": [{ "type": "command", "command": "${user_config.knowledge_bin}", "args": ["hook", "capture", "--harness", "claude"], "timeout": 10 }] }
+    ],
+    "PreCompact": [
+      { "hooks": [{ "type": "command", "command": "${user_config.knowledge_bin}", "args": ["hook", "capture", "--harness", "claude"], "timeout": 10 }] }
+    ],
+    "Stop": [
+      { "hooks": [{ "type": "command", "command": "${user_config.knowledge_bin}", "args": ["hook", "capture", "--harness", "claude"], "timeout": 10, "async": true }] }
+    ],
+    "SubagentStop": [
+      { "hooks": [{ "type": "command", "command": "${user_config.knowledge_bin}", "args": ["hook", "capture", "--harness", "claude"], "timeout": 10, "async": true }] }
+    ],
+    "PreToolUse": [
+      { "matcher": "Bash|PowerShell|Edit|Write|MultiEdit|NotebookEdit|mcp__.*", "hooks": [
+        { "type": "command", "command": "${user_config.knowledge_bin}", "args": ["hook", "pre-tool", "--harness", "claude"], "timeout": 5 }
+      ] }
+    ],
+    "PostToolUse": [
+      { "matcher": "Edit|Write", "hooks": [
+        { "type": "command", "command": "${user_config.knowledge_bin}", "args": ["hook", "post-edit", "--harness", "claude"] }
+      ] },
+      { "matcher": "Bash", "hooks": [{ "type": "command", "command": "${user_config.knowledge_bin}", "args": ["hook", "post-bash", "--harness", "claude"], "timeout": 15, "async": true }] }
+    ],
+    "PostToolUseFailure": [
+      { "matcher": "Bash", "hooks": [{ "type": "command", "command": "${user_config.knowledge_bin}", "args": ["hook", "post-bash", "--harness", "claude"], "timeout": 15, "async": true }] }
+    ]
+  }
+}

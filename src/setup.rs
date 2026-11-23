@@ -1,7 +1,7 @@
 //! `knowledge setup`: the engine on this machine, planned before anything is written (Stage 6; it
 //! replaces install.ts after the Arch pass). The targets: the vault (new from template/, or
-//! adopted), config.json, the links into ~/.claude, the hook block in ~/.claude/settings.json, the
-//! CLAUDE.md imports, the githooks path of every clone, the compile state, the graphify MCP entry,
+//! adopted), config.json, the links into ~/.claude, the Claude plugin that carries the hooks (and
+//! its `knowledge_bin` option in ~/.claude/settings.json), the CLAUDE.md imports, the githooks path of every clone, the compile state, the graphify MCP entry,
 //! and with --signing this boot's signing key.
 //!
 //! `--plan` writes nothing. Its last line is the plan id: a hash of every line and of what each
@@ -10,6 +10,7 @@
 //! and settings.json is copied beside itself before a change. `--remove` never touches the vault.
 //! Stage 6 knows one harness, Claude Code; the others arrive with their adapters in Stage 7.
 use crate::config::{self, Config};
+use crate::instructions::{self, Form};
 use crate::state::{self, J};
 use crate::{Args, Fault, compile, emit, session};
 use std::fs;
@@ -22,10 +23,6 @@ const USAGE: &str = "usage:
   knowledge setup --apply <id> [the same options]
   knowledge setup --remove --plan | --remove --apply <id>";
 
-const BEGIN: &str = "<!-- knowledge-skeleton: imports, written by knowledge setup -->";
-/// The marker install.ts wrote: its section is found and replaced the same way.
-const BEGIN_OLD: &str = "<!-- knowledge-skeleton: imports, written by install.ts -->";
-const END: &str = "<!-- /knowledge-skeleton -->";
 const GIT: Duration = Duration::from_secs(20);
 /// graphify-mcp imports `mcp`, which only the [mcp] extra brings: without it the server dies on
 /// import and Claude Code lists it as failed (install.ts, Stage 4).
@@ -72,6 +69,20 @@ enum Act {
         vault: PathBuf,
         remove: bool,
         add: Option<(PathBuf, PathBuf)>,
+    },
+    /// Through the `claude` CLI: add the marketplace from this url, install the plugin, or
+    /// uninstall both.
+    Plugin {
+        add: Option<String>,
+        install: bool,
+        remove: bool,
+    },
+    /// settings.json read again when it runs, since `claude plugin` writes it in the same apply,
+    /// then [`swapped`] and written, kept beside itself first.
+    Swap {
+        file: PathBuf,
+        bin: PathBuf,
+        backup: Option<PathBuf>,
     },
 }
 
@@ -228,7 +239,7 @@ fn os_tag() -> String {
 /// The checkout the links point into: --skeleton, else the one ~/.claude/hooks already links,
 /// else the one this binary was built in, else `<devRoot>/knowledge-skeleton`.
 fn skeleton(args: &Args, dev: &Path) -> Option<PathBuf> {
-    let is = |p: &Path| p.join("settings.hooks.json").is_file() && p.join("template").is_dir();
+    let is = |p: &Path| p.join(HOOKS).is_file() && p.join("template").is_dir();
     if let Some(p) = args.get("skeleton") {
         let p = expand(p);
         return is(&p).then_some(p);
@@ -378,27 +389,15 @@ fn strip(gs: Option<&J>) -> Vec<J> {
         .collect()
 }
 
-/// settings.json's hooks with ours replaced by `block` (none for --remove): its own events first,
-/// in their order, then the block's new ones.
-fn merged(settings: &J, block: Option<&J>) -> J {
-    let current = settings.get("hooks");
-    let mut events: Vec<String> = match current {
-        Some(J::Obj(v)) => v.iter().map(|(k, _)| k.clone()).collect(),
-        _ => Vec::new(),
-    };
-    if let Some(J::Obj(b)) = block {
-        events.extend(
-            b.iter()
-                .map(|(k, _)| k.clone())
-                .filter(|k| !current.is_some_and(|c| c.get(k).is_some())),
-        );
-    }
+/// settings.json with every hook of ours taken out; a group or an event left empty goes.
+fn without_ours(settings: &J) -> J {
     let mut hooks = Vec::new();
-    for ev in events {
-        let mut gs = strip(current.and_then(|c| c.get(&ev)));
-        gs.extend(arr(block.and_then(|b| b.get(&ev))).iter().cloned());
-        if !gs.is_empty() {
-            hooks.push((ev, J::Arr(gs)));
+    if let Some(J::Obj(evs)) = settings.get("hooks") {
+        for (ev, gs) in evs {
+            let gs = strip(Some(gs));
+            if !gs.is_empty() {
+                hooks.push((ev.clone(), J::Arr(gs)));
+            }
         }
     }
     let mut next = settings.clone();
@@ -410,50 +409,57 @@ fn merged(settings: &J, block: Option<&J>) -> J {
     next
 }
 
-/// settings.hooks.json with `{KNOWLEDGE}` filled in; a token setup cannot fill is a FAIL.
-fn block(root: &Path, bin: &Path) -> Result<J, String> {
-    let file = root.join("settings.hooks.json");
-    let mut b: J =
-        serde_json::from_str(&state::read(&file)).map_err(|e| format!("{}: {e}", fwd(&file)))?;
-    let quote = |t: String| {
-        if t.contains(char::is_whitespace) {
-            format!("\"{t}\"")
+// ---- the Claude plugin ---------------------------------------------------------------------------
+
+/// The plugin's hooks, in the checkout; it also marks a folder as a skeleton checkout.
+const HOOKS: &str = "claude/hooks/hooks.json";
+/// `<plugin>@<marketplace>`, as `.claude-plugin/marketplace.json` names them.
+const PLUGIN: &str = "knowledge@knowledge-skeleton";
+const MARKET: &str = "knowledge-skeleton";
+
+/// settings.json after the swap (S7.3): no hook of ours, since the plugin carries them, and the
+/// plugin's `knowledge_bin` set to the binary its exec-form hooks run.
+fn swapped(settings: &J, bin: &Path) -> J {
+    let mut next = without_ours(settings);
+    let empty = || J::Obj(Vec::new());
+    let mut configs = next.get("pluginConfigs").cloned().unwrap_or_else(empty);
+    let mut mine = configs.get(PLUGIN).cloned().unwrap_or_else(empty);
+    let mut options = mine.get("options").cloned().unwrap_or_else(empty);
+    options.set("knowledge_bin", J::s(fwd(bin)));
+    mine.set("options", options);
+    configs.set(PLUGIN, mine);
+    next.set("pluginConfigs", configs);
+    next
+}
+
+/// settings.json with nothing of ours: no hook, and no option for the plugin.
+fn unswapped(settings: &J) -> J {
+    let mut next = without_ours(settings);
+    if let Some(mut configs) = next.get("pluginConfigs").cloned() {
+        configs.remove(PLUGIN);
+        if configs == J::Obj(Vec::new()) {
+            next.remove("pluginConfigs");
         } else {
-            t
-        }
-    };
-    let mut bad = None;
-    if let J::Obj(evs) = &mut b {
-        for (_, gs) in evs {
-            let J::Arr(gs) = gs else { continue };
-            for g in gs {
-                let Some(J::Arr(hs)) = (match g {
-                    J::Obj(items) => items.iter_mut().find(|(k, _)| k == "hooks").map(|(_, v)| v),
-                    _ => None,
-                }) else {
-                    continue;
-                };
-                for h in hs {
-                    let filled: Vec<String> = command(h)
-                        .split(' ')
-                        .map(|t| quote(t.replace("{KNOWLEDGE}", &fwd(bin))))
-                        .collect();
-                    let filled = filled.join(" ");
-                    if filled.contains('{') {
-                        bad = Some(filled.clone());
-                    }
-                    h.set("command", J::s(filled));
-                }
-            }
+            next.set("pluginConfigs", configs);
         }
     }
-    match bad {
-        Some(c) => Err(format!(
-            "{} names a placeholder setup does not fill: {c}",
-            fwd(&file)
-        )),
-        None => Ok(b),
-    }
+    next
+}
+
+/// The marketplace Claude Code knows, and the plugin version it installed, from its own records.
+fn plugin_state(claude: &Path) -> (bool, Option<String>) {
+    let plugins = claude.join("plugins");
+    let known =
+        read_obj(&plugins.join("known_marketplaces.json")).is_ok_and(|m| m.get(MARKET).is_some());
+    let version = read_obj(&plugins.join("installed_plugins.json"))
+        .ok()
+        .and_then(|i| match i.get("plugins").and_then(|p| p.get(PLUGIN)) {
+            Some(J::Arr(v)) => v
+                .iter()
+                .find_map(|r| r.get("version").and_then(J::str).map(String::from)),
+            _ => None,
+        });
+    (known, version)
 }
 
 fn read_obj(file: &Path) -> Result<J, String> {
@@ -494,13 +500,6 @@ fn imports(text: &str) -> Vec<String> {
             })
         })
         .collect()
-}
-
-/// The section's bounds: from either marker to the end marker.
-fn section(text: &str) -> Option<(usize, usize)> {
-    let at = text.find(BEGIN).or_else(|| text.find(BEGIN_OLD))?;
-    let end = text[at..].find(END)? + at + END.len();
-    Some((at, end))
 }
 
 // ---- the setup plan ------------------------------------------------------------------------------
@@ -884,37 +883,69 @@ fn plan_setup(args: &Args) -> Plan {
         p.say("WARN", "knowledge", format!("the hooks would run {}, a build folder: `cargo install --path {} --locked` puts it in ~/.cargo/bin, then plan again", fwd(&bin), fwd(&root)));
     }
 
-    // The hook block in ~/.claude/settings.json: ours replaced, every other hook kept.
+    // The hooks live in the Claude plugin (S7.3): its marketplace is this checkout's origin, as
+    // git with no autoUpdate, so an update is the owner's `claude plugin update` (K14). It installs
+    // first, so a failed install leaves the old settings.json hooks running.
+    let want = serde_json::from_str::<J>(&state::read(
+        &root.join("claude/.claude-plugin/plugin.json"),
+    ))
+    .ok()
+    .and_then(|m| m.get("version").and_then(J::str).map(String::from))
+    .unwrap_or_default();
+    let (known, version) = plugin_state(&claude);
+    match version {
+        Some(v) if v == want => p.say("ok", "plugin", format!("{PLUGIN} {v}")),
+        Some(v) => p.say("WARN", "plugin", format!("{PLUGIN} {v} is installed and the checkout has {want}: run `claude plugin update {PLUGIN}`, then /reload-plugins")),
+        None => {
+            let url = git_get(&root, "remote.origin.url");
+            if !known && url.is_empty() {
+                p.say("FAIL", "plugin", format!("{} has no origin remote to add as the plugin's marketplace", fwd(&root)));
+            } else {
+                let from = if known { format!("the known {MARKET} marketplace") } else { url.clone() };
+                p.act(
+                    "create",
+                    "plugin",
+                    format!("claude plugin install {PLUGIN}, from {from} (git, no autoUpdate)"),
+                    if known { "marketplace known".into() } else { "absent".into() },
+                    vec![Act::Plugin { add: (!known).then_some(url), install: true, remove: false }],
+                );
+            }
+        }
+    }
+
+    // settings.json: our old hook block out, the plugin's knowledge_bin option in. Every other
+    // hook and key stays.
     let file = claude.join("settings.json");
-    match (read_obj(&file), block(&root, &bin)) {
-        (Err(e), _) | (_, Err(e)) => p.say("FAIL", "settings.json", e),
-        (Ok(settings), Ok(b)) => {
-            if sig(settings.get("hooks")) == sig(Some(&b)) {
-                p.say("ok", "settings.json", format!("{}: hook block", fwd(&file)));
+    match read_obj(&file) {
+        Err(e) => p.say("FAIL", "settings.json", e),
+        Ok(settings) => {
+            if swapped(&settings, &bin) == settings {
+                p.say(
+                    "ok",
+                    "settings.json",
+                    format!("{}: no hook of ours, knowledge_bin set", fwd(&file)),
+                );
             } else {
                 let seen = seen_file(&file);
                 let backup = settings_backup(&file, &seen);
-                let events = match &b {
-                    J::Obj(v) => v.len(),
-                    _ => 0,
-                };
+                let n = sig(settings.get("hooks")).len();
                 let kept = backup
                     .as_ref()
                     .map(|b| format!(" (the old file kept as {})", fwd(b)))
                     .unwrap_or_default();
                 let detail = format!(
-                    "{}: hook block, {events} events, knowledge only{kept}",
-                    fwd(&file)
+                    "{}: our {n} hooks out (the plugin carries them), knowledge_bin = {}{kept}",
+                    fwd(&file),
+                    fwd(&bin)
                 );
-                let text = pretty(&merged(&settings, Some(&b)));
                 p.act(
                     if file.exists() { "change" } else { "create" },
                     "settings.json",
                     detail,
                     seen,
-                    vec![Act::Write {
-                        path: file.clone(),
-                        text,
+                    vec![Act::Swap {
+                        file: file.clone(),
+                        bin: bin.clone(),
                         backup,
                     }],
                 );
@@ -933,23 +964,9 @@ fn plan_setup(args: &Args) -> Plan {
     if want.iter().all(|w| have.contains(&w.to_lowercase())) {
         p.say("ok", "CLAUDE.md", "imports Identity and Hard-Rules");
     } else {
-        let sec = [
-            BEGIN.to_string(),
-            format!("# Knowledge vault - {}", fwd(&vault)),
-            String::new(),
-            "Identity and Hard-Rules load whole, every session: never move either behind a link or into a hook.".into(),
-            "The SessionStart hook gives the retrieval order.".into(),
-            String::new(),
-            format!("@{}", want[0]),
-            format!("@{}", want[1]),
-            END.to_string(),
-        ]
-        .join("\n");
-        let next = match section(&text) {
-            Some((a, e)) => format!("{}{sec}{}", &text[..a], &text[e..]),
-            None if text.is_empty() => format!("{sec}\n"),
-            None => format!("{}\n\n{sec}\n", text.trim_end()),
-        };
+        let next = instructions::block(&vault, Form::Imports)
+            .map(|sec| instructions::splice(&text, &sec))
+            .unwrap_or_default();
         let detail = format!("{}: imports {}", fwd(&md), want.join(", "));
         p.act(
             if md.exists() { "change" } else { "create" },
@@ -1228,8 +1245,9 @@ fn plan_remove(args: &Args) -> Plan {
         Err(e) => p.say("FAIL", "settings.json", e),
         Ok(settings) => {
             let n = sig(settings.get("hooks")).len();
-            if n == 0 {
-                p.say("ok", "settings.json", "no hook of ours");
+            let next = unswapped(&settings);
+            if next == settings {
+                p.say("ok", "settings.json", "no hook or plugin option of ours");
             } else {
                 let seen = seen_file(&file);
                 let backup = settings_backup(&file, &seen);
@@ -1238,10 +1256,10 @@ fn plan_remove(args: &Args) -> Plan {
                     .map(|b| format!(" (the old file kept as {})", fwd(b)))
                     .unwrap_or_default();
                 let detail = format!(
-                    "{}: our {n} hooks removed, every other hook kept{kept}",
+                    "{}: our {n} hooks and the plugin's option removed, every other hook kept{kept}",
                     fwd(&file)
                 );
-                let text = pretty(&merged(&settings, None));
+                let text = pretty(&next);
                 p.act(
                     "remove",
                     "settings.json",
@@ -1257,9 +1275,33 @@ fn plan_remove(args: &Args) -> Plan {
         }
     }
 
+    // After settings.json's own write, since `claude plugin uninstall` edits that file too.
+    let (known, version) = plugin_state(&claude);
+    if known || version.is_some() {
+        let what = match &version {
+            Some(v) => {
+                format!("claude plugin uninstall {PLUGIN} ({v}), then marketplace remove {MARKET}")
+            }
+            None => format!("claude plugin marketplace remove {MARKET}"),
+        };
+        p.act(
+            "remove",
+            "plugin",
+            what,
+            version.unwrap_or_else(|| "marketplace known".into()),
+            vec![Act::Plugin {
+                add: None,
+                install: false,
+                remove: true,
+            }],
+        );
+    } else {
+        p.say("ok", "plugin", "not installed");
+    }
+
     let md = claude.join("CLAUDE.md");
     let text = state::read(&md);
-    match section(&text) {
+    match instructions::section(&text) {
         Some((a, e)) => {
             let head = text[..a].trim_end();
             let tail = text[e..].trim_start_matches(['\r', '\n']);
@@ -1500,6 +1542,44 @@ fn exec(a: &Act) -> Result<(), String> {
                 fs::create_dir_all(d).map_err(io(d))?;
             }
             fs::write(path, text).map_err(io(path))
+        }
+        Act::Swap { file, bin, backup } => exec(&Act::Write {
+            path: file.clone(),
+            text: pretty(&swapped(&read_obj(file)?, bin)),
+            backup: backup.clone(),
+        }),
+        Act::Plugin {
+            add,
+            install,
+            remove,
+        } => {
+            let claude = which("claude").ok_or("claude is not on PATH")?;
+            let t = Duration::from_secs(120);
+            let run = |argv: &[&str], what: &str| {
+                checked(state::run(&claude, argv, None, None, &[], t), what)
+            };
+            if let Some(url) = add {
+                run(
+                    &["plugin", "marketplace", "add", url],
+                    "claude plugin marketplace add",
+                )?;
+            }
+            if *install {
+                run(
+                    &["plugin", "install", PLUGIN, "--scope", "user"],
+                    "claude plugin install",
+                )?;
+            }
+            if *remove {
+                if plugin_state(&state::home().join(".claude")).1.is_some() {
+                    run(&["plugin", "uninstall", PLUGIN], "claude plugin uninstall")?;
+                }
+                run(
+                    &["plugin", "marketplace", "remove", MARKET],
+                    "claude plugin marketplace remove",
+                )?;
+            }
+            Ok(())
         }
         Act::Mkdir(d) => fs::create_dir_all(d).map_err(io(d)),
         Act::Unlink(p) => unlink(p),

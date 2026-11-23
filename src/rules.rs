@@ -472,7 +472,7 @@ fn check(cfg: &Config, args: &Args) -> Result<u8, Fault> {
     let units = parse(&text)?;
     let d = diff(&units, &lock);
     if args.has("restore") {
-        let mut code = imports(cfg, true);
+        let code = imports(cfg, true);
         if !d.is_empty() {
             let head_ok = git_show(cfg, &format!("HEAD:{RULES}"))
                 .and_then(|h| parse(&h).ok())
@@ -484,12 +484,13 @@ fn check(cfg: &Config, args: &Args) -> Result<u8, Fault> {
                     "!! RULES: {RULES} differs from {LOCK} and from HEAD ({}); the owner runs `knowledge rules lock` or reverts\n",
                     few(&d)
                 ));
-                code = 1;
+                // The blocks copy the rules file: none is rewritten from a file the lock disowns.
+                return Ok(1);
             }
         }
-        return Ok(code);
+        return Ok(code.max(crate::instructions::restore(&cfg.vault, true)?));
     }
-    let mut code = imports(cfg, false);
+    let mut code = imports(cfg, false).max(crate::instructions::restore(&cfg.vault, false)?);
     if d.is_empty() {
         emit(&format!("rules: {} units match {LOCK}\n", lock.rules.len()));
     } else {

@@ -626,9 +626,7 @@ pub fn record(cfg: &Config, since: &str, dry: bool) -> usize {
 
 /// The PostToolUse hook: a loose prefilter (any `git` or `commit` word), then a three-day scan.
 /// A false positive costs one scan that finds nothing; a false negative is the only real failure.
-pub fn hook(input: &str) {
-    let p = state::payload(input);
-    let cmd = p["tool_input"]["command"].as_str().unwrap_or("");
+pub fn hook(cmd: &str) {
     if !has_word(cmd, "git") && !has_word(cmd, "commit") {
         return;
     }

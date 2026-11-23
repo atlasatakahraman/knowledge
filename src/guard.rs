@@ -1,23 +1,17 @@
-//! `knowledge hook pre-tool --harness claude`: the guard (spec D15, K38, K40). It reads the
+//! `knowledge hook pre-tool --harness <id>`: the guard (spec D15, K38, K40). It reads the
 //! config and `rules.lock`, nothing else, and answers `deny` or `ask` with the guard's id and
-//! reason; when it allows, it prints nothing. A missing or broken lock fails open with one stderr
-//! line: the doctor FAILs on the lock and the commit-time backstops still hold.
+//! reason, which the harness's translator words; when it allows, it answers nothing. A missing or
+//! broken lock fails open with one stderr line: the doctor FAILs on the lock and the commit-time
+//! backstops still hold.
 //!
 //! A shell line is split by hand, no crate: segments on `|`, `;`, `&`, `&&`, `||` and newlines,
 //! words on whitespace, quotes removed, `>` and `>>` kept as tokens so their targets count as
 //! written. A line it cannot judge (`$(…)`, backticks, brace expansion) is judged on the words it
 //! does see, so what hides inside passes: K40's backstop is what holds there.
+use crate::config;
+use crate::harness::{Payload, Tool};
 use crate::rules::{self, Guard, Lock};
-use crate::{Fault, config, emit};
-use serde::Deserialize;
 use std::path::{Path, PathBuf};
-
-#[derive(Deserialize)]
-struct Payload {
-    tool_name: Option<String>,
-    tool_input: Option<serde_json::Value>,
-    cwd: Option<String>,
-}
 
 /// Where a call happens, for a guard's `repo`, `branch` and `os`.
 pub struct Place {
@@ -25,62 +19,41 @@ pub struct Place {
     pub branch: String,
 }
 
-pub fn pre_tool(input: &str) -> Result<Option<String>, Fault> {
-    let p: Payload = serde_json::from_str(input)?;
-    let (Some(tool), Some(ti)) = (p.tool_name, p.tool_input) else {
-        return Ok(None);
-    };
-    let cwd = p.cwd.unwrap_or_default();
+/// The strongest guard that matches the call: its action and `id (rule): reason`, or None to allow.
+pub fn run(p: &Payload) -> Option<(String, String)> {
+    let c = &p.call;
+    if c.tool == Tool::None {
+        return None;
+    }
     let lock = match config::load().and_then(|c| rules::read_lock(&c.abs_of(rules::LOCK))) {
         Ok(Some(l)) => l,
-        Ok(None) => return Ok(None),
+        Ok(None) => return None,
         Err(f) => {
             eprintln!("knowledge guard: no usable rules.lock ({f}); allowing");
-            return Ok(None);
+            return None;
         }
     };
-    let place = place_of(Path::new(&cwd));
-    let s = |k: &str| {
-        ti.get(k)
-            .and_then(|v| v.as_str())
-            .unwrap_or_default()
-            .to_string()
-    };
-    let hit = match tool.as_str() {
-        "Bash" => judge_shell(&lock, &place, &s("command"), &cwd, false),
-        "PowerShell" => judge_shell(&lock, &place, &s("command"), &cwd, true),
-        "Edit" | "Write" | "NotebookEdit" | "MultiEdit" => {
-            let file = [s("file_path"), s("notebook_path")]
-                .into_iter()
-                .find(|f| !f.is_empty())
-                .unwrap_or_default();
-            judge(&lock, &place, |g| {
-                !file.is_empty() && g.paths.iter().any(|pat| path_match(pat, &file, &cwd))
-            })
-        }
-        t if t.starts_with("mcp__") => judge(&lock, &place, |g| {
+    let cwd = &p.cwd;
+    let place = place_of(Path::new(cwd));
+    let hit = match &c.tool {
+        Tool::Shell => judge_shell(&lock, &place, &c.command, cwd, false),
+        Tool::PowerShell => judge_shell(&lock, &place, &c.command, cwd, true),
+        Tool::Edit => judge(&lock, &place, |g| {
+            !c.path.is_empty() && g.paths.iter().any(|pat| path_match(pat, &c.path, cwd))
+        }),
+        Tool::Mcp(t) => judge(&lock, &place, |g| {
             g.tools
                 .iter()
                 .any(|pat| wild(&pat.to_lowercase(), &t.to_lowercase()))
         }),
-        _ => None,
+        Tool::None | Tool::Other => None,
     };
-    Ok(hit.map(|g| {
-        serde_json::json!({"hookSpecificOutput": {
-            "hookEventName": "PreToolUse",
-            "permissionDecision": g.action,
-            "permissionDecisionReason": format!("{} ({}): {}", g.id, g.rule, g.reason),
-        }})
-        .to_string()
-    }))
-}
-
-pub fn run(input: &str) {
-    match pre_tool(input) {
-        Ok(Some(out)) => emit(&out),
-        Ok(None) => {}
-        Err(f) => eprintln!("knowledge guard: {f}; allowing"),
-    }
+    hit.map(|g| {
+        (
+            g.action.clone(),
+            format!("{} ({}): {}", g.id, g.rule, g.reason),
+        )
+    })
 }
 
 /// The strongest answer among the guards that apply here and match: `deny` over `ask`.

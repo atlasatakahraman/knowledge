@@ -766,11 +766,6 @@ pub fn ledger_add(cfg: &Config, entries: Vec<J>) -> usize {
     n
 }
 
-/// Read stdin whole; the hook payload. Bad or absent JSON is an empty object.
-pub fn payload(text: &str) -> serde_json::Value {
-    serde_json::from_str(text).unwrap_or(serde_json::Value::Object(Default::default()))
-}
-
 /// The file's text, or "" when unreadable.
 pub fn read(path: &Path) -> String {
     fs::read_to_string(path).unwrap_or_default()

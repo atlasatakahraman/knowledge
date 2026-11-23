@@ -7,6 +7,7 @@
 //!                                             to one haiku `claude -p`, and appends what is durable
 //!                                             to the daily note.
 use crate::config::Config;
+use crate::harness::{Event, Payload};
 use crate::linkcheck::LinkCheck;
 use crate::state::{self, J, OPS, obj};
 use crate::{Args, Fault, emit, ev, vault};
@@ -105,20 +106,16 @@ fn usage_stale(cfg: &Config, month: &str, now: i64) -> bool {
     day(mtime.as_millis() as i64) != day(now)
 }
 
-pub fn hook(input: &str, dry: bool) {
+pub fn hook(p: &Payload, dry: bool) {
     if state::invoked() {
         return; // flush's own `claude -p` re-fires this hook
     }
     let Ok(cfg) = crate::config::load() else {
         return;
     };
-    let p = state::payload(input);
-    let event = p["hook_event_name"]
-        .as_str()
-        .unwrap_or("unknown")
-        .to_string();
-    let sid = state::clean_sid(p["session_id"].as_str().unwrap_or(""));
-    let is_stop = event == "Stop" || event == "SubagentStop";
+    let event = p.name.as_str();
+    let sid = state::clean_sid(&p.session);
+    let is_stop = p.event == Some(Event::Stop);
     let now = state::now_ms();
 
     // A throttled Stop exits before logging: a line per turn would say nothing.
@@ -132,7 +129,7 @@ pub fn hook(input: &str, dry: bool) {
     {
         return;
     }
-    let given = p["transcript_path"].as_str();
+    let given = p.transcript.as_deref();
     let tp = state::resolve_transcript(&sid, given);
     let tp_j = tp.as_ref().map_or(J::Null, |t| J::s(state::native(t)));
 
@@ -141,7 +138,7 @@ pub fn hook(input: &str, dry: bool) {
         emit(&format!(
             "{}\n",
             obj([
-                ("event", J::s(&event)),
+                ("event", J::s(event)),
                 ("sid", J::s(&sid)),
                 ("transcript", tp_j),
                 ("compileAndUsage", J::Bool(!is_stop)),
@@ -156,7 +153,7 @@ pub fn hook(input: &str, dry: bool) {
         .is_some_and(|t| given.is_some_and(|g| Path::new(g) == t.as_path()));
     state::log_event(
         &cfg,
-        ev!("hook" => J::s("capture"), "event" => J::s(&event), "sid" => J::s(&sid), "transcript" => tp_j, "givenPathUsed" => J::Bool(given_used)),
+        ev!("hook" => J::s("capture"), "event" => J::s(event), "sid" => J::s(&sid), "transcript" => tp_j, "givenPathUsed" => J::Bool(given_used)),
     );
 
     if !is_stop {
@@ -172,7 +169,7 @@ pub fn hook(input: &str, dry: bool) {
         return;
     }
     state::write_watermark(&sid, vec![("triedAt".into(), J::n(now))]);
-    let cwd = p["cwd"].as_str().unwrap_or("").to_string();
+    let cwd = p.cwd.clone();
     state::detach(
         &[
             "flush".into(),
@@ -184,7 +181,7 @@ pub fn hook(input: &str, dry: bool) {
         "brain_flush",
     );
     // SessionEnd's flush is the session's last write: once it finishes, records commit and push.
-    if event == "SessionEnd" {
+    if p.event == Some(Event::SessionEnd) {
         state::detach(&["records".into(), sid], "brain_records");
     }
 }

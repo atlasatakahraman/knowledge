@@ -1,26 +1,13 @@
-//! `knowledge hook <event> --harness claude`: what Claude Code runs on a prompt and after an edit.
-//! Fails silent, always ([[0002-hooks-fail-silent-always-query]]): an unknown harness, bad JSON,
-//! no match or no index all end in exit 0 and no output.
+//! `knowledge hook <verb> --harness <id>`: what a harness runs on each of its events. The adapter
+//! named by `--harness` turns the payload into a [`Payload`] and the answer into its own shape; the
+//! verbs below never see which harness called (K26).
+//! Fails silent, always ([[0002-hooks-fail-silent-always-query]]): an unknown harness, a harness
+//! without hooks, bad JSON, no match or no index all end in exit 0 and no output.
 use crate::config::{self, Config};
+use crate::harness::{self, Event, Payload};
 use crate::{Args, Fault, emit, index, search, vault};
-use serde::Deserialize;
 use std::collections::HashSet;
 use std::io::Read;
-
-#[derive(Deserialize)]
-struct Prompt {
-    prompt: Option<String>,
-}
-
-#[derive(Deserialize)]
-struct Edit {
-    tool_input: Option<ToolInput>,
-}
-
-#[derive(Deserialize)]
-struct ToolInput {
-    file_path: Option<String>,
-}
 
 pub fn run(raw: &[String]) {
     let _ = handle(raw);
@@ -28,9 +15,12 @@ pub fn run(raw: &[String]) {
 
 fn handle(raw: &[String]) -> Result<(), Fault> {
     let args = Args::parse(raw, &["harness", "record"])?;
-    if args.get("harness") != Some("claude") {
+    let Some(adapter) = args.get("harness").and_then(harness::adapter) else {
         return Ok(());
-    }
+    };
+    let Some(t) = adapter.translator() else {
+        return Ok(());
+    };
     let mut input = String::new();
     std::io::stdin()
         .read_to_string(&mut input)
@@ -38,38 +28,47 @@ fn handle(raw: &[String]) -> Result<(), Fault> {
     if let Some(dir) = args.get("record") {
         record(dir, &input);
     }
-    if args.words.first().map(String::as_str) == Some("record") {
+    let verb = args.words.first().map_or("", String::as_str);
+    if verb == "record" {
         return Ok(());
     }
-    match args.words.first().map(String::as_str) {
-        Some("pre-tool") => {
-            crate::guard::run(&input);
+    let p = match t.parse(&adapter, &input) {
+        Ok(p) => p,
+        Err(f) if verb == "pre-tool" => {
+            eprintln!("knowledge guard: {f}; allowing");
+            return Ok(());
+        }
+        Err(_) if matches!(verb, "prompt" | "post-edit") => return Ok(()),
+        // The rest read what they can of an empty payload, as the bun hooks did.
+        Err(_) => Payload {
+            name: "unknown".into(),
+            ..Payload::default()
+        },
+    };
+    // Each verb is one of the six events (`capture` is pre-compact or end, by the payload's name).
+    let (event, context) = match verb {
+        "session" => (Event::SessionStart, crate::session::hook(args.has("dry"))),
+        "pre-tool" => {
+            if let Some((action, reason)) = crate::guard::run(&p) {
+                emit(&t.verdict(&adapter, &action, &reason));
+            }
             return Ok(());
         }
         // A `claude -p` this engine started fires the hooks too: these stand down inside it.
-        Some("post-bash") if !crate::state::invoked() => {
-            crate::recorder::hook(&input);
+        "post-bash" if !crate::state::invoked() => {
+            crate::recorder::hook(&p.call.command);
             return Ok(());
         }
-        Some("post-bash") => return Ok(()),
-        Some("session") => {
-            crate::session::hook(args.has("dry"));
+        "capture" => {
+            crate::memory::hook(&p, args.has("dry-run"));
             return Ok(());
         }
-        Some("capture") => {
-            crate::memory::hook(&input, args.has("dry-run"));
-            return Ok(());
-        }
-        _ => {}
-    }
-    let cfg = config::load()?;
-    let (event, context) = match args.words.first().map(String::as_str) {
-        Some("prompt") => ("UserPromptSubmit", prompt(&cfg, &input)?),
-        Some("post-edit") => ("PostToolUse", post_edit(&cfg, &input)?),
+        "prompt" => (Event::Prompt, prompt(&config::load()?, &p)?),
+        "post-edit" => (Event::PostTool, post_edit(&config::load()?, &p)?),
         _ => return Ok(()),
     };
     if let Some(context) = context {
-        emit(&serde_json::json!({"hookSpecificOutput": {"hookEventName": event, "additionalContext": context}}).to_string());
+        emit(&t.context(&adapter, event, &context));
     }
     Ok(())
 }
@@ -95,14 +94,14 @@ fn record(dir: &str, input: &str) {
     }
 }
 
-fn prompt(cfg: &Config, input: &str) -> Result<Option<String>, Fault> {
-    let Some(text) = serde_json::from_str::<Prompt>(input)?.prompt else {
+fn prompt(cfg: &Config, p: &Payload) -> Result<Option<String>, Fault> {
+    let Some(text) = &p.prompt else {
         return Ok(None);
     };
     search::inject(
         &index::open_ro(cfg)?,
         cfg,
-        &text,
+        text,
         search::FORMAT,
         search::PASSAGE,
         &search::TUNED,
@@ -111,14 +110,11 @@ fn prompt(cfg: &Config, input: &str) -> Result<Option<String>, Fault> {
 
 /// An Edit or Write on a vault note reindexes that note, then checks it the way brain-reindex's
 /// validateNote() did. Anything outside the vault is not ours.
-fn post_edit(cfg: &Config, input: &str) -> Result<Option<String>, Fault> {
-    let Some(file) = serde_json::from_str::<Edit>(input)?
-        .tool_input
-        .and_then(|t| t.file_path)
-    else {
+fn post_edit(cfg: &Config, p: &Payload) -> Result<Option<String>, Fault> {
+    if p.call.path.is_empty() {
         return Ok(None);
-    };
-    let path = std::path::Path::new(&file);
+    }
+    let path = std::path::Path::new(&p.call.path);
     let Some(rel) = cfg.rel_of(path) else {
         // A repo's docs are kept current the same way, without the vault's write-time rules.
         let repos = cfg.repos();

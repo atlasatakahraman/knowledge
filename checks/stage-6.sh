@@ -29,26 +29,36 @@ export PATH
 # vault from its template with one finished daily log for the compile state to seed.
 SK="$TMP/sk"
 mkdir -p "$SK" "$HOME/.claude"
-for d in hooks commands skills githooks template; do cp -R "$ROOT/$d" "$SK/$d"; done
+for d in hooks commands skills githooks template claude; do cp -R "$ROOT/$d" "$SK/$d"; done
 rm -rf "$SK/hooks/.state"
-cp "$ROOT/settings.hooks.json" "$ROOT/package.json" "$SK/"
+cp "$ROOT/package.json" "$SK/"
 git -C "$SK" init -q
 VAULT="$TMP/vault"
 cp -R "$ROOT/template" "$VAULT"
 mkdir -p "$VAULT/30-Sessions/2026/01"
 printf '# 2026-01-01\n\nA finished log.\n' > "$VAULT/30-Sessions/2026/01/2026-01-01.md"
 git -C "$VAULT" init -q
-# Someone else's hook and setting, which setup must keep, and a CLAUDE.md of the user's own.
+# Someone else's hook and setting, which setup must keep, one hook of ours from before the plugin,
+# which the swap takes out, and a CLAUDE.md of the user's own.
 cat > "$HOME/.claude/settings.json" <<'EOF'
 {
   "model": "fixture",
   "hooks": {
     "Stop": [
       { "hooks": [{ "type": "command", "command": "echo someone-elses" }] }
+    ],
+    "SessionStart": [
+      { "hooks": [{ "type": "command", "command": "/fixture/bin/knowledge hook session --harness claude" }] }
     ]
   }
 }
 EOF
+# The plugin as Claude Code records it once installed, at the checkout's version, so the plan
+# never runs the real `claude plugin` against the fixture HOME.
+mkdir -p "$HOME/.claude/plugins"
+ver=$(sed -n 's/^ *"version": "\(.*\)",$/\1/p' "$ROOT/claude/.claude-plugin/plugin.json")
+printf '{"knowledge-skeleton": {"source": {"source": "git", "url": "fixture"}}}\n' > "$HOME/.claude/plugins/known_marketplaces.json"
+printf '{"version": 2, "plugins": {"knowledge@knowledge-skeleton": [{"scope": "user", "version": "%s"}]}}\n' "$ver" > "$HOME/.claude/plugins/installed_plugins.json"
 printf '# Mine\n\nThe user'"'"'s own instructions.\n' > "$HOME/.claude/CLAUDE.md"
 
 k() { "$BIN" setup "$@" --vault "$(native "$VAULT")" --dev "$(native "$TMP/dev")" --skeleton "$(native "$SK")"; }
@@ -79,7 +89,7 @@ id=$(plan_id "$plan")
 check "--plan exits 0 and ends with the plan id" '[ "$code" = 0 ] && [ -n "$id" ]'
 check "--plan leaves the tree hash unchanged" '[ "$(snap)" = "$before" ]'
 check "--plan twice gives the same id" '[ "$(plan_id "$(k --plan)")" = "$id" ]'
-check "--plan names the adopted vault, the links, the hook block and the compile state" \
+check "--plan names the adopted vault, the links, the settings swap and the compile state" \
   'printf "%s" "$plan" | grep -q "(adopted)" && printf "%s" "$plan" | grep -q "^  create  link " && printf "%s" "$plan" | grep -q "^  change  settings.json" && printf "%s" "$plan" | grep -q "1 finished log(s) marked compiled"'
 
 # A file touched between plan and apply: refused, nothing written. Put back, the plan is current again.
@@ -100,11 +110,14 @@ check "--apply changes exactly the files the plan lists" '[ "$(changed "$before"
 [ "$(changed "$before" "$after")" = "$(listed "$plan")" ] || diff <(changed "$before" "$after") <(listed "$plan") | sed 's/^/      /'
 check "a second --plan has nothing to change" 'k --plan | grep -q "^Nothing to change.$"'
 s="$HOME/.claude/settings.json"
-check "the hook block names only knowledge, and keeps someone else's hook and setting" \
-  'grep -q "echo someone-elses" "$s" && grep -q "\"model\": \"fixture\"" "$s" && ! grep -q "bun" "$s" && [ "$(grep -c " hook [a-z-]* --harness claude" "$s")" = 10 ]'
+check "the swap takes our old hook out, sets knowledge_bin, and keeps someone else's hook and setting" \
+  'grep -q "echo someone-elses" "$s" && grep -q "\"model\": \"fixture\"" "$s" && ! grep -q " hook " "$s" && grep -q "\"knowledge_bin\": \"[^\"]*knowledge" "$s"'
 check "CLAUDE.md keeps the user's text and imports Identity and Hard-Rules" \
   'grep -q "^# Mine$" "$md" && grep -q "^@.*/00-Meta/Identity.md$" "$md" && grep -q "^@.*/00-Meta/Hard-Rules.md$" "$md"'
 
+# Uninstalled by hand first, so --remove has no reason to run the real `claude plugin`.
+rm -rf "$HOME/.claude/plugins"
+after=$(snap)
 vault_before=$(snap | grep "^$FX/vault/" | grep -v "/\.git/config ")
 rplan=$(k --remove --plan); code=$?
 rid=$(plan_id "$rplan")
@@ -117,7 +130,7 @@ check "--remove --apply changes exactly the files its plan lists" \
   '[ "$(changed "$after" "$(snap)" | grep -v -e "^$FX/home/.claude/commands$" -e "^$FX/home/.claude/skills$")" = "$(listed "$rplan")" ]'
 check "--remove leaves the vault as it was" '[ "$(snap | grep "^$FX/vault/" | grep -v "/\.git/config ")" = "$vault_before" ]'
 check "--remove takes our hooks and links out and keeps the rest" \
-  '! grep -q " hook " "$s" && grep -q "echo someone-elses" "$s" && [ ! -e "$HOME/.claude/hooks" ] && [ "$(cat "$md")" = "$(cat "$TMP/out/CLAUDE.md")" ]'
+  '! grep -q " hook " "$s" && ! grep -q "knowledge_bin" "$s" && grep -q "echo someone-elses" "$s" && [ ! -e "$HOME/.claude/hooks" ] && [ "$(cat "$md")" = "$(cat "$TMP/out/CLAUDE.md")" ]'
 
 rm -rf "$TMP"
 echo
