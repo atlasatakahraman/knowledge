@@ -11,6 +11,8 @@
 //! `--harness codex` (S7.4) adds Codex beside Claude Code: its plugin, its AGENTS.md block, the
 //! `knowledge mcp` retrieval server and the graphify server, from the config.json the Claude setup wrote. It never writes hook trust.
 //! `--harness opencode` (S7.5): its plugin file, compiled into this binary, and its AGENTS.md block.
+//! `--harness generic --instructions <file>` (S7.6): the inline block in any file a harness reads.
+//! Nothing restores it at session start (a generic harness has no hooks): plan again to check it.
 use crate::config::{self, Config};
 use crate::instructions::{self, Form};
 use crate::state::{self, J};
@@ -26,7 +28,8 @@ const USAGE: &str = "usage:
   knowledge setup --remove --plan | --remove --apply <id>
   knowledge setup --harness codex --plan | --apply <id> [--skeleton <checkout>]   (after the Claude setup)
   knowledge setup --harness codex --remove --plan | --remove --apply <id>
-  knowledge setup --harness opencode [--remove] --plan | --apply <id>";
+  knowledge setup --harness opencode [--remove] --plan | --apply <id>
+  knowledge setup --harness generic --instructions <file> [--remove] --plan | --apply <id>";
 
 const GIT: Duration = Duration::from_secs(20);
 /// graphify-mcp imports `mcp`, which only the [mcp] extra brings: without it the server dies on
@@ -250,24 +253,40 @@ fn os_tag() -> String {
 /// The checkout the links point into: --skeleton, else the one ~/.claude/hooks already links,
 /// else the one this binary was built in, else `<devRoot>/knowledge-skeleton`.
 fn skeleton(args: &Args, dev: &Path) -> Option<PathBuf> {
-    let is = |p: &Path| p.join(HOOKS).is_file() && p.join("template").is_dir();
-    if let Some(p) = args.get("skeleton") {
-        let p = expand(p);
-        return is(&p).then_some(p);
+    match args.get("skeleton") {
+        Some(p) => Some(expand(p)).filter(|p| is_checkout(p)),
+        None => checkout(dev),
     }
+}
+
+/// `~/.agents/skills/brain`: the shared skills folder's link to the /brain skill.
+fn agents_brain() -> PathBuf {
+    state::home().join(".agents").join("skills").join("brain")
+}
+
+fn is_checkout(p: &Path) -> bool {
+    p.join(HOOKS).is_file() && p.join("template").is_dir()
+}
+
+/// The checkout found without `--skeleton`; `knowledge config skeleton` prints it.
+pub fn checkout(dev: &Path) -> Option<PathBuf> {
     let linked = session::skeleton_root();
-    if is(&linked) {
+    if is_checkout(&linked) {
         return Some(linked);
     }
     if let Some(a) = std::env::current_exe()
         .ok()
         .and_then(|e| real(&e))
-        .and_then(|e| e.ancestors().find(|a| is(a)).map(Path::to_path_buf))
+        .and_then(|e| {
+            e.ancestors()
+                .find(|a| is_checkout(a))
+                .map(Path::to_path_buf)
+        })
     {
         return Some(a);
     }
     let d = dev.join("knowledge-skeleton");
-    is(&d).then_some(d)
+    is_checkout(&d).then_some(d)
 }
 
 fn pages(d: &Path, out: &mut Vec<PathBuf>) {
@@ -821,7 +840,9 @@ fn plan_setup(args: &Args) -> Plan {
         );
     }
 
-    // Links into ~/.claude: the hooks folder, the /brain skill, every brain-* command.
+    // Links into ~/.claude: the hooks folder, the /brain skill, every brain-* command. And the
+    // skill again in ~/.agents/skills, the folder Codex, Gemini CLI, Cursor, opencode, Amp and Zed
+    // read (S7.6). opencode reads both folders and keeps one skill per name, so it loads once.
     let mut links = vec![
         (root.join("hooks"), claude.join("hooks"), true),
         (
@@ -829,6 +850,7 @@ fn plan_setup(args: &Args) -> Plan {
             claude.join("skills").join("brain"),
             true,
         ),
+        (root.join("skills").join("brain"), agents_brain(), true),
     ];
     let mut cmds: Vec<String> = fs::read_dir(root.join("commands"))
         .map(|rd| {
@@ -1350,7 +1372,7 @@ fn plan_remove(args: &Args) -> Plan {
         None => p.say("info", "link", "no knowledge-skeleton checkout found, so no link is known to be ours: pass --skeleton <checkout>"),
         Some(root) => {
             let inside = |path: &Path| real(path).is_some_and(|r| real(root).is_some_and(|root| r.starts_with(root)));
-            let mut paths = vec![claude.join("hooks"), claude.join("skills").join("brain")];
+            let mut paths = vec![claude.join("hooks"), claude.join("skills").join("brain"), agents_brain()];
             let mut cmds: Vec<PathBuf> = fs::read_dir(claude.join("commands")).map(|rd| rd.flatten().map(|e| e.path()).collect()).unwrap_or_default();
             cmds.sort();
             paths.extend(cmds);
@@ -2164,18 +2186,21 @@ fn configured(p: &mut Plan) -> Option<(PathBuf, PathBuf)> {
 
 /// The adapter's inline block (Identity and Hard-Rules whole) in its global instructions file.
 fn block_step(p: &mut Plan, id: &str, vault: &Path) {
-    let Some((path, form)) = crate::harness::adapter(id).and_then(|a| a.instructions()) else {
-        p.say(
+    match crate::harness::adapter(id).and_then(|a| a.instructions()) {
+        Some((path, form)) => block_write(p, "AGENTS.md", &path, form, vault),
+        None => p.say(
             "FAIL",
             "AGENTS.md",
             format!("the {id} adapter names no instructions file"),
-        );
-        return;
-    };
+        ),
+    }
+}
+
+fn block_write(p: &mut Plan, name: &'static str, path: &Path, form: Form, vault: &Path) {
     let Some(want) = instructions::block(vault, form) else {
         p.say(
             "FAIL",
-            "AGENTS.md",
+            name,
             format!(
                 "cannot read Identity.md and Hard-Rules.md in {}",
                 fwd(&vault.join(state::META))
@@ -2183,15 +2208,15 @@ fn block_step(p: &mut Plan, id: &str, vault: &Path) {
         );
         return;
     };
-    let text = state::read(&path);
+    let text = state::read(path);
     match instructions::section(&text) {
-        Some((a, e)) if text[a..e] == want => p.say("ok", "AGENTS.md", format!("{}: the block is current", fwd(&path))),
+        Some((a, e)) if text[a..e] == want => p.say("ok", name, format!("{}: the block is current", fwd(path))),
         found => p.act(
             if found.is_some() { "update" } else { "create" },
-            "AGENTS.md",
-            format!("{}: Identity and Hard-Rules written whole between the markers; text outside them kept", fwd(&path)),
-            seen_file(&path),
-            vec![Act::Write { path: path.clone(), text: instructions::splice(&text, &want), backup: None }],
+            name,
+            format!("{}: Identity and Hard-Rules written whole between the markers; text outside them kept", fwd(path)),
+            seen_file(path),
+            vec![Act::Write { path: path.to_path_buf(), text: instructions::splice(&text, &want), backup: None }],
         ),
     }
 }
@@ -2199,33 +2224,78 @@ fn block_step(p: &mut Plan, id: &str, vault: &Path) {
 /// The block out of the adapter's instructions file, the owner's text kept; the file goes when
 /// nothing else is left in it.
 fn block_remove(p: &mut Plan, id: &str) {
-    let Some((path, _)) = crate::harness::adapter(id).and_then(|a| a.instructions()) else {
-        return;
-    };
-    let text = state::read(&path);
+    if let Some((path, _)) = crate::harness::adapter(id).and_then(|a| a.instructions()) {
+        block_unwrite(p, "AGENTS.md", &path);
+    }
+}
+
+fn block_unwrite(p: &mut Plan, name: &'static str, path: &Path) {
+    let text = state::read(path);
     match instructions::section(&text) {
-        None => p.say("ok", "AGENTS.md", "no knowledge block"),
+        None => p.say("ok", name, "no knowledge block"),
         Some((a, e)) => {
             let rest = format!("{}{}", &text[..a], &text[e..]);
             let rest = rest.trim();
             let act = if rest.is_empty() {
-                Act::Unlink(path.clone())
+                Act::Unlink(path.to_path_buf())
             } else {
                 Act::Write {
-                    path: path.clone(),
+                    path: path.to_path_buf(),
                     text: format!("{rest}\n"),
                     backup: None,
                 }
             };
             p.act(
                 "remove",
-                "AGENTS.md",
-                format!("{}: the knowledge block, text outside it kept", fwd(&path)),
-                seen_file(&path),
+                name,
+                format!("{}: the knowledge block, text outside it kept", fwd(path)),
+                seen_file(path),
                 vec![act],
             );
         }
     }
+}
+
+// ---- generic (S7.6) ------------------------------------------------------------------------------
+
+/// The file `--instructions` names, refused when it is a folder: the block goes into a file.
+fn generic_file(p: &mut Plan, args: &Args) -> Option<PathBuf> {
+    let Some(f) = args.get("instructions").map(expand) else {
+        p.say(
+            "FAIL",
+            "instructions",
+            "--harness generic needs --instructions <file>: the file the harness reads",
+        );
+        return None;
+    };
+    if f.is_dir() {
+        p.say(
+            "FAIL",
+            "instructions",
+            format!("{} is a folder, not a file", fwd(&f)),
+        );
+        return None;
+    }
+    Some(f)
+}
+
+/// Inline: a harness this skeleton has no adapter for follows no `@` imports.
+fn plan_generic(args: &Args) -> Plan {
+    let mut p = Plan::default();
+    if let Some(f) = generic_file(&mut p, args)
+        && let Some((vault, _)) = configured(&mut p)
+    {
+        block_write(&mut p, "instructions", &f, Form::Generic, &vault);
+    }
+    p
+}
+
+fn plan_generic_remove(args: &Args) -> Plan {
+    let mut p = Plan::default();
+    if let Some(f) = generic_file(&mut p, args) {
+        block_unwrite(&mut p, "instructions", &f);
+    }
+    p
 }
 
 // ---- opencode (S7.5) -----------------------------------------------------------------------------
@@ -2331,7 +2401,14 @@ fn plan_opencode_remove() -> Plan {
 /// The options again, for the apply line: `--apply` must be given the plan's own inputs.
 fn options(args: &Args) -> String {
     let mut out = String::new();
-    for k in ["harness", "vault", "dev", "machine", "skeleton"] {
+    for k in [
+        "harness",
+        "instructions",
+        "vault",
+        "dev",
+        "machine",
+        "skeleton",
+    ] {
         if let Some(v) = args.get(k) {
             let v = if v.contains(char::is_whitespace) || v.is_empty() {
                 format!("\"{v}\"")
@@ -2352,7 +2429,15 @@ fn options(args: &Args) -> String {
 pub fn run(raw: &[String]) -> Result<u8, Fault> {
     let args = Args::parse(
         raw,
-        &["vault", "dev", "machine", "skeleton", "apply", "harness"],
+        &[
+            "vault",
+            "dev",
+            "machine",
+            "skeleton",
+            "apply",
+            "harness",
+            "instructions",
+        ],
     )?;
     let remove = args.has("remove");
     if args.has("plan") == args.get("apply").is_some() {
@@ -2365,9 +2450,11 @@ pub fn run(raw: &[String]) -> Result<u8, Fault> {
         ("codex", true) => plan_codex_remove(),
         ("opencode", false) => plan_opencode(),
         ("opencode", true) => plan_opencode_remove(),
+        ("generic", false) => plan_generic(&args),
+        ("generic", true) => plan_generic_remove(&args),
         (h, _) => {
             return Err(Fault::Usage(format!(
-                "setup: no harness `{h}` (claude, codex, opencode)\n{USAGE}"
+                "setup: no harness `{h}` (claude, codex, opencode, generic)\n{USAGE}"
             )));
         }
     };

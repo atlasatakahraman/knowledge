@@ -21,6 +21,7 @@ mod instructions;
 mod linkcheck;
 mod mcp;
 mod memory;
+mod note;
 mod recorder;
 mod records;
 mod rules;
@@ -50,7 +51,9 @@ const USAGE: &str = "usage:
   knowledge fetch <url> [--q <query>]... [--budget N] [--allow-private]
   knowledge events <transcript.jsonl> [--json]
   knowledge inject <text> [--format lines|tagged] [--no-passage | --passage-max N --passage-score S]
-  knowledge graph <note> [<other note>] [--json]
+  knowledge graph <note> [<other note>] [--json] | <note> --text
+  knowledge note decision <text> [--question <q>] [--promoted <path>] | note log <text>
+  knowledge config [<key>]
   knowledge rules list [--json] | kernel | check [--staged] [--restore] | lock [--seed <file>]
   knowledge rules enable|disable <pack>
   knowledge hook session|prompt|pre-tool|post-edit|post-bash|capture --harness claude
@@ -66,7 +69,7 @@ const USAGE: &str = "usage:
   knowledge post-bash [--backfill <since>] [--dry-run]
   knowledge records | hubs
   knowledge usage [--month <YYYY-MM>] [--days N] [--projects] [--blocks]
-  knowledge mcp   (an MCP server on stdio: read-only find and graph)";
+  knowledge mcp   (an MCP server on stdio: find, graph, read and note)";
 
 /// Every fallible function returns this ([[Hard-Rules]] § Working preferences: `Fault`, never
 /// `Result<_, String>`). Named `Fault` so it never collides with an `Error` already in scope.
@@ -196,6 +199,8 @@ fn main() -> ExitCode {
         "events" => events::run(rest),
         "inject" => search::run_inject(rest),
         "graph" => graph::run(rest),
+        "note" => note::run(rest),
+        "config" => config::run(rest),
         "rules" => rules::run(rest),
         // A hook never fails the harness: whatever happens inside, it exits 0.
         "hook" => {

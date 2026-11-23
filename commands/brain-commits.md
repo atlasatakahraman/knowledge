@@ -5,7 +5,7 @@ description: Write a commit digest across the vault and all repos into 50-Ops/Co
 The vault and checkout roots come from this machine's config:
 
 ```bash
-CFG=~/.claude/hooks/skeleton-config.mjs; VAULT=$(bun --bun $CFG vault); DEV=$(bun --bun $CFG devRoot)
+VAULT=$(knowledge config vault); DEV=$(knowledge config devRoot)
 ```
 
 Collect commits for the current month. The checkouts live at `$DEV/<remote-name>/`

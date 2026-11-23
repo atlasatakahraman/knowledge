@@ -127,7 +127,7 @@ k --remove --apply "$rid" > "$TMP/out/remove.txt" 2>&1; code=$?
 check "--remove --apply exits 0" '[ "$code" = 0 ]'
 # The folders the removed links leave empty stay: setup cannot tell whether it made them.
 check "--remove --apply changes exactly the files its plan lists" \
-  '[ "$(changed "$after" "$(snap)" | grep -v -e "^$FX/home/.claude/commands$" -e "^$FX/home/.claude/skills$")" = "$(listed "$rplan")" ]'
+  '[ "$(changed "$after" "$(snap)" | grep -v -e "^$FX/home/.claude/commands$" -e "^$FX/home/.claude/skills$" -e "^$FX/home/.agents/skills$")" = "$(listed "$rplan")" ]'
 check "--remove leaves the vault as it was" '[ "$(snap | grep "^$FX/vault/" | grep -v "/\.git/config ")" = "$vault_before" ]'
 check "--remove takes our hooks and links out and keeps the rest" \
   '! grep -q " hook " "$s" && ! grep -q "knowledge_bin" "$s" && grep -q "echo someone-elses" "$s" && [ ! -e "$HOME/.claude/hooks" ] && [ "$(cat "$md")" = "$(cat "$TMP/out/CLAUDE.md")" ]'

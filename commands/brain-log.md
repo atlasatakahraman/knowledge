@@ -4,7 +4,7 @@ description: Write today's session note into the brain's 30-Sessions/
 
 Write or append to `30-Sessions/YYYY/MM/YYYY-MM-DD.md`.
 
-**Rollover is `rolloverHour` local time** (`bun --bun ~/.claude/hooks/skeleton-config.mjs rolloverHour`,
+**Rollover is `rolloverHour` local time** (`knowledge config rolloverHour`,
 default 5). With the default, a session that started at 02:00 belongs to the *previous* day's note.
 Compute the date accordingly rather than using today's date blindly.
 

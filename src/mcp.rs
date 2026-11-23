@@ -1,8 +1,10 @@
 //! `knowledge mcp`: the vault's retrieval as an MCP server over stdio, for a harness whose shell
 //! sandbox cannot read `~/.config/knowledge` (Codex on Windows runs its commands as
 //! `CodexSandboxUsers`, denied there; the harness spawns an MCP server as the user, outside it).
-//! JSON-RPC 2.0, one message per line. Two read-only tools, `find` and `graph`, each re-running
-//! this binary's own verb, so the server holds no index handle and no state between calls.
+//! It is also the whole engine for a harness with no shell at all (the Claude desktop app's chat).
+//! JSON-RPC 2.0, one message per line. Four tools, K39's ceiling: `find`, `graph` and `read`
+//! (read-only) and `note` (an append), each re-running this binary's own verb, so the server holds
+//! no index handle and no state between calls.
 use crate::{Fault, emit};
 use serde_json::{Value, json};
 use std::io::BufRead;
@@ -96,6 +98,38 @@ fn tools() -> Value {
                 "additionalProperties": false
             },
             "annotations": notes,
+        },
+        {
+            "name": "read",
+            "title": "Read a vault note",
+            "description": "One note's full text, by the name find or graph gave.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "note": { "type": "string", "description": "A note's name or vault path." }
+                },
+                "required": ["note"],
+                "additionalProperties": false
+            },
+            "annotations": notes,
+        },
+        {
+            "name": "note",
+            "title": "Write to the vault's memory",
+            "description": "decision: one line in the decision ledger, for the owner to promote to \
+                an ADR. log: one bullet in today's session note. One line of text.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "kind": { "type": "string", "enum": ["decision", "log"] },
+                    "text": { "type": "string", "description": "What was decided, or what happened." }
+                },
+                "required": ["kind", "text"],
+                "additionalProperties": false
+            },
+            // An append: not read-only, so a harness asks before calling it; never destructive.
+            "annotations": { "readOnlyHint": false, "destructiveHint": false,
+                             "idempotentHint": false, "openWorldHint": false },
         }
     ])
 }
@@ -144,6 +178,19 @@ fn argv(name: &Value, a: &Value) -> Result<Vec<String>, Option<String>> {
             v.extend(field("other", false)?);
             Ok(v)
         }
+        Some("read") => Ok(vec![
+            "graph".into(),
+            field("note", true)?.unwrap_or_default(),
+            "--text".into(),
+        ]),
+        Some("note") => match a["kind"].as_str() {
+            Some(k @ ("decision" | "log")) => Ok(vec![
+                "note".into(),
+                k.into(),
+                field("text", true)?.unwrap_or_default(),
+            ]),
+            _ => Err(Some("kind: decision | log".into())),
+        },
         _ => Err(None),
     }
 }

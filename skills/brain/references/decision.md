@@ -14,11 +14,11 @@ Record a decision as an ADR, and keep the ledger (`50-Ops/decisions.jsonl`) in s
    `aliases: [ADR-<NNNN>]`), H1 `<NNNN> — <Title>`, then **Decision**, **Why**, **Rejected**
    (alternatives and why not), **Consequences**, **Related** (wikilinks). One decision per file.
 5. **Add it** to the table in `60-Decisions/00-MOC-Decisions.md`.
-6. **Ledger:** `bun --bun ~/.claude/hooks/brain-ledger.mjs add --tier 1 --question "<the question>" --answer "<the decision>" --promoted "<vault-relative path>"`
+6. **Ledger:** `knowledge note decision "<the decision>" --question "<the question>" --promoted "<vault-relative path>"`
 
 ## new --ledger — promote captured answers (tier 2)
 
-1. `bun --bun ~/.claude/hooks/brain-ledger.mjs list` — the verbatim questions and chosen answers
+1. `bun --bun "$(knowledge config skeleton)/hooks/brain-ledger.mjs" list` — the verbatim questions and chosen answers
    captured from `AskUserQuestion`, with the options that were `offered` and any `note`.
 2. Go through them **with the user**, one at a time. For each:
    - a real decision → write the ADR (steps 1–5 above), then

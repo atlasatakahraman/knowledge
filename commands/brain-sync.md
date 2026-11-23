@@ -5,7 +5,7 @@ description: Refresh the brain - re-index, merge repo graphs, verify links
 Bring the brain's indexes back in step with what is on disk. The vault and checkout roots come from this machine's config:
 
 ```bash
-CFG=~/.claude/hooks/skeleton-config.mjs; VAULT=$(bun --bun $CFG vault); DEV=$(bun --bun $CFG devRoot)
+VAULT=$(knowledge config vault); DEV=$(knowledge config devRoot); SK=$(knowledge config skeleton)
 ```
 
 Then run in order:
@@ -23,7 +23,7 @@ knowledge index && knowledge index --check
 
 ```bash
 cd "$DEV/<Repo>" && graphify update .
-bun --bun ~/.claude/hooks/brain-graph.mjs
+bun --bun "$SK/hooks/brain-graph.mjs"
 ```
 
 **`merged-graph.json` is what the graphify MCP serves.** It is the repo graphs only.
@@ -40,7 +40,7 @@ knowledge index --repo "$DEV/<Repo>"
    Exits non-zero if anything is broken:
 
 ```bash
-bun --bun ~/.claude/hooks/brain-verify.mjs
+bun --bun "$SK/hooks/brain-verify.mjs"
 ```
 
 **Do not re-derive this check as a shell one-liner.** It was got wrong twice in one run that way —

@@ -182,8 +182,8 @@ mcp=$( { rpc 1 initialize '{"protocolVersion":"2025-06-18","capabilities":{},"cl
 line() { printf '%s\n' "$mcp" | grep "\"id\":$1[,}]"; }
 check "mcp: initialize echoes the revision and offers tools; the notification gets no reply" \
   'line 1 | grep -q "\"protocolVersion\":\"2025-06-18\"" && line 1 | grep -q "\"tools\":{}" && [ "$(printf "%s\n" "$mcp" | wc -l)" -eq 7 ]'
-check "mcp: two tools, find and graph, each read-only and closed-world" \
-  '[ "$(line 2 | grep -o "\"name\":\"[a-z]*\"" | tr "\n" " ")" = "\"name\":\"find\" \"name\":\"graph\" " ] && [ "$(line 2 | grep -o "\"readOnlyHint\":true" | wc -l)" -eq 2 ] && [ "$(line 2 | grep -o "\"openWorldHint\":false" | wc -l)" -eq 2 ]'
+check "mcp: four tools; find, graph and read read-only, note not; all closed-world" \
+  '[ "$(line 2 | grep -o "\"name\":\"[a-z]*\"" | tr "\n" " ")" = "\"name\":\"find\" \"name\":\"graph\" \"name\":\"read\" \"name\":\"note\" " ] && [ "$(line 2 | grep -o "\"readOnlyHint\":true" | wc -l)" -eq 3 ] && [ "$(line 2 | grep -o "\"readOnlyHint\":false" | wc -l)" -eq 1 ] && [ "$(line 2 | grep -o "\"openWorldHint\":false" | wc -l)" -eq 4 ]'
 check "mcp: find returns the vault's ranked notes" \
   'line 3 | grep -q "\"isError\":false" && line 3 | grep -q "\"type\":\"text\""'
 check "mcp: an argument starting with - is refused as a tool error, never run as a flag" \
@@ -278,6 +278,49 @@ check "opencode remove: the plugin file gone, the owner's AGENTS.md text kept" \
 printf '// my own plugin\n' > "$OP"
 check "opencode remove: a knowledge.ts not written by setup stays" \
   'k setup --harness opencode --remove --plan 2>&1 | grep -q "not written by setup: left as it is"'
+
+# --- S7.6: generic, note, mcp, config ------------------------------------------------------------
+check "config: one value, a folder, the JSON; an unknown key is exit 2" \
+  '[ "$(k config vault)" = "$V" ] && [ "$(k config ops)" = "50-Ops" ] && k config | grep -q "\"rolloverHour\": 5" && { k config nope >/dev/null 2>&1; [ $? = 2 ]; }'
+LEDGER="$VAULT/50-Ops/decisions.jsonl"
+k note decision "use  bun
+always" --question "which runtime?" >/dev/null 2>&1
+check "note decision: one tier-1 ledger line, unpromoted, its text on one line" \
+  'tail -n 1 "$LEDGER" | grep -q "\"promoted\":null,\"tier\":1,\"sid\":null,\"src\":\"manual:[0-9]*\",\"question\":\"which runtime?\",\"answer\":\"use bun always\""'
+check "note decision: the session start counts it for /brain new decision --ledger" \
+  'printf "{\"session_id\":\"s76\",\"cwd\":\"/\",\"source\":\"startup\"}" | k hook session --harness claude 2>/dev/null | grep -q "captured decision.* not yet in 60-Decisions"'
+n=$(wc -l < "$LEDGER")
+k note decision "x" --promoted 60-Decisions/none.md >/dev/null 2>&1; code=$?
+check "note decision: --promoted to a missing note is refused, nothing written" '[ "$code" = 2 ] && [ "$(wc -l < "$LEDGER")" = "$n" ]'
+k note log "tried  the note verb" >/dev/null 2>&1
+DAY=$(find "$VAULT/30-Sessions" -name '*.md' -newer "$LEDGER" | head -n 1)
+check "note log: a bullet under its own heading in the day's note" \
+  '[ -n "$DAY" ] && grep -q "^### [0-9][0-9]:[0-9][0-9] · note · " "$DAY" && grep -q "^- tried the note verb$" "$DAY"'
+mcp=$( { rpc 1 tools/call '{"name":"read","arguments":{"note":"Hard-Rules"}}'
+         rpc 2 tools/call '{"name":"read","arguments":{"note":"../../outside"}}'
+         rpc 3 tools/call '{"name":"note","arguments":{"kind":"log","text":"from mcp"}}'
+         rpc 4 tools/call '{"name":"note","arguments":{"kind":"rm","text":"x"}}'; } | k mcp 2>/dev/null)
+check "mcp read: a note's text by name; a name outside the index is a tool error" \
+  'line 1 | grep -q "\"isError\":false" && line 1 | grep -q "Hard Rules" && line 2 | grep -q "\"isError\":true" && line 2 | grep -q "no note named"'
+check "mcp note: a log bullet written; an unknown kind refused" \
+  'line 3 | grep -q "\"isError\":false" && grep -q "^- from mcp$" "$DAY" && line 4 | grep -q "kind: decision | log"'
+GEN="$HOME/GEMINI.md"
+printf 'My own line.\n' > "$GEN"
+check "generic setup: --instructions is required, a folder refused" \
+  'k setup --harness generic --plan 2>&1 | grep -q "FAIL    instructions .*needs --instructions" && k setup --harness generic --instructions "$(native "$HOME")" --plan 2>&1 | grep -q "is a folder, not a file"'
+out=$(k setup --harness generic --instructions "$(native "$GEN")" --plan 2>&1)
+k setup --harness generic --instructions "$(native "$GEN")" --apply "$(printf "%s" "$out" | sed -n "s/^plan //p")" >/dev/null 2>&1
+check "generic setup apply: the block with the note lines, the owner's text kept" \
+  'grep -qF "$BEGIN" "$GEN" && grep -q "^No hook records this session" "$GEN" && grep -q "^My own line.$" "$GEN"'
+check "generic setup plan again: nothing to change" \
+  'k setup --harness generic --instructions "$(native "$GEN")" --plan 2>&1 | grep -q "^Nothing to change.$"'
+check "codex and opencode blocks carry no note lines (their hooks capture the session)" \
+  '! grep -q "No hook records this session" "$CODEX" "$OPEN" 2>/dev/null'
+out=$(k setup --harness generic --instructions "$(native "$GEN")" --remove --plan 2>&1)
+k setup --harness generic --instructions "$(native "$GEN")" --remove --apply "$(printf "%s" "$out" | sed -n "s/^plan //p")" >/dev/null 2>&1
+check "generic remove: the block gone, the owner's text kept" '[ "$(cat "$GEN")" = "My own line." ]'
+check "no skill or command names ~/.claude/hooks or skeleton-config.mjs" \
+  '! grep -rqE "claude/hooks|skeleton-config" "$ROOT/skills" "$ROOT/commands"'
 
 rm -rf "$TMP"
 if [ "$fails" -eq 0 ]; then echo "stage 7: all checks pass"; else echo "stage 7: $fails check(s) FAIL"; exit 1; fi

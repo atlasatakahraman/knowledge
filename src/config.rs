@@ -167,6 +167,68 @@ impl Config {
     }
 }
 
+/// The vault's folders, as `skeleton-config.mjs`'s FOLDERS names them.
+const FOLDERS: [(&str, &str); 9] = [
+    ("meta", "00-Meta"),
+    ("repos", "10-Repos"),
+    ("knowledge", "20-Knowledge"),
+    ("sessions", "30-Sessions"),
+    ("plans", "40-Plans"),
+    ("ops", "50-Ops"),
+    ("decisions", "60-Decisions"),
+    ("assets", "80-Assets"),
+    ("inbox", "90-Inbox"),
+];
+
+/// `knowledge config [<key>]`: the resolved config as JSON, or one value, for a skill or command
+/// that needs a path (`skeleton-config.mjs`'s keys, plus `home` and `skeleton`). It is what lets a
+/// skill loaded by Codex or opencode run with no `~/.claude/hooks`.
+pub fn run(raw: &[String]) -> Result<u8, Fault> {
+    let cfg = load()?;
+    let shown = |p: &Path| p.display().to_string();
+    // The checkout the bun scripts are in, until Stage 9 ports them; empty when none is found.
+    let skeleton = crate::setup::checkout(&cfg.dev).map_or_else(String::new, |p| shown(&p));
+    let values = serde_json::json!({
+        "vault": shown(&cfg.vault),
+        "devRoot": shown(&cfg.dev),
+        "os": cfg.os,
+        "machine": cfg.machine,
+        "rolloverHour": cfg.rollover,
+        "pullTrust": if cfg.pull_trust { "signed" } else { "" },
+        "trustDir": shown(&cfg.trust_dir),
+        "source": shown(&config_path()),
+        "home": shown(&cfg.home),
+        "skeleton": skeleton,
+    });
+    match raw {
+        [] => crate::emit(&format!("{}\n", serde_json::to_string_pretty(&values)?)),
+        [key] => match (values.get(key), FOLDERS.iter().find(|(k, _)| k == key)) {
+            (Some(serde_json::Value::String(s)), _) if key == "skeleton" && s.is_empty() => {
+                return Err(Fault::Config(
+                    "no skeleton checkout found: run `knowledge setup --plan`".into(),
+                ));
+            }
+            (Some(serde_json::Value::String(s)), _) => crate::emit(&format!("{s}\n")),
+            (Some(v), _) => crate::emit(&format!("{v}\n")),
+            (None, Some((_, dir))) => crate::emit(&format!("{dir}\n")),
+            (None, None) => {
+                let keys: Vec<&str> = values
+                    .as_object()
+                    .into_iter()
+                    .flat_map(|o| o.keys().map(String::as_str))
+                    .chain(FOLDERS.iter().map(|(k, _)| *k))
+                    .collect();
+                return Err(Fault::Usage(format!(
+                    "config: unknown key \"{key}\": {}",
+                    keys.join(", ")
+                )));
+            }
+        },
+        _ => return Err(Fault::Usage("knowledge config [<key>]".into())),
+    }
+    Ok(0)
+}
+
 /// The path with its on-disk case, when it exists. Windows' canonical form starts `\\?\`, which
 /// no other tool prints, so it is dropped.
 fn canonical(p: &Path) -> PathBuf {

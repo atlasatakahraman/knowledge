@@ -113,6 +113,13 @@ pub fn run(raw: &[String]) -> Result<u8, Fault> {
     let cfg = config::load()?;
     let conn = index::open_ro(&cfg)?;
     match args.words.as_slice() {
+        // The note itself, for a harness with no shell to open it (the MCP `read` tool). Only an
+        // indexed path is read, so a name cannot reach a file outside the vault.
+        [note] if args.has("text") => {
+            let (_, path) = resolve(&conn, &cfg, note)?;
+            let file = cfg.abs_of(&path);
+            emit(&std::fs::read_to_string(&file).map_err(|e| Fault::io(&file, e))?);
+        }
         [note] => {
             let (id, path) = resolve(&conn, &cfg, note)?;
             let (out, inc) = (outgoing(&conn, id)?, incoming(&conn, id)?);
@@ -154,7 +161,7 @@ pub fn run(raw: &[String]) -> Result<u8, Fault> {
         }
         _ => {
             return Err(Fault::Usage(
-                "knowledge graph <note> [<other note>] [--json]".into(),
+                "knowledge graph <note> [<other note>] [--json] | <note> --text".into(),
             ));
         }
     }
