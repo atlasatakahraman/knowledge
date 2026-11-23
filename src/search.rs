@@ -6,12 +6,22 @@ use crate::{Args, Fault, emit};
 use rusqlite::Connection;
 use std::collections::HashSet;
 
-/// Words that match everything and so rank nothing. brain-lib's list.
-const STOP: [&str; 38] = [
-    "the", "and", "for", "with", "that", "this", "from", "have", "been", "are", "was", "you",
-    "your", "can", "not", "but", "how", "why", "what", "when", "where", "does", "did", "its",
-    "his", "her", "them", "they", "then", "than", "into", "out", "get", "got", "use", "using",
-    "should", "would",
+/// English function words: they say nothing about a note, yet in a technical vault a word like
+/// `these` is rare enough to take a rare-token slot from a word that names the topic (S7.0a:
+/// `these`, `there` and `most` pushed `player` out of a Queue prompt). The usual English list, of
+/// three letters or more, plus brain-lib's `get`, `got`, `use`, `using` and `would`.
+#[rustfmt::skip] // one word per line would be 105 lines
+const STOP: [&str; 105] = [
+    "about", "above", "after", "again", "against", "all", "and", "any", "are", "because", "been",
+    "before", "being", "below", "between", "both", "but", "can", "did", "does", "doing", "down",
+    "during", "each", "few", "for", "from", "further", "get", "got", "had", "has", "have",
+    "having", "her", "here", "hers", "herself", "him", "himself", "his", "how", "into", "its",
+    "itself", "just", "more", "most", "myself", "nor", "not", "now", "off", "once", "only",
+    "other", "our", "ours", "ourselves", "out", "over", "own", "same", "she", "should", "some",
+    "such", "than", "that", "the", "their", "theirs", "them", "themselves", "then", "there",
+    "these", "they", "this", "those", "through", "too", "under", "until", "use", "using", "very",
+    "was", "were", "what", "when", "where", "which", "while", "who", "whom", "why", "will",
+    "with", "would", "you", "your", "yours", "yourself", "yourselves",
 ];
 
 /// Kinds that are records, not answers: hundreds of short commit notes would crowd rules and
