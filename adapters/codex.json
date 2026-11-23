@@ -1,4 +1,19 @@
 {
   "id": "codex",
-  "instructions": { "global": "~/.codex/AGENTS.md", "form": "inline" }
+  "name": "Codex",
+  "translator": "codex",
+  "instructions": { "global": "~/.codex/AGENTS.md", "form": "inline" },
+  "events": {
+    "session-start": ["SessionStart"],
+    "prompt": ["UserPromptSubmit"],
+    "pre-tool": ["PreToolUse"],
+    "post-tool": ["PostToolUse"],
+    "pre-compact": ["PreCompact"],
+    "stop": ["Stop", "SubagentStop"],
+    "session-end": ["SessionEnd"]
+  },
+  "runner": {
+    "argv": ["codex", "exec", "--ignore-user-config", "-m", "gpt-6-luna", "-s", "read-only", "--skip-git-repo-check", "--json", "-"],
+    "reply": "codex-jsonl"
+  }
 }

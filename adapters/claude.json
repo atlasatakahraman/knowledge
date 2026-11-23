@@ -1,5 +1,6 @@
 {
   "id": "claude",
+  "name": "Claude Code",
   "translator": "claude",
   "instructions": { "global": "~/.claude/CLAUDE.md", "form": "imports" },
   "events": {
@@ -10,5 +11,6 @@
     "pre-compact": ["PreCompact"],
     "stop": ["Stop", "SubagentStop"],
     "session-end": ["SessionEnd"]
-  }
+  },
+  "runner": { "argv": ["claude", "-p", "--model", "haiku"], "reply": "text" }
 }

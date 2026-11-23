@@ -9,6 +9,7 @@
 //! whole, and a hook's context over 10,000 chars is cut to a 2,000-char preview (2026-10-09).
 //! `--dry` (the doctor measuring this output) pulls, commits and spawns nothing.
 use crate::config::Config;
+use crate::instructions::Form;
 use crate::records;
 use crate::state::{self, DECISIONS, J, META, OPS, SESSIONS};
 use std::fs;
@@ -650,7 +651,7 @@ fn reflush_orphans(cfg: &Config) {
 }
 
 /// The session start's context, for the harness's translator to word; None without a config.
-pub fn hook(dry: bool) -> Option<String> {
+pub fn hook(dry: bool, instructions: Option<(&str, Form)>) -> Option<String> {
     let cfg = crate::config::load().ok()?;
     let os = std::thread::spawn(os_now);
     let current = |os: std::thread::JoinHandle<String>| {
@@ -730,10 +731,15 @@ pub fn hook(dry: bool) -> Option<String> {
         ctx.extend([l, String::new()]);
     }
     ctx.push(machine(&cfg, &current(os)));
+    // Claude imports the two files; a harness without imports has them written whole into its file.
+    let how = match instructions {
+        Some((file, Form::Inline)) => format!("written whole into {file}"),
+        _ => "through ~/.claude/CLAUDE.md imports".into(),
+    };
     ctx.extend([
         String::new(),
         format!("The user's second brain is at {vault}. Its Identity.md and Hard-Rules.md are loaded in full"),
-        "through ~/.claude/CLAUDE.md imports and are authoritative about who the user is and the rules.".into(),
+        format!("{how} and are authoritative about who the user is and the rules."),
         String::new(),
         "Retrieval order for anything else - do not skip tiers:".into(),
         "  0. Note names injected on each prompt by the knowledge hook - vault notes only. Follow one into the file.".into(),

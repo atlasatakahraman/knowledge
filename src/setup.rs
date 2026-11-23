@@ -8,7 +8,8 @@
 //! target holds now, so `--apply <id>` recomputes the plan and refuses when anything moved in
 //! between. Nothing is deleted: a real file where a link belongs moves to ~/.claude/.pre-skeleton/,
 //! and settings.json is copied beside itself before a change. `--remove` never touches the vault.
-//! Stage 6 knows one harness, Claude Code; the others arrive with their adapters in Stage 7.
+//! `--harness codex` (S7.4) adds Codex beside Claude Code: its plugin, its AGENTS.md block, the
+//! `knowledge mcp` retrieval server and the graphify server, from the config.json the Claude setup wrote. It never writes hook trust.
 use crate::config::{self, Config};
 use crate::instructions::{self, Form};
 use crate::state::{self, J};
@@ -21,7 +22,9 @@ const USAGE: &str = "usage:
   knowledge setup --plan [--vault <path>] [--dev <path>] [--machine <text>] [--from-template | --adopt]
                          [--signing] [--skeleton <checkout>]
   knowledge setup --apply <id> [the same options]
-  knowledge setup --remove --plan | --remove --apply <id>";
+  knowledge setup --remove --plan | --remove --apply <id>
+  knowledge setup --harness codex --plan | --apply <id> [--skeleton <checkout>]   (after the Claude setup)
+  knowledge setup --harness codex --remove --plan | --remove --apply <id>";
 
 const GIT: Duration = Duration::from_secs(20);
 /// graphify-mcp imports `mcp`, which only the [mcp] extra brings: without it the server dies on
@@ -77,6 +80,12 @@ enum Act {
         install: bool,
         remove: bool,
     },
+    /// One `codex` CLI call: the marketplace, the plugin, or the graphify server.
+    Codex(Vec<String>),
+    /// config.toml read again when it runs (the `codex` calls before it write the same file),
+    /// kept beside itself, then written without our `[hooks.state]` tables. Clearing trust is the
+    /// one write setup makes there; it never adds trust (C1).
+    Untrust(PathBuf),
     /// settings.json read again when it runs, since `claude plugin` writes it in the same apply,
     /// then [`swapped`] and written, kept beside itself first.
     Swap {
@@ -1581,6 +1590,25 @@ fn exec(a: &Act) -> Result<(), String> {
             }
             Ok(())
         }
+        Act::Codex(argv) => {
+            let codex = which("codex").ok_or("codex is not on PATH")?;
+            let argv: Vec<&str> = argv.iter().map(String::as_str).collect();
+            let what = format!("codex {}", argv[..argv.len().min(3)].join(" "));
+            checked(
+                state::run(&codex, &argv, None, None, &[], Duration::from_secs(120)),
+                &what,
+            )
+        }
+        Act::Untrust(file) => {
+            let text = fs::read_to_string(file).map_err(io(file))?;
+            let next = untrusted(&text);
+            if next == text {
+                return Ok(());
+            }
+            let backup = file.with_extension("toml.pre-skeleton");
+            fs::copy(file, &backup).map_err(io(&backup))?;
+            fs::write(file, next).map_err(io(file))
+        }
         Act::Mkdir(d) => fs::create_dir_all(d).map_err(io(d)),
         Act::Unlink(p) => unlink(p),
         Act::Aside { path, to } => {
@@ -1677,12 +1705,506 @@ fn exec(a: &Act) -> Result<(), String> {
     }
 }
 
+// ---- Codex (S7.4) --------------------------------------------------------------------------------
+
+/// A TOML table header line: `[a.b."c"]`, or `[[array]]`.
+fn header(line: &str) -> bool {
+    line.trim_start().starts_with('[')
+}
+
+/// The body of the table whose header line is `head`, up to the next header.
+fn table(text: &str, head: &str) -> Option<String> {
+    let mut lines = text.lines().skip_while(|l| l.trim() != head);
+    lines.next()?;
+    Some(
+        lines
+            .take_while(|l| !header(l))
+            .collect::<Vec<_>>()
+            .join("\n"),
+    )
+}
+
+/// One of our hooks' trust tables: `[hooks.state."knowledge@knowledge-skeleton:<event>:i:j"]`.
+fn ours_trusted(line: &str) -> bool {
+    let l = line.trim_start();
+    l.starts_with("[hooks.state.") && l.contains(&format!("{PLUGIN}:"))
+}
+
+/// config.toml without our trust tables, each header with its body; every other byte kept.
+fn untrusted(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut skip = false;
+    for line in text.split_inclusive('\n') {
+        if header(line) {
+            skip = ours_trusted(line);
+        }
+        if !skip {
+            out.push_str(line);
+        }
+    }
+    out
+}
+
+/// What Codex holds of ours. config.toml is read as text, one header per line, since setup only
+/// needs to know which tables exist; the `codex` CLI does every write but [`Act::Untrust`].
+struct CodexState {
+    known: bool,
+    /// The plugin's cached versions, when it is enabled.
+    versions: Vec<String>,
+    /// The `[mcp_servers.graphify]` body.
+    mcp: Option<String>,
+    /// The `[mcp_servers.knowledge]` body.
+    retrieval: Option<String>,
+    trusted: usize,
+}
+
+fn codex_state(codex: &Path) -> CodexState {
+    let text = state::read(&codex.join("config.toml"));
+    let has = |head: String| text.lines().any(|l| l.trim() == head);
+    let (name, _) = PLUGIN.split_once('@').unwrap_or((PLUGIN, ""));
+    let versions = if has(format!("[plugins.\"{PLUGIN}\"]")) {
+        let cache = codex.join("plugins").join("cache").join(MARKET).join(name);
+        fs::read_dir(cache)
+            .map(|rd| {
+                rd.flatten()
+                    .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))
+                    .map(|e| e.file_name().to_string_lossy().into_owned())
+                    .collect()
+            })
+            .unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+    CodexState {
+        known: has(format!("[marketplaces.{MARKET}]")),
+        versions,
+        mcp: table(&text, "[mcp_servers.graphify]"),
+        retrieval: table(&text, "[mcp_servers.knowledge]"),
+        trusted: text.lines().filter(|l| ours_trusted(l)).count(),
+    }
+}
+
+/// How many hook handlers a hooks.json declares: Codex trusts each one on its own.
+fn hook_count(file: &Path) -> usize {
+    let v: serde_json::Value = serde_json::from_str(&state::read(file)).unwrap_or_default();
+    v["hooks"].as_object().map_or(0, |events| {
+        events
+            .values()
+            .filter_map(serde_json::Value::as_array)
+            .flatten()
+            .map(|g| g["hooks"].as_array().map_or(0, Vec::len))
+            .sum()
+    })
+}
+
+/// The doctor's `codex-trust`: (our trust tables, the installed plugin's hooks), or None when the
+/// plugin is not installed.
+pub fn codex_trust() -> Option<(usize, usize)> {
+    let codex = state::home().join(".codex");
+    let st = codex_state(&codex);
+    let (name, _) = PLUGIN.split_once('@').unwrap_or((PLUGIN, ""));
+    let cache = codex.join("plugins").join("cache").join(MARKET).join(name);
+    let hooks = st
+        .versions
+        .iter()
+        .map(|v| hook_count(&cache.join(v).join("hooks").join("hooks.json")))
+        .max()?;
+    Some((st.trusted, hooks))
+}
+
+/// Whether a TOML body names `path`, in any of the spellings a Windows path takes there.
+fn names_path(body: &str, path: &Path) -> bool {
+    body.replace("\\\\", "/")
+        .replace('\\', "/")
+        .to_lowercase()
+        .contains(&fwd(path).to_lowercase())
+}
+
+/// `setup --harness codex`: the plugin from this checkout's local marketplace, the AGENTS.md block,
+/// and two MCP servers, retrieval's and graphify's. Trust is never written: the owner reviews the hooks once in the Codex CLI
+/// (C1), and this plan only says how many are reviewed.
+fn plan_codex(args: &Args) -> Plan {
+    let mut p = Plan::default();
+    let codex = state::home().join(".codex");
+    let config = codex.join("config.toml");
+    if which("codex").is_none() {
+        p.say(
+            "FAIL",
+            "prerequisites",
+            "codex is not on PATH. Install the Codex CLI, then plan again",
+        );
+        return p;
+    }
+    let ver = env!("CARGO_PKG_VERSION");
+    // The plugin's hooks run `knowledge` from PATH: no option carries an absolute path in Codex.
+    let this = std::env::current_exe().ok().and_then(|e| real(&e));
+    let bin = match (which("knowledge").and_then(|k| real(&k)), &this) {
+        (Some(k), Some(t)) if same(&k, t) => {
+            p.say("ok", "knowledge", format!("{} on PATH ({ver})", fwd(&k)));
+            k
+        }
+        (Some(k), _) => {
+            p.say("WARN", "knowledge", format!("the hooks run the knowledge on PATH, {}, not this binary; its version must be {ver}", fwd(&k)));
+            k
+        }
+        (None, _) => {
+            p.say("FAIL", "knowledge", "knowledge is not on PATH, and the Codex hooks find it there: `cargo install --path <checkout> --locked`, then plan again");
+            return p;
+        }
+    };
+    let existing = read_obj(&config::config_path()).unwrap_or(J::Obj(Vec::new()));
+    let str_of = |k: &str| {
+        existing
+            .get(k)
+            .and_then(J::str)
+            .filter(|s| !s.is_empty())
+            .map(expand)
+    };
+    let Some(vault) = str_of("vault") else {
+        p.say(
+            "FAIL",
+            "config",
+            "config.json names no vault: run `knowledge setup --plan` (Claude Code) first",
+        );
+        return p;
+    };
+    let dev = str_of("devRoot").unwrap_or_else(|| expand("~/dev"));
+    let Some(root) = skeleton(args, &dev) else {
+        p.say(
+            "FAIL",
+            "skeleton",
+            "no knowledge-skeleton checkout found: pass --skeleton <checkout>",
+        );
+        return p;
+    };
+    let manifest = root.join("codex/.codex-plugin/plugin.json");
+    let want = serde_json::from_str::<J>(&state::read(&manifest))
+        .ok()
+        .and_then(|m| m.get("version").and_then(J::str).map(String::from));
+    let Some(want) = want.filter(|_| root.join(".agents/plugins/marketplace.json").is_file())
+    else {
+        p.say("FAIL", "plugin", format!("{} has no Codex plugin (codex/.codex-plugin/plugin.json and .agents/plugins/marketplace.json)", fwd(&root)));
+        return p;
+    };
+
+    // The plugin. A local marketplace has no upgrade: `plugin add` again copies the new version,
+    // and Codex then asks for the changed hooks to be reviewed again.
+    let st = codex_state(&codex);
+    let review = "Open the Codex CLI and review the plugin's hooks (it asks, or /hooks): unreviewed hooks never run, and the ChatGPT app never asks";
+    if st.versions.contains(&want) {
+        p.say("ok", "plugin", format!("{PLUGIN} {want}"));
+    } else {
+        let mut acts = Vec::new();
+        if !st.known {
+            let src = root.to_string_lossy().into_owned();
+            acts.push(Act::Codex(vec![
+                "plugin".into(),
+                "marketplace".into(),
+                "add".into(),
+                src,
+            ]));
+        }
+        acts.push(Act::Codex(vec![
+            "plugin".into(),
+            "add".into(),
+            PLUGIN.into(),
+        ]));
+        let (status, detail) = match st.versions.first() {
+            Some(v) => (
+                "update",
+                format!("codex plugin add {PLUGIN}: {v} to {want}"),
+            ),
+            None => (
+                "create",
+                format!(
+                    "codex plugin add {PLUGIN} {want}, from {} (local marketplace)",
+                    fwd(&root)
+                ),
+            ),
+        };
+        p.act(status, "plugin", detail, seen_file(&config), acts);
+        p.next.push(review.into());
+    }
+
+    // Trust: counted, never written.
+    let n = hook_count(&root.join("codex/hooks/hooks.json"));
+    if !st.versions.is_empty() {
+        if st.trusted >= n {
+            p.say(
+                "ok",
+                "hook trust",
+                format!(
+                    "{} of {n} hooks reviewed in Codex (a changed plugin needs review again)",
+                    st.trusted
+                ),
+            );
+        } else {
+            p.say(
+                "WARN",
+                "hook trust",
+                format!(
+                    "{} of {n} hooks reviewed; the rest never run. setup never writes trust",
+                    st.trusted
+                ),
+            );
+            p.next.push(review.into());
+        }
+    }
+
+    // The AGENTS.md block, Identity and Hard-Rules whole (Codex cannot import).
+    let adapter = crate::harness::adapter("codex");
+    match adapter.as_ref().and_then(|a| a.instructions()) {
+        None => p.say(
+            "FAIL",
+            "AGENTS.md",
+            "the codex adapter names no instructions file",
+        ),
+        Some((path, form)) => match instructions::block(&vault, form) {
+            None => p.say(
+                "FAIL",
+                "AGENTS.md",
+                format!(
+                    "cannot read Identity.md and Hard-Rules.md in {}",
+                    fwd(&vault.join(state::META))
+                ),
+            ),
+            Some(want) => {
+                let text = state::read(&path);
+                match instructions::section(&text) {
+                    Some((a, e)) if text[a..e] == want => p.say("ok", "AGENTS.md", format!("{}: the block is current", fwd(&path))),
+                    found => p.act(
+                        if found.is_some() { "update" } else { "create" },
+                        "AGENTS.md",
+                        format!("{}: Identity and Hard-Rules written whole between the markers; text outside them kept", fwd(&path)),
+                        seen_file(&path),
+                        vec![Act::Write { path: path.clone(), text: instructions::splice(&text, &want), backup: None }],
+                    ),
+                }
+            }
+        },
+    }
+
+    // Retrieval as an MCP server: Codex's Windows sandbox denies its shell `~/.config/knowledge`,
+    // where the index and config live, and an MCP server runs as the user, outside the sandbox.
+    // The same binary the hooks run, by absolute path; its tools are read-only, so never asked.
+    match &st.retrieval {
+        Some(body) if names_path(body, &bin) => p.say(
+            "ok",
+            "knowledge MCP",
+            format!("~/.codex/config.toml, {} mcp", fwd(&bin)),
+        ),
+        current => {
+            let mut acts = Vec::new();
+            if current.is_some() {
+                acts.push(Act::Codex(vec![
+                    "mcp".into(),
+                    "remove".into(),
+                    "knowledge".into(),
+                ]));
+            }
+            acts.push(Act::Codex(vec![
+                "mcp".into(),
+                "add".into(),
+                "knowledge".into(),
+                "--".into(),
+                bin.to_string_lossy().into_owned(),
+                "mcp".into(),
+            ]));
+            p.act(
+                if current.is_some() {
+                    "update"
+                } else {
+                    "create"
+                },
+                "knowledge MCP",
+                format!(
+                    "codex mcp add knowledge -- {} mcp (read-only find and graph)",
+                    fwd(&bin)
+                ),
+                seen_file(&config),
+                acts,
+            );
+        }
+    }
+
+    // graphify's server. Codex keeps it in the user config, so every Codex session sees it.
+    let graph = vault.join("graphify-out").join("merged-graph.json");
+    match (which("graphify-mcp"), &st.mcp) {
+        (None, _) => {
+            p.say("WARN", "graphify MCP", "graphify-mcp is not on PATH");
+            p.next.push(format!("uv tool install \"{GRAPHIFY}\", open a new shell, then knowledge setup --harness codex --plan again"));
+        }
+        (Some(_), Some(body)) if names_path(body, &graph) => p.say(
+            "ok",
+            "graphify MCP",
+            format!("~/.codex/config.toml, {}", fwd(&graph)),
+        ),
+        (Some(m), current) => {
+            let mut acts = Vec::new();
+            if current.is_some() {
+                acts.push(Act::Codex(vec![
+                    "mcp".into(),
+                    "remove".into(),
+                    "graphify".into(),
+                ]));
+            }
+            let (m, g) = (
+                m.to_string_lossy().into_owned(),
+                graph.to_string_lossy().into_owned(),
+            );
+            acts.push(Act::Codex(vec![
+                "mcp".into(),
+                "add".into(),
+                "graphify".into(),
+                "--".into(),
+                m,
+                g,
+            ]));
+            p.act(
+                if current.is_some() {
+                    "update"
+                } else {
+                    "create"
+                },
+                "graphify MCP",
+                format!("codex mcp add graphify, serving {}", fwd(&graph)),
+                seen_file(&config),
+                acts,
+            );
+        }
+    }
+    p
+}
+
+/// `setup --harness codex --remove`: the block, our two MCP servers, the plugin and its
+/// marketplace, then the trust tables `codex plugin remove` leaves behind.
+fn plan_codex_remove() -> Plan {
+    let mut p = Plan::default();
+    let codex = state::home().join(".codex");
+    let config = codex.join("config.toml");
+    let st = codex_state(&codex);
+
+    if let Some((path, _)) = crate::harness::adapter("codex").and_then(|a| a.instructions()) {
+        let text = state::read(&path);
+        match instructions::section(&text) {
+            None => p.say("ok", "AGENTS.md", "no knowledge block"),
+            Some((a, e)) => {
+                let rest = format!("{}{}", &text[..a], &text[e..]);
+                let rest = rest.trim();
+                let act = if rest.is_empty() {
+                    Act::Unlink(path.clone())
+                } else {
+                    Act::Write {
+                        path: path.clone(),
+                        text: format!("{rest}\n"),
+                        backup: None,
+                    }
+                };
+                p.act(
+                    "remove",
+                    "AGENTS.md",
+                    format!("{}: the knowledge block, text outside it kept", fwd(&path)),
+                    seen_file(&path),
+                    vec![act],
+                );
+            }
+        }
+    }
+
+    // Ours when it serves a merged graph; a graphify server of the owner's own stays.
+    match &st.mcp {
+        Some(body) if body.contains("merged-graph.json") => p.act(
+            "remove",
+            "graphify MCP",
+            "codex mcp remove graphify",
+            seen_file(&config),
+            vec![Act::Codex(vec![
+                "mcp".into(),
+                "remove".into(),
+                "graphify".into(),
+            ])],
+        ),
+        Some(_) => p.say(
+            "ok",
+            "graphify MCP",
+            "a graphify server not set by setup: left as it is",
+        ),
+        None => p.say("ok", "graphify MCP", "not registered"),
+    }
+
+    // Ours when it runs a knowledge binary's `mcp` verb.
+    match &st.retrieval {
+        Some(body) if body.contains("knowledge") && body.contains("\"mcp\"") => p.act(
+            "remove",
+            "knowledge MCP",
+            "codex mcp remove knowledge",
+            seen_file(&config),
+            vec![Act::Codex(vec![
+                "mcp".into(),
+                "remove".into(),
+                "knowledge".into(),
+            ])],
+        ),
+        Some(_) => p.say(
+            "ok",
+            "knowledge MCP",
+            "a knowledge server not set by setup: left as it is",
+        ),
+        None => p.say("ok", "knowledge MCP", "not registered"),
+    }
+
+    let mut acts = Vec::new();
+    if !st.versions.is_empty() {
+        acts.push(Act::Codex(vec![
+            "plugin".into(),
+            "remove".into(),
+            PLUGIN.into(),
+        ]));
+    }
+    if st.known {
+        acts.push(Act::Codex(vec![
+            "plugin".into(),
+            "marketplace".into(),
+            "remove".into(),
+            MARKET.into(),
+        ]));
+    }
+    if acts.is_empty() {
+        p.say("ok", "plugin", "not installed");
+    } else {
+        p.act(
+            "remove",
+            "plugin",
+            format!("codex plugin remove {PLUGIN}, then marketplace remove {MARKET}"),
+            seen_file(&config),
+            acts,
+        );
+    }
+
+    if st.trusted == 0 {
+        p.say("ok", "hook trust", "no trust entry of ours");
+    } else {
+        p.act(
+            "remove",
+            "hook trust",
+            format!(
+                "{}: our {} [hooks.state] tables (the old file kept as config.toml.pre-skeleton)",
+                fwd(&config),
+                st.trusted
+            ),
+            seen_file(&config),
+            vec![Act::Untrust(config.clone())],
+        );
+    }
+    p
+}
+
 // ---- the verb ------------------------------------------------------------------------------------
 
 /// The options again, for the apply line: `--apply` must be given the plan's own inputs.
 fn options(args: &Args) -> String {
     let mut out = String::new();
-    for k in ["vault", "dev", "machine", "skeleton"] {
+    for k in ["harness", "vault", "dev", "machine", "skeleton"] {
         if let Some(v) = args.get(k) {
             let v = if v.contains(char::is_whitespace) || v.is_empty() {
                 format!("\"{v}\"")
@@ -1701,15 +2223,24 @@ fn options(args: &Args) -> String {
 }
 
 pub fn run(raw: &[String]) -> Result<u8, Fault> {
-    let args = Args::parse(raw, &["vault", "dev", "machine", "skeleton", "apply"])?;
+    let args = Args::parse(
+        raw,
+        &["vault", "dev", "machine", "skeleton", "apply", "harness"],
+    )?;
     let remove = args.has("remove");
     if args.has("plan") == args.get("apply").is_some() {
         return Err(Fault::Usage(USAGE.into()));
     }
-    let plan = if remove {
-        plan_remove(&args)
-    } else {
-        plan_setup(&args)
+    let plan = match (args.get("harness").unwrap_or("claude"), remove) {
+        ("claude", false) => plan_setup(&args),
+        ("claude", true) => plan_remove(&args),
+        ("codex", false) => plan_codex(&args),
+        ("codex", true) => plan_codex_remove(),
+        (h, _) => {
+            return Err(Fault::Usage(format!(
+                "setup: no harness `{h}` (claude, codex)\n{USAGE}"
+            )));
+        }
     };
     let id = plan.id();
     let (what, flag) = if remove {

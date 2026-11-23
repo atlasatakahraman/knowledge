@@ -32,7 +32,7 @@ k index >/dev/null
 P='{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"ls"},"cwd":"/"}'
 check "hook: an unknown harness is silent" '[ -z "$(printf "%s" "$P" | k hook pre-tool --harness nope 2>&1)" ]'
 check "hook: generic has no hooks, silent" '[ -z "$(printf "{\"prompt\":\"retrieval\"}" | k hook prompt --harness generic 2>&1)" ]'
-check "hook: codex has no translator yet, silent" '[ -z "$(printf "{\"prompt\":\"retrieval\"}" | k hook prompt --harness codex 2>&1)" ]'
+check "hook: opencode has no translator yet, silent" '[ -z "$(printf "{\"prompt\":\"retrieval\"}" | k hook prompt --harness opencode 2>&1)" ]'
 
 # --- S7.2: the instructions generator and the restore --------------------------------------------
 BEGIN='<!-- knowledge-skeleton:begin -->'
@@ -98,6 +98,132 @@ printf '{"knowledge-skeleton": {}}\n' > "$HOME/.claude/plugins/known_marketplace
 printf '{"version": 2, "plugins": {"knowledge@knowledge-skeleton": [{"version": "0.0.1"}]}}\n' > "$HOME/.claude/plugins/installed_plugins.json"
 check "an older plugin: the plan WARNs with the owner's update command, and installs nothing" \
   'out=$(sp); printf "%s" "$out" | grep -q "WARN    plugin .*0.0.1 is installed .*claude plugin update knowledge@knowledge-skeleton" && ! printf "%s" "$out" | grep -q "create  plugin"'
+
+# --- S7.4: Codex ---------------------------------------------------------------------------------
+# The template locks no guard, so these checks lock three of Stage 5's: a deny, and two asks.
+cat > "$VAULT/00-Meta/Hard-Rules.md" <<'EOF'
+# Hard Rules
+
+Fixture rules for Stage 7's Codex checks.
+
+## Package management
+
+- **Never npm, pnpm, or yarn.** A `package-lock.json` is contamination.
+
+## Safety
+
+- **Rules change only on a yes.** The owner edits this note, then runs `knowledge rules lock`.
+- **Ask before every push.** Each push needs its own yes.
+EOF
+cat > "$TMP/seed.json" <<'EOF'
+{
+  "packs": { "": "head", "Package management": "bun", "Safety": "safety" },
+  "rules": {
+    "never-npm-pnpm-or-yarn": { "kind": "guard", "enforce": ["P", "G"] },
+    "rules-change-only-on-a-yes": { "kind": "guard", "enforce": ["P", "G"] },
+    "ask-before-every-push": { "kind": "agent", "enforce": ["P", "G"] }
+  },
+  "guards": [
+    { "id": "no-npm", "rule": "never-npm-pnpm-or-yarn", "action": "deny", "reason": "bun always",
+      "words": [["npm"], ["pnpm"], ["yarn"], ["npx"]] },
+    { "id": "rules-files", "rule": "rules-change-only-on-a-yes", "action": "ask", "reason": "the owner's yes",
+      "paths": ["*/00-meta/hard-rules.md", "*/00-meta/rules.lock"] },
+    { "id": "push", "rule": "ask-before-every-push", "action": "ask", "reason": "each push its own yes",
+      "words": [["git", "push"]] }
+  ]
+}
+EOF
+k rules lock --seed "$(native "$TMP/seed.json")" >/dev/null 2>&1
+VER=$(k --version | grep -o "[0-9][0-9.]*" | head -n 1)
+cx() { printf '%s' "$1" | k hook "$2" --harness codex --pin "${3:-$VER}" 2>/dev/null; }
+cbash() { printf '{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"%s"},"cwd":"%s"}' "$1" "$V"; }
+# An apply_patch payload: the patch text is tool_input.command, one header per file it touches.
+cpatch() { printf '{"hook_event_name":"PreToolUse","tool_name":"apply_patch","tool_input":{"command":"*** Begin Patch\\n%s\\n*** End Patch"},"cwd":"%s"}' "$1" "$V"; }
+check "codex: npm i is denied, in Codex's shape" 'cx "$(cbash "npm i")" pre-tool | grep -q "\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\""'
+check "codex: an ask rule goes out as a deny, saying why" 'out=$(cx "$(cbash "git -C x push origin main")" pre-tool); printf "%s" "$out" | grep -q "\"permissionDecision\":\"deny\"" && printf "%s" "$out" | grep -q "Codex cannot ask"'
+check "codex: git log prints nothing" '[ -z "$(cx "$(cbash "git log --oneline")" pre-tool)" ]'
+check "codex: a patch updating Hard-Rules (relative to cwd) is stopped" 'cx "$(cpatch "*** Update File: 00-Meta/Hard-Rules.md")" pre-tool | grep -q "\"permissionDecision\":\"deny\""'
+check "codex: a patch naming two files is stopped by its second" 'cx "$(cpatch "*** Add File: notes/x.md\\n+x\\n*** Update File: 00-Meta/Hard-Rules.md")" pre-tool | grep -q "\"permissionDecision\":\"deny\""'
+check "codex: a patch moving a file onto the lock is stopped" 'cx "$(cpatch "*** Update File: a.md\\n*** Move to: 00-Meta/rules.lock")" pre-tool | grep -q "\"permissionDecision\":\"deny\""'
+check "codex: a patch on an ordinary note prints nothing" '[ -z "$(cx "$(cpatch "*** Update File: notes/x.md")" pre-tool)" ]'
+check "codex: a pin mismatch stands the guard down" '[ -z "$(cx "$(cbash "npm i")" pre-tool 0.0.0)" ]'
+out=$(printf '{"hook_event_name":"SessionStart","cwd":"%s"}' "$V" | k hook session --harness codex --pin 0.0.0 2>/dev/null)
+check "codex: a pin mismatch says so once at session start, naming both versions and the update" \
+  'printf "%s" "$out" | grep -q "\"hookEventName\":\"SessionStart\"" && printf "%s" "$out" | grep -q "binary is $VER.*reviewed at 0.0.0.*codex plugin add knowledge@knowledge-skeleton" && [ "$(printf "%s" "$out" | wc -l)" -le 1 ]'
+out=$(printf '{"hook_event_name":"SessionStart","cwd":"%s"}' "$V" | k hook session --harness codex --pin "$VER" 2>/dev/null)
+check "codex: session start names AGENTS.md, not CLAUDE.md imports" \
+  'printf "%s" "$out" | grep -q "additionalContext" && printf "%s" "$out" | grep -q "AGENTS.md" && ! printf "%s" "$out" | grep -q "CLAUDE.md imports"'
+
+CPJ="$ROOT/codex/.codex-plugin/plugin.json"
+CHJ="$ROOT/codex/hooks/hooks.json"
+check "the Codex plugin hooks the events its adapter maps" \
+  '[ "$(events "$CHJ")" = "$(tr -d "\n" < "$ROOT/adapters/codex.json" | sed "s/.*\"events\": *{\([^}]*\)}.*/\1/" | grep -o "\"[A-Z][A-Za-z]*\"" | tr -d "\"" | LC_ALL=C sort)" ]'
+check "every Codex hook is the hook verb, --harness codex, pinned to the binary's version, in both forms" \
+  '[ "$(grep -o "\"command\": \"knowledge hook [a-z-]* --harness codex --pin $VER\", \"commandWindows\": \"knowledge hook [a-z-]* --harness codex --pin $VER\"" "$CHJ" | wc -l)" = "$(grep -o "\"type\": \"command\"" "$CHJ" | wc -l)" ]'
+check "the Codex plugin's version is the binary's, its hooks a ./ path" \
+  'grep -q "\"version\": \"$VER\"" "$CPJ" && grep -q "\"hooks\": \"./hooks/hooks.json\"" "$CPJ"'
+check "the Codex marketplace serves ./codex locally" \
+  'grep -q "\"source\": { \"source\": \"local\", \"path\": \"./codex\" }" "$ROOT/.agents/plugins/marketplace.json"'
+check "nothing in the skeleton writes Codex hook trust or bypasses it" \
+  '! grep -rqE "trusted_hash|dangerously-bypass-hook-trust" "$ROOT/src" "$ROOT/codex" "$ROOT/adapters"'
+check "the Codex flush runner skips the user config (no plugin hooks, no MCP servers in the exec)" \
+  'grep -q "\"codex\", \"exec\", \"--ignore-user-config\"" "$ROOT/adapters/codex.json"'
+
+# knowledge mcp: retrieval for a sandbox that cannot read ~/.config/knowledge.
+rpc() { printf '{"jsonrpc":"2.0","id":%s,"method":"%s","params":%s}\n' "$1" "$2" "$3"; }
+call() { rpc "$1" tools/call "{\"name\":\"$2\",\"arguments\":$3}"; }
+mcp=$( { rpc 1 initialize '{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"check","version":"0"}}'
+         echo '{"jsonrpc":"2.0","method":"notifications/initialized"}'
+         rpc 2 tools/list '{}'
+         call 3 find '{"q":"retrieval"}'
+         call 4 find '{"q":"--repair"}'
+         call 5 find '{"q":"x","scope":"captures","repo":"y"}'
+         call 6 nope '{}'
+         rpc 7 nope '{}'; } | k mcp 2>/dev/null)
+line() { printf '%s\n' "$mcp" | grep "\"id\":$1[,}]"; }
+check "mcp: initialize echoes the revision and offers tools; the notification gets no reply" \
+  'line 1 | grep -q "\"protocolVersion\":\"2025-06-18\"" && line 1 | grep -q "\"tools\":{}" && [ "$(printf "%s\n" "$mcp" | wc -l)" -eq 7 ]'
+check "mcp: two tools, find and graph, each read-only and closed-world" \
+  '[ "$(line 2 | grep -o "\"name\":\"[a-z]*\"" | tr "\n" " ")" = "\"name\":\"find\" \"name\":\"graph\" " ] && [ "$(line 2 | grep -o "\"readOnlyHint\":true" | wc -l)" -eq 2 ] && [ "$(line 2 | grep -o "\"openWorldHint\":false" | wc -l)" -eq 2 ]'
+check "mcp: find returns the vault's ranked notes" \
+  'line 3 | grep -q "\"isError\":false" && line 3 | grep -q "\"type\":\"text\""'
+check "mcp: an argument starting with - is refused as a tool error, never run as a flag" \
+  'line 4 | grep -q "\"isError\":true" && line 4 | grep -q "not starting with"'
+check "mcp: repo outside scope repo is refused" 'line 5 | grep -q "\"isError\":true"'
+check "mcp: an unknown tool is -32602, an unknown method -32601" \
+  'line 6 | grep -q "\"code\":-32602" && line 7 | grep -q "\"code\":-32601"'
+
+# setup --harness codex. The plan only for the install half: the real `codex` never runs here.
+CT="$HOME/.codex/config.toml"
+if command -v codex >/dev/null 2>&1; then
+  out=$(k setup --harness codex --plan --skeleton "$(native "$ROOT")" 2>&1)
+  check "codex setup plan: installs the plugin from the local marketplace, writes no trust" \
+    'printf "%s" "$out" | grep -q "create  plugin .*codex plugin add knowledge@knowledge-skeleton $VER, from" && ! printf "%s" "$out" | grep -q "hook trust" && [ ! -e "$CT" ]'
+  check "codex setup plan: registers the knowledge MCP server, or says why it cannot" \
+    'printf "%s" "$out" | grep -qE "create  knowledge MCP .*codex mcp add knowledge -- .* mcp|FAIL +knowledge "'
+else
+  echo "SKIP  codex setup plan: no codex on PATH"
+fi
+printf '[mcp_servers.knowledge]\ncommand = "C:\\\\x\\\\knowledge.exe"\nargs = ["mcp"]\n' > "$CT"
+check "codex remove plan: our knowledge MCP server goes" \
+  'k setup --harness codex --remove --plan 2>&1 | grep -q "remove  knowledge MCP .*codex mcp remove knowledge"'
+printf '[tui]\nx = 1\n\n[hooks.state."knowledge@knowledge-skeleton:pre_tool_use:0:0"]\ntrusted_hash = "a"\n\n[hooks.state."other@market:stop:0:0"]\ntrusted_hash = "b"\n\n[hooks.state."knowledge@knowledge-skeleton:stop:0:0"]\ntrusted_hash = "c"\ntrusted_content_hash = "d"\n' > "$CT"
+out=$(k setup --harness codex --remove --plan 2>&1)
+check "codex remove plan: our two trust tables, and nothing else of Codex's" \
+  'printf "%s" "$out" | grep -q "remove  hook trust .*our 2 \[hooks.state\] tables" && printf "%s" "$out" | grep -q "remove  AGENTS.md"'
+id=$(printf "%s" "$out" | sed -n "s/^plan //p")
+k setup --harness codex --remove --apply "$id" >/dev/null 2>&1
+check "codex remove: our trust tables gone, the others byte-for-byte, the old file kept" \
+  '! grep -q "knowledge@knowledge-skeleton" "$CT" && grep -q "^\[hooks.state.\"other@market:stop:0:0\"\]$" "$CT" && grep -q "^trusted_hash = \"b\"$" "$CT" && grep -q "^x = 1$" "$CT" && [ -f "$CT.pre-skeleton" ]'
+check "codex remove: the AGENTS.md block is gone, the owner's text kept" \
+  '! grep -qF "$BEGIN" "$CODEX" && grep -q "^Text above, mine.$" "$CODEX" && grep -q "^Text below, mine.$" "$CODEX"'
+mkdir -p "$HOME/.codex/plugins/cache/knowledge-skeleton/knowledge/$VER/hooks"
+cp "$CHJ" "$HOME/.codex/plugins/cache/knowledge-skeleton/knowledge/$VER/hooks/"
+printf '[plugins."knowledge@knowledge-skeleton"]\nenabled = true\n\n[hooks.state."knowledge@knowledge-skeleton:stop:0:0"]\ntrusted_hash = "c"\n' > "$CT"
+ctrust() { k doctor --json --only codex-trust 2>/dev/null; }
+check "doctor codex-trust WARNs while the plugin's hooks are not all reviewed" 'ctrust | grep -q "\"ok\":false" && ctrust | grep -q "\"trusted\":1"'
+rm -f "$CT"
+check "doctor codex-trust passes with no plugin installed" 'ctrust | grep -q "\"ok\":true"'
 
 rm -rf "$TMP"
 if [ "$fails" -eq 0 ]; then echo "stage 7: all checks pass"; else echo "stage 7: $fails check(s) FAIL"; exit 1; fi

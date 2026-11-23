@@ -1,0 +1,174 @@
+//! `knowledge mcp`: the vault's retrieval as an MCP server over stdio, for a harness whose shell
+//! sandbox cannot read `~/.config/knowledge` (Codex on Windows runs its commands as
+//! `CodexSandboxUsers`, denied there; the harness spawns an MCP server as the user, outside it).
+//! JSON-RPC 2.0, one message per line. Two read-only tools, `find` and `graph`, each re-running
+//! this binary's own verb, so the server holds no index handle and no state between calls.
+use crate::{Fault, emit};
+use serde_json::{Value, json};
+use std::io::BufRead;
+use std::time::Duration;
+
+/// A verb that outlives this has hung; the harness gets an error, not a stalled turn.
+const CALL_TIMEOUT: Duration = Duration::from_secs(30);
+
+pub fn run(raw: &[String]) -> Result<u8, Fault> {
+    if !raw.is_empty() {
+        return Err(Fault::Usage("knowledge mcp (takes no arguments)".into()));
+    }
+    let exe = std::env::current_exe().map_err(|e| Fault::Config(format!("current_exe: {e}")))?;
+    for line in std::io::stdin().lock().lines() {
+        let Ok(line) = line else { break };
+        if line.trim().is_empty() {
+            continue;
+        }
+        if let Some(reply) = handle(&exe, &line) {
+            emit(&format!("{reply}\n"));
+        }
+    }
+    Ok(0)
+}
+
+/// One message in, at most one reply out. A notification (no `id`) and a client's response (no
+/// `method`) get none.
+fn handle(exe: &std::path::Path, line: &str) -> Option<Value> {
+    let Ok(msg) = serde_json::from_str::<Value>(line) else {
+        return Some(error(Value::Null, -32700, "parse error"));
+    };
+    let id = msg.get("id").cloned()?;
+    let method = msg["method"].as_str()?;
+    let p = &msg["params"];
+    Some(match method {
+        "initialize" => ok(
+            id,
+            json!({
+                // Echo the client's revision: the two tools read the same in every one so far.
+                "protocolVersion": p["protocolVersion"].as_str().unwrap_or("2025-06-18"),
+                "capabilities": { "tools": {} },
+                "serverInfo": { "name": "knowledge", "version": env!("CARGO_PKG_VERSION") },
+            }),
+        ),
+        "ping" => ok(id, json!({})),
+        "tools/list" => ok(id, json!({ "tools": tools() })),
+        // An unknown tool is a protocol error; a bad argument is the tool's, so the model reads it.
+        "tools/call" => match argv(&p["name"], &p["arguments"]) {
+            Ok(args) => ok(id, call(exe, &args)),
+            Err(None) => error(id, -32602, "unknown tool"),
+            Err(Some(m)) => ok(id, result(m, true)),
+        },
+        _ => error(id, -32601, "method not found"),
+    })
+}
+
+/// Read-only, closed-world: Codex calls a tool annotated this way without asking.
+fn tools() -> Value {
+    let notes = json!({ "readOnlyHint": true, "destructiveHint": false,
+                        "idempotentHint": true, "openWorldHint": false });
+    json!([
+        {
+            "name": "find",
+            "title": "Search the knowledge vault",
+            "description": "Ranked notes for a question, each with its best passage. scope: vault \
+                (default), repo (a repository's indexed docs; repo names one) or captures \
+                (kept and fetched output, 14 days). One call per question.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "q": { "type": "string", "description": "The question, in words." },
+                    "scope": { "type": "string", "enum": ["vault", "repo", "captures"] },
+                    "repo": { "type": "string", "description": "With scope repo: the repository's name." }
+                },
+                "required": ["q"],
+                "additionalProperties": false
+            },
+            "annotations": notes,
+        },
+        {
+            "name": "graph",
+            "title": "A vault note's links",
+            "description": "A note's links in and out, or with other, the path between two notes.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "note": { "type": "string", "description": "A note's name or vault path." },
+                    "other": { "type": "string" }
+                },
+                "required": ["note"],
+                "additionalProperties": false
+            },
+            "annotations": notes,
+        }
+    ])
+}
+
+/// The verb's argv for a call. Every value is a string that cannot start with `-`, so a model
+/// cannot pass a flag (`--repair`, `--budget`) through a field: this is the trust boundary.
+/// `Err(None)` names no tool of this server; `Err(Some(m))` is a bad argument.
+fn argv(name: &Value, a: &Value) -> Result<Vec<String>, Option<String>> {
+    let field = |k: &str, required: bool| -> Result<Option<String>, Option<String>> {
+        match &a[k] {
+            Value::Null if !required => Ok(None),
+            Value::String(s) if !s.trim().is_empty() && !s.starts_with('-') => Ok(Some(s.clone())),
+            _ => Err(Some(format!(
+                "{k}: a non-empty string not starting with '-'"
+            ))),
+        }
+    };
+    if !(a.is_object() || a.is_null()) {
+        return Err(Some("arguments: an object".into()));
+    }
+    match name.as_str() {
+        Some("find") => {
+            let mut v = vec!["find".into(), field("q", true)?.unwrap_or_default()];
+            let scope = if a["scope"].is_null() {
+                Some("vault")
+            } else {
+                a["scope"].as_str()
+            };
+            match (scope, field("repo", false)?) {
+                (Some("vault"), None) => {}
+                (Some("repo"), repo) => {
+                    v.push("--repo".into());
+                    v.extend(repo);
+                }
+                (Some("captures"), None) => v.push("--captures".into()),
+                _ => {
+                    return Err(Some(
+                        "scope: vault | repo | captures; repo only with scope repo".into(),
+                    ));
+                }
+            }
+            Ok(v)
+        }
+        Some("graph") => {
+            let mut v = vec!["graph".into(), field("note", true)?.unwrap_or_default()];
+            v.extend(field("other", false)?);
+            Ok(v)
+        }
+        _ => Err(None),
+    }
+}
+
+/// Run the verb; its stdout is the result, its stderr the error text when it fails.
+fn call(exe: &std::path::Path, args: &[String]) -> Value {
+    let refs: Vec<&str> = args.iter().map(String::as_str).collect();
+    let o = crate::state::run(exe, &refs, None, None, &[], CALL_TIMEOUT);
+    let failed = !o.ok();
+    let text = match (failed, o.timed_out) {
+        (false, _) => o.stdout,
+        (true, true) => format!("knowledge {}: timed out", args[0]),
+        (true, false) => format!("{}{}", o.stdout, o.stderr).trim().to_string(),
+    };
+    result(text, failed)
+}
+
+fn result(text: String, failed: bool) -> Value {
+    json!({ "content": [{ "type": "text", "text": text }], "isError": failed })
+}
+
+fn ok(id: Value, result: Value) -> Value {
+    json!({ "jsonrpc": "2.0", "id": id, "result": result })
+}
+
+fn error(id: Value, code: i64, message: &str) -> Value {
+    json!({ "jsonrpc": "2.0", "id": id, "error": { "code": code, "message": message } })
+}

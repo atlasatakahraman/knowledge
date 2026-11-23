@@ -14,7 +14,7 @@ pub fn run(raw: &[String]) {
 }
 
 fn handle(raw: &[String]) -> Result<(), Fault> {
-    let args = Args::parse(raw, &["harness", "record"])?;
+    let args = Args::parse(raw, &["harness", "record", "pin"])?;
     let Some(adapter) = args.get("harness").and_then(harness::adapter) else {
         return Ok(());
     };
@@ -32,6 +32,18 @@ fn handle(raw: &[String]) -> Result<(), Fault> {
     if verb == "record" {
         return Ok(());
     }
+    // The Codex plugin's hooks name the version they were reviewed at (`--pin`). A binary of another
+    // version stands down: the one session start says why, so the owner knows to update the plugin.
+    if let Some(pin) = args.get("pin").filter(|p| *p != env!("CARGO_PKG_VERSION")) {
+        if verb == "session" {
+            let line = format!(
+                "knowledge-skeleton: this binary is {}, but the plugin's hooks were reviewed at {pin}, so they stand down. Update the plugin (codex plugin add knowledge@knowledge-skeleton), then review its hooks in the Codex CLI.",
+                env!("CARGO_PKG_VERSION")
+            );
+            emit(&t.context(&adapter, Event::SessionStart, &line));
+        }
+        return Ok(());
+    }
     let p = match t.parse(&adapter, &input) {
         Ok(p) => p,
         Err(f) if verb == "pre-tool" => {
@@ -47,7 +59,10 @@ fn handle(raw: &[String]) -> Result<(), Fault> {
     };
     // Each verb is one of the six events (`capture` is pre-compact or end, by the payload's name).
     let (event, context) = match verb {
-        "session" => (Event::SessionStart, crate::session::hook(args.has("dry"))),
+        "session" => (
+            Event::SessionStart,
+            crate::session::hook(args.has("dry"), adapter.instructions_label()),
+        ),
         "pre-tool" => {
             if let Some((action, reason)) = crate::guard::run(&p) {
                 emit(&t.verdict(&adapter, &action, &reason));
@@ -108,13 +123,20 @@ fn prompt(cfg: &Config, p: &Payload) -> Result<Option<String>, Fault> {
     )
 }
 
+/// Each file an edit touched (one `apply_patch` can name several) is judged on its own.
+fn post_edit(cfg: &Config, p: &Payload) -> Result<Option<String>, Fault> {
+    let mut msgs = Vec::new();
+    for path in &p.call.paths {
+        if let Some(m) = post_edit_one(cfg, std::path::Path::new(path))? {
+            msgs.push(m);
+        }
+    }
+    Ok((!msgs.is_empty()).then(|| msgs.join("\n")))
+}
+
 /// An Edit or Write on a vault note reindexes that note, then checks it the way brain-reindex's
 /// validateNote() did. Anything outside the vault is not ours.
-fn post_edit(cfg: &Config, p: &Payload) -> Result<Option<String>, Fault> {
-    if p.call.path.is_empty() {
-        return Ok(None);
-    }
-    let path = std::path::Path::new(&p.call.path);
+fn post_edit_one(cfg: &Config, path: &std::path::Path) -> Result<Option<String>, Fault> {
     let Some(rel) = cfg.rel_of(path) else {
         // A repo's docs are kept current the same way, without the vault's write-time rules.
         let repos = cfg.repos();

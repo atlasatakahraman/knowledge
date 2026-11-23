@@ -39,7 +39,9 @@ pub fn run(p: &Payload) -> Option<(String, String)> {
         Tool::Shell => judge_shell(&lock, &place, &c.command, cwd, false),
         Tool::PowerShell => judge_shell(&lock, &place, &c.command, cwd, true),
         Tool::Edit => judge(&lock, &place, |g| {
-            !c.path.is_empty() && g.paths.iter().any(|pat| path_match(pat, &c.path, cwd))
+            g.paths
+                .iter()
+                .any(|pat| c.paths.iter().any(|f| path_match(pat, f, cwd)))
         }),
         Tool::Mcp(t) => judge(&lock, &place, |g| {
             g.tools

@@ -177,6 +177,8 @@ pub fn hook(p: &Payload, dry: bool) {
             cwd,
             "--transcript".into(),
             state::native(&tp),
+            "--harness".into(),
+            p.harness.clone(),
         ],
         "brain_flush",
     );
@@ -196,7 +198,7 @@ struct Turns {
 
 /// Real conversation turns (`user: …`, `assistant: …`), and every AskUserQuestion answer as a
 /// tier-2 ledger entry.
-fn turns_of(path: &Path, sid: &str) -> Turns {
+fn turns_of(path: &Path, sid: &str, t9r: &dyn crate::harness::Translator) -> Turns {
     let mut t = Turns {
         turns: Vec::new(),
         times: Vec::new(),
@@ -257,32 +259,16 @@ fn turns_of(path: &Path, sid: &str) -> Turns {
                 t.asked.push(e);
             }
         }
-        let kind = o["type"].as_str().unwrap_or("");
-        if kind != "user" && kind != "assistant" {
-            continue;
-        }
-        let c = &o["message"]["content"];
-        let body = match c {
-            Value::Array(parts) => parts
-                .iter()
-                .filter(|p| p["type"] == "text")
-                .map(|p| js_string(&p["text"]))
-                .collect::<Vec<_>>()
-                .join("\n"),
-            Value::String(s) => s.clone(),
-            _ => String::new(),
-        };
-        let body = body.trim();
-        if !body.is_empty() {
-            t.turns.push(format!("{kind}: {body}"));
-            t.times.push(o["timestamp"].as_str().map(str::to_string));
-        }
+    }
+    for turn in t9r.turns(&text) {
+        t.turns.push(format!("{}: {}", turn.role, turn.text));
+        t.times.push(turn.at);
     }
     t
 }
 
 /// JavaScript's `String(v)` for what a transcript holds.
-fn js_string(v: &Value) -> String {
+pub(crate) fn js_string(v: &Value) -> String {
     match v {
         Value::String(s) => s.clone(),
         Value::Null => "null".into(),
@@ -329,10 +315,10 @@ fn events_since(mark: &J, tp: Option<&Path>) -> (Vec<String>, Option<i64>) {
     (rows, Some(all.len() as i64))
 }
 
-fn prompt(facts: &str, tail: &str) -> String {
+fn prompt(harness: &str, facts: &str, tail: &str) -> String {
     [
         "You are compiling a session into a personal knowledge vault.",
-        "Below are structured events captured from a Claude Code session, plus a transcript tail.",
+        &format!("Below are structured events captured from a {harness} session, plus a transcript tail."),
         "",
         "Extract ONLY durable knowledge in these four categories:",
         "- decisions (what was chosen, what was rejected, and WHY)",
@@ -363,7 +349,7 @@ fn looks_like_notes(out: &str) -> bool {
 }
 
 pub fn run_flush(raw: &[String]) -> Result<u8, Fault> {
-    let args = Args::parse(raw, &["transcript", "date"])?;
+    let args = Args::parse(raw, &["transcript", "date", "harness"])?;
     let cfg = crate::config::load()?;
     let sid = state::clean_sid(args.words.first().map_or("", String::as_str));
     let cwd = args.words.get(1).cloned().unwrap_or_default();
@@ -414,12 +400,23 @@ fn flush(cfg: &Config, args: &Args, sid: &str, cwd: &str, dry: bool) {
     } else {
         saved
     };
+    // The harness whose session this is: its transcript reader and its runner. An old caller
+    // passes none, and Claude Code is the harness the engine began with.
+    let Some(adapter) = crate::harness::adapter(args.get("harness").unwrap_or("claude")) else {
+        return;
+    };
+    let (Some(t9r), Some(runner)) = (adapter.translator(), adapter.runner.as_ref()) else {
+        return;
+    };
     let tp: Option<PathBuf> = state::resolve_transcript(sid, args.get("transcript"));
-    let t = tp.as_deref().map(|p| turns_of(p, sid)).unwrap_or(Turns {
-        turns: Vec::new(),
-        times: Vec::new(),
-        asked: Vec::new(),
-    });
+    let t = tp
+        .as_deref()
+        .map(|p| turns_of(p, sid, t9r))
+        .unwrap_or(Turns {
+            turns: Vec::new(),
+            times: Vec::new(),
+            asked: Vec::new(),
+        });
     let skip = mark.get("turns").and_then(J::i64).unwrap_or(0).max(0) as usize;
     let fresh: Vec<&String> = t.turns.iter().skip(skip).collect();
     let (rows, events) = events_since(&mark, tp.as_deref());
@@ -458,24 +455,32 @@ fn flush(cfg: &Config, args: &Args, sid: &str, cwd: &str, dry: bool) {
     let joined = last20.join("\n\n");
     let tail = js_tail(&joined, 6000);
     let facts = rows.join("\n");
-    let text = prompt(&facts, tail);
+    let text = prompt(&adapter.name, &facts, tail);
 
+    let (program, rest) = runner
+        .argv
+        .split_first()
+        .map_or(("", &[][..]), |(p, r)| (p.as_str(), r));
+    let rest: Vec<&str> = rest.iter().map(String::as_str).collect();
     let o = state::run(
-        Path::new("claude"),
-        &["-p", "--model", "haiku"],
+        Path::new(program),
+        &rest,
         None,
         Some(&text),
-        &[("CLAUDE_INVOKED_BY", "brain_flush")],
+        &[
+            ("CLAUDE_INVOKED_BY", "brain_flush"),
+            ("KNOWLEDGE_INVOKED_BY", "brain_flush"),
+        ],
         Duration::from_secs(120),
     );
     if !o.ok() {
         // The watermark is not advanced: the next capture retries this material.
         let msg = if o.timed_out {
-            "spawnSync claude ETIMEDOUT".to_string()
+            format!("spawnSync {program} ETIMEDOUT")
         } else if o.missing {
-            "spawnSync claude ENOENT".to_string()
+            format!("spawnSync {program} ENOENT")
         } else {
-            "Command failed: claude -p --model haiku".to_string()
+            format!("Command failed: {}", runner.argv.join(" "))
         };
         if !dry {
             state::record_failure("flush", &state::claude_reason(&o, &msg));
@@ -488,11 +493,12 @@ fn flush(cfg: &Config, args: &Args, sid: &str, cwd: &str, dry: bool) {
     if !dry {
         state::clear_failure("flush");
     }
-    let out = o.stdout.trim();
+    let reply = runner.reply.of(&o.stdout);
+    let out = reply.trim();
     // An empty reply is a broken CLI, not a verdict.
     if out.is_empty() {
         if !dry {
-            state::record_failure("flush", "claude -p returned an empty reply");
+            state::record_failure("flush", &format!("{program} returned an empty reply"));
         }
         log(counts("empty"));
         return;

@@ -495,6 +495,7 @@ pub fn detach(args: &[String], tag: &str) {
     let mut c = Command::new(exe);
     c.args(args)
         .env("CLAUDE_INVOKED_BY", tag)
+        .env("KNOWLEDGE_INVOKED_BY", tag)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
@@ -519,9 +520,13 @@ pub fn detach(args: &[String], tag: &str) {
     let _ = c.spawn();
 }
 
-/// True inside a `claude -p` this engine started: every hook verb exits at once there.
+/// True inside a run this engine started (`claude -p`, `codex exec`): every hook verb exits at once
+/// there. `KNOWLEDGE_INVOKED_BY` is the harness-neutral name; `CLAUDE_INVOKED_BY` stays for the
+/// `claude -p` that the bun hooks started.
 pub fn invoked() -> bool {
-    std::env::var_os("CLAUDE_INVOKED_BY").is_some_and(|v| !v.is_empty())
+    ["CLAUDE_INVOKED_BY", "KNOWLEDGE_INVOKED_BY"]
+        .iter()
+        .any(|k| std::env::var_os(k).is_some_and(|v| !v.is_empty()))
 }
 
 /// The knowledge binary the bun hooks would name: $KNOWLEDGE_BIN, else cargo's, else this one.
@@ -697,7 +702,8 @@ pub fn write_watermark(sid: &str, patch: Vec<(String, J)>) {
 // ---- transcripts ---------------------------------------------------------------------------------
 
 /// A session's transcript: the payload's path when it exists, else
-/// `~/.claude/projects/<slug>/<sid>.jsonl` (the payload's path is sometimes absent or stale).
+/// `~/.claude/projects/<slug>/<sid>.jsonl` (the payload's path is sometimes absent or stale), else
+/// Codex's rollout under `~/.codex/sessions/`.
 pub fn resolve_transcript(sid: &str, given: Option<&str>) -> Option<PathBuf> {
     if let Some(g) = given.filter(|g| !g.is_empty())
         && Path::new(g).exists()
@@ -709,10 +715,34 @@ pub fn resolve_transcript(sid: &str, given: Option<&str>) -> Option<PathBuf> {
         return None;
     }
     let root = home().join(".claude").join("projects");
-    fs::read_dir(root).ok()?.flatten().find_map(|d| {
-        let f = d.path().join(format!("{sid}.jsonl"));
-        (d.file_type().is_ok_and(|t| t.is_dir()) && f.exists()).then_some(f)
-    })
+    fs::read_dir(root)
+        .ok()
+        .and_then(|rd| {
+            rd.flatten().find_map(|d| {
+                let f = d.path().join(format!("{sid}.jsonl"));
+                (d.file_type().is_ok_and(|t| t.is_dir()) && f.exists()).then_some(f)
+            })
+        })
+        .or_else(|| codex_rollout(&home().join(".codex").join("sessions"), &sid, 3))
+}
+
+/// The rollout `sessions/YYYY/MM/DD/rollout-<ts>-<sid>.jsonl` for a session, `depth` folders down.
+fn codex_rollout(dir: &Path, sid: &str, depth: u8) -> Option<PathBuf> {
+    let suffix = format!("-{sid}.jsonl");
+    for e in fs::read_dir(dir).ok()?.flatten() {
+        let p = e.path();
+        if depth > 0 && p.is_dir() {
+            if let Some(f) = codex_rollout(&p, sid, depth - 1) {
+                return Some(f);
+            }
+        } else {
+            let name = e.file_name().to_string_lossy().into_owned();
+            if name.starts_with("rollout-") && name.ends_with(&suffix) {
+                return Some(p);
+            }
+        }
+    }
+    None
 }
 
 // ---- the decision ledger -------------------------------------------------------------------------

@@ -1,0 +1,11 @@
+{
+  "name": "knowledge-skeleton",
+  "interface": { "displayName": "knowledge-skeleton" },
+  "plugins": [
+    {
+      "name": "knowledge",
+      "source": { "source": "local", "path": "./codex" },
+      "category": "Productivity"
+    }
+  ]
+}

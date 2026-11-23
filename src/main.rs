@@ -19,6 +19,7 @@ mod hubs;
 mod index;
 mod instructions;
 mod linkcheck;
+mod mcp;
 mod memory;
 mod recorder;
 mod records;
@@ -64,7 +65,8 @@ const USAGE: &str = "usage:
   knowledge compile [--force] [--dry-run]
   knowledge post-bash [--backfill <since>] [--dry-run]
   knowledge records | hubs
-  knowledge usage [--month <YYYY-MM>] [--days N] [--projects] [--blocks]";
+  knowledge usage [--month <YYYY-MM>] [--days N] [--projects] [--blocks]
+  knowledge mcp   (an MCP server on stdio: read-only find and graph)";
 
 /// Every fallible function returns this ([[Hard-Rules]] § Working preferences: `Fault`, never
 /// `Result<_, String>`). Named `Fault` so it never collides with an `Error` already in scope.
@@ -208,6 +210,7 @@ fn main() -> ExitCode {
         "usage" => usage::run(rest),
         "hubs" => hubs::run(rest),
         "setup" => setup::run(rest),
+        "mcp" => mcp::run(rest),
         _ => Err(Fault::Usage(USAGE.to_string())),
     };
     match result {

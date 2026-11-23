@@ -1,0 +1,7 @@
+{
+  "name": "knowledge",
+  "version": "0.11.0",
+  "description": "The knowledge vault's hooks for Codex. Each one runs the knowledge binary's hook verb, pinned to the version they were reviewed at; knowledge setup --harness codex installs this plugin.",
+  "keywords": ["knowledge", "vault", "hooks"],
+  "hooks": "./hooks/hooks.json"
+}

@@ -28,7 +28,7 @@ const HOOK_LIMIT: i64 = 10_000;
 /// What a vault session loads whole: the merge left 64,691 bytes (spec item 21), plus 15%.
 const PRIMING_CEILING: i64 = 74_395;
 
-pub const IDS: [&str; 17] = [
+pub const IDS: [&str; 18] = [
     "vault-index",
     "retrieval",
     "sessions",
@@ -45,6 +45,7 @@ pub const IDS: [&str; 17] = [
     "skeleton-version",
     "hygiene",
     "pull-trust",
+    "codex-trust",
     "portable",
 ];
 
@@ -297,6 +298,31 @@ fn check_auth() -> Check {
             .collect(),
     );
     fail("auth", f.is_empty(), detail)
+}
+
+/// The Codex plugin's hooks run only once the owner has reviewed them in the Codex CLI (C1), and
+/// the ChatGPT app skips them silently until then. WARNs when fewer are trusted than the plugin
+/// has; passes when the plugin is not installed.
+fn check_codex_trust() -> Check {
+    match crate::setup::codex_trust() {
+        None => warn(
+            "codex-trust",
+            true,
+            J::s("the Codex plugin is not installed"),
+        ),
+        Some((trusted, hooks)) => warn(
+            "codex-trust",
+            trusted >= hooks,
+            obj([
+                ("trusted", n(trusted)),
+                ("hooks", n(hooks)),
+                (
+                    "fix",
+                    J::s("review the plugin's hooks in the Codex CLI (/hooks)"),
+                ),
+            ]),
+        ),
+    }
 }
 
 /// Portability (D16): the traps that break the vault on the other boot.
@@ -930,6 +956,7 @@ fn run_check(cfg: &Config, v: &Vault, id: &'static str) -> Check {
         "skeleton-version" => check_skeleton_version(cfg),
         "hygiene" => Ok(check_hygiene(cfg)),
         "pull-trust" => Ok(check_pull_trust(cfg)),
+        "codex-trust" => Ok(check_codex_trust()),
         _ => check_portable(cfg),
     };
     r.unwrap_or_else(|e| fail(id, false, obj([("error", J::s(e.to_string()))])))

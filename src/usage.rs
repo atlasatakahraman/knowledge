@@ -14,7 +14,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 /// USD per million tokens. Not authoritative: token counts are exact, these rates are not.
-/// Cache reads bill at 0.1x input, cache writes at 1.25x.
+/// Cache reads bill at 0.1x input, cache writes at 1.25x. Codex models (`gpt-*`) have no rate here:
+/// their rows show `?` and are unpriced. VERIFY a rate before adding one.
 const PRICING: [(&str, f64, f64); 4] = [
     ("opus", 15.0, 75.0),
     ("sonnet", 3.0, 15.0),
@@ -118,6 +119,78 @@ fn jsonl_files(dir: &Path, out: &mut Vec<PathBuf>) {
     }
 }
 
+/// Codex's rollouts (`~/.codex/sessions/**`): one `token_usage_record` per model response, in the
+/// model of the latest `turn_context` and the project of the rollout's `session_meta` cwd. Its
+/// `input_tokens` already include the cached part, so the uncached input is the difference.
+fn read_codex(root: &Path) -> Vec<Ev> {
+    let mut files = Vec::new();
+    jsonl_files(root, &mut files);
+    let mut events = Vec::new();
+    for path in files {
+        let Ok(bytes) = fs::read(&path) else { continue };
+        let text = String::from_utf8_lossy(&bytes);
+        let mut project = String::new();
+        let mut model = String::from("unknown");
+        for line in text.split('\n') {
+            if ![
+                "\"session_meta\"",
+                "\"turn_context\"",
+                "\"token_usage_record\"",
+            ]
+            .iter()
+            .any(|m| line.contains(m))
+            {
+                continue;
+            }
+            let Ok(rec) = serde_json::from_str::<Value>(line) else {
+                continue;
+            };
+            match rec["type"].as_str() {
+                Some("session_meta") => {
+                    project = Path::new(rec["payload"]["cwd"].as_str().unwrap_or_default())
+                        .file_name()
+                        .map(|n| n.to_string_lossy().into_owned())
+                        .unwrap_or_default();
+                }
+                Some("turn_context") => {
+                    if let Some(m) = rec["payload"]["model"].as_str().filter(|m| !m.is_empty()) {
+                        model = m.to_string();
+                    }
+                }
+                Some("token_usage_record") => {
+                    let u = &rec["payload"]["usage"];
+                    let Some(ms) = rec["timestamp"]
+                        .as_str()
+                        .filter(|s| !s.is_empty())
+                        .and_then(state::parse_ms)
+                    else {
+                        continue;
+                    };
+                    if !u.is_object() {
+                        continue;
+                    }
+                    let n = |v: &Value| v.as_u64().unwrap_or(0);
+                    let (input, cached) = (n(&u["input_tokens"]), n(&u["cached_input_tokens"]));
+                    events.push(Ev {
+                        ms,
+                        project: project.clone(),
+                        model: model.clone(),
+                        t: [
+                            input.saturating_sub(cached),
+                            n(&u["output_tokens"]),
+                            cached,
+                            n(&u["cache_write_input_tokens"]),
+                            n(&u["reasoning_output_tokens"]),
+                        ],
+                    });
+                }
+                _ => {}
+            }
+        }
+    }
+    events
+}
+
 fn read_events(root: &Path) -> Vec<Ev> {
     let mut files = Vec::new();
     jsonl_files(root, &mut files);
@@ -177,11 +250,16 @@ pub fn run(raw: &[String]) -> Result<u8, Fault> {
     let month = args.get("month").map(str::to_string);
     let days: i64 = args.num("days", 30)?;
     let root = state::home().join(".claude").join("projects");
-    if !root.exists() {
+    let codex_root = state::home().join(".codex").join("sessions");
+    if !root.exists() && !codex_root.exists() {
         emit(&format!("no transcripts at {}\n", state::native(&root)));
         return Ok(1);
     }
     let mut events = read_events(&root);
+    // Codex rows join the same digest; the title names Codex only when there are some.
+    let codex = read_codex(&codex_root);
+    let has_codex = !codex.is_empty();
+    events.extend(codex);
     if events.is_empty() {
         emit("no usage records found\n");
         return Ok(1);
@@ -221,8 +299,13 @@ pub fn run(raw: &[String]) -> Result<u8, Fault> {
     }
     let pad = |n: i64| format!("{n:02}");
     let mut out: Vec<String> = Vec::new();
+    let label = if has_codex {
+        "Claude and Codex"
+    } else {
+        "Claude"
+    };
     out.push(format!(
-        "# Claude usage — {}",
+        "# {label} usage — {}",
         month.clone().unwrap_or_else(|| format!("last {days} days"))
     ));
     out.push(String::new());

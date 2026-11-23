@@ -15,6 +15,7 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 mod claude;
+mod codex;
 
 const ADAPTERS: [&str; 4] = [
     include_str!("../../adapters/claude.json"),
@@ -26,6 +27,9 @@ const ADAPTERS: [&str; 4] = [
 #[derive(Deserialize)]
 pub struct Adapter {
     pub id: String,
+    /// The harness as a person names it: "Claude Code", "Codex".
+    #[serde(default)]
+    pub name: String,
     /// The translator's name; none for a harness without hooks.
     translator: Option<String>,
     #[serde(default)]
@@ -33,6 +37,24 @@ pub struct Adapter {
     /// The global instructions file the block goes into, `~/` for the home folder; none for
     /// `generic`, whose file `setup --instructions` names.
     instructions: Option<Instructions>,
+    /// The headless run the flush summarizes through; none for a harness without one.
+    pub runner: Option<Runner>,
+}
+
+/// A one-shot model call: the prompt goes in on stdin, and `reply` says how to read stdout.
+#[derive(Deserialize)]
+pub struct Runner {
+    pub argv: Vec<String>,
+    pub reply: Reply,
+}
+
+#[derive(Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum Reply {
+    /// The reply is stdout as printed.
+    Text,
+    /// `codex exec --json`: the last `item.completed` whose item is an `agent_message`.
+    CodexJsonl,
 }
 
 #[derive(Deserialize)]
@@ -65,6 +87,8 @@ const EVENTS: [(Event, &str); 7] = [
 /// One hook call, harness-neutral. Absent fields are empty, as the bun hooks read them.
 #[derive(Default)]
 pub struct Payload {
+    /// The adapter's id: the flush reads the transcript and runs the model through it.
+    pub harness: String,
     /// The harness's own name for the event, for the event log; "unknown" when it sent none.
     pub name: String,
     pub event: Option<Event>,
@@ -76,12 +100,20 @@ pub struct Payload {
     pub call: Call,
 }
 
-/// A tool call: the guard judges `tool`, `post-edit` reads `path`, `post-bash` reads `command`.
+/// A tool call: the guard judges `tool`, `post-edit` reads `paths`, `post-bash` reads `command`.
+/// One edit can name several files (Codex's `apply_patch`).
 #[derive(Default)]
 pub struct Call {
     pub tool: Tool,
     pub command: String,
-    pub path: String,
+    pub paths: Vec<String>,
+}
+
+/// One conversation turn from a transcript: `user` or `assistant`, its text, and its time.
+pub struct Turn {
+    pub role: &'static str,
+    pub text: String,
+    pub at: Option<String>,
 }
 
 #[derive(Default, PartialEq, Eq, Debug)]
@@ -104,6 +136,24 @@ pub trait Translator {
     fn context(&self, adapter: &Adapter, event: Event, text: &str) -> String;
     /// The guard's answer to a pre-tool call: `deny` or `ask`, and why.
     fn verdict(&self, adapter: &Adapter, action: &str, reason: &str) -> String;
+    /// The real conversation turns in a transcript file's text, in order.
+    fn turns(&self, text: &str) -> Vec<Turn>;
+}
+
+impl Reply {
+    /// The model's reply in a runner's stdout.
+    pub fn of(self, stdout: &str) -> String {
+        match self {
+            Reply::Text => stdout.to_string(),
+            Reply::CodexJsonl => stdout
+                .lines()
+                .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+                .filter(|v| v["type"] == "item.completed" && v["item"]["type"] == "agent_message")
+                .filter_map(|v| v["item"]["text"].as_str().map(str::to_string))
+                .next_back()
+                .unwrap_or_default(),
+        }
+    }
 }
 
 /// Every adapter the binary carries.
@@ -130,8 +180,16 @@ impl Adapter {
     pub fn translator(&self) -> Option<&'static dyn Translator> {
         match self.translator.as_deref()? {
             "claude" => Some(&claude::Claude),
+            "codex" => Some(&codex::Codex),
             _ => None,
         }
+    }
+
+    /// The global instructions file as the adapter writes it (`~/...`), and its form.
+    pub fn instructions_label(&self) -> Option<(&str, Form)> {
+        self.instructions
+            .as_ref()
+            .map(|i| (i.global.as_str(), i.form))
     }
 
     /// The abstract event a harness event name stands for.
