@@ -12,10 +12,12 @@ status: active
 Every hook that touches this vault: its event, what it does, what it writes, what it costs, and
 what notices when it breaks. The rationale is in [[Why-This-Exists]].
 
-Every hook is the `knowledge` binary's `hook` verb, registered by `knowledge setup` from the
-skeleton's `settings.hooks.json`, and reads its paths from the machine's `config.json`. What a hook
-starts in the background is the same binary again, detached, so no hook starts a JavaScript
-runtime. `~/.claude/hooks` links the skeleton checkout's `hooks/` (its `.state/` holds the
+Every hook is the `knowledge` binary's `hook` verb, and reads its paths from the machine's
+`config.json`. Claude Code gets the hooks from the skeleton's plugin, `knowledge@knowledge-skeleton`,
+which `knowledge setup` installs: each hook is exec form, `${user_config.knowledge_bin}` with
+`["hook", <verb>, "--harness", "claude"]`, so no shell starts and no other `knowledge` on PATH is
+picked. Other harnesses run the same verbs (§ Other harnesses). What a hook starts in the background
+is the same binary again, detached, so no hook starts a JavaScript runtime. `~/.claude/hooks` links the skeleton checkout's `hooks/` (its `.state/` holds the
 watermarks and locks), and the doctor's `skeleton-version` check fails when it does not.
 `.skeleton.json` at the vault root pins the skeleton version the vault is written for: the session
 start says so when the checkout is another version, and `skeleton-version` fails.
@@ -28,7 +30,7 @@ says what notices a failure.
 | Event | Matcher | Hook | What it does | Writes | Cost | When it fails |
 |---|---|---|---|---|---|---|
 | `SessionStart` | — | `knowledge hook session` | Commits and pushes records an earlier session left (one line when it pushed or held), then fast-forwards the vault and the skeleton checkout at the same time, each only when clean (a checkout on a detached HEAD is pinned on purpose and left alone), and says in one line when the skeleton is not the version `.skeleton.json` pins. Runs `knowledge rules check --restore`. Then injects what changes per session: the current OS, the retrieval order, the flush canary, any recorded `claude -p` failure, the health alarm, and how many captured decisions wait for promotion. Identity and Hard-Rules are **not** injected here: `~/.claude/CLAUDE.md` imports both whole, because a hook's context past 10,000 chars is cut to a preview. Re-runs a flush that was killed when the app closed, and once per logical day starts the health sweep (below) | — | ~2,000 chars, once per session; must stay ≤ 10,000 | the doctor's `priming`, `priming-size`, `skeleton-version` |
-| `PreToolUse` | `Bash\|PowerShell\|Edit\|Write\|MultiEdit\|NotebookEdit\|mcp__.*` | `knowledge hook pre-tool` | **The guard**: matches each guard in `00-Meta/rules.lock` on command words, a written path or an MCP tool name, and answers `deny` or `ask` with the rule's id. Prints nothing when it allows | — | ~20 ms | the doctor's `rules`; the pre-commit backstop |
+| `PreToolUse` | `Bash\|PowerShell\|Edit\|Write\|MultiEdit\|NotebookEdit\|mcp__.*` | `knowledge hook pre-tool --harness claude` | **The guard**: matches each guard in `00-Meta/rules.lock` on command words, a written path or an MCP tool name, and answers `deny` or `ask` with the rule's id. Prints nothing when it allows | — | ~20 ms | the doctor's `rules`; the pre-commit backstop |
 | `UserPromptSubmit` | — | `knowledge hook prompt` | Up to six vault notes matching the prompt's rarest words, one line each, and the best passage when it is short and strong | — | ≤ 1,800 chars on a hit, 0 otherwise; ≤ 35 ms | the doctor's `retrieval`, which asks `knowledge find` the same way |
 | `PreCompact`, `SessionEnd` | — | `knowledge hook capture` | Logs the event, then detaches compile, usage, flush and (SessionEnd) records (below). Timeout 10 s | `50-Ops/hook-events.jsonl` | free itself | the flush canary |
 | `Stop`, `SubagentStop` | — | `knowledge hook capture` | The same, **async**, at most once per 20 min per session, flush only | same | same | same |
@@ -45,29 +47,50 @@ on its next success; the session start turns each record into a `!! BRAIN <TAG> 
 detached child carries `CLAUDE_INVOKED_BY`, and every hook verb exits at once when it is set, so a
 flush's own `claude -p` cannot re-fire capture.
 
+## Other harnesses
+
+Each harness is an adapter (`adapters/<id>.json`, built into the binary) that maps its own event
+names onto the same verbs, plus a translator that reads its payload and words the reply. The rows
+above hold for each; what differs is below. Setup and the by-hand steps: the skeleton's
+`INSTALL.md` § Other harnesses.
+
+| Harness | Registered by | Differs from Claude Code |
+|---|---|---|
+| Codex CLI | The Codex plugin `knowledge@knowledge-skeleton`: `knowledge hook <verb> --harness codex --pin <version>`, from PATH | A hook runs only once you review it in `/hooks`; the doctor's `codex-trust` warns until then. The pin: a binary of another version stands every hook down, with one session-start line. An ask rule is a deny. The instructions block is inline in `~/.codex/AGENTS.md` |
+| opencode | The shim `~/.config/opencode/plugins/knowledge.ts`, written by setup and pinned the same way | The guard runs in `execute.before` and a deny throws; an ask is a deny. The flush exports the session and runs `opencode run`. The block is inline in `~/.config/opencode/AGENTS.md` |
+| Claude desktop app, Chat | No hooks: `mcpServers.knowledge` runs `knowledge mcp` | No capture and no guard. `note` writes the ledger or the session note, and asks first |
+| Any other (`generic`) | No hooks: the block goes into the file you name | The rules are text only; `knowledge find`, `graph` and `note` from its shell |
+
+The session start's rules restore also rewrites a stale block in each `AGENTS.md` it finds, and
+leaves a file with no block alone.
+
 ## By hand
 
 | Command | Does |
 |---|---|
-| `knowledge doctor [--pretty] [--repair] [--record] [--only <ids>]` | Zero-token health check, seventeen checks. **Fail:** `vault-index`, `retrieval` (the questions in `00-Meta/retrieval-cases.json` return their notes), `sessions`, `auth`, `frontmatter`, `links`, `reach`, `ignores`, `commits`, `priming`, `priming-size`, `rules`, `budget`, `skeleton-version`, `portable`. **Warn:** `hygiene`, `pull-trust`. `--repair` rebuilds derived artifacts only and never edits a note; `--record` writes today's line in `50-Ops/Health/`. Always exits 0 |
+| `knowledge doctor [--pretty] [--repair] [--record] [--only <ids>]` | Zero-token health check, eighteen checks. **Fail:** `vault-index`, `retrieval` (the questions in `00-Meta/retrieval-cases.json` return their notes), `sessions`, `auth`, `frontmatter`, `links`, `reach`, `ignores`, `commits`, `priming` (also each harness's instructions block), `priming-size`, `rules`, `budget`, `skeleton-version`, `portable`. **Warn:** `hygiene`, `pull-trust`, `codex-trust`. `--repair` rebuilds derived artifacts only and never edits a note; `--record` writes today's line in `50-Ops/Health/`. Always exits 0 |
 | `knowledge hubs` | Regenerate the generated hubs from the folders. Never edit a hub by hand |
 | `knowledge post-bash [--backfill YYYY-MM-DD] [--dry-run]` | The commit recorder, from a date, idempotent |
 | `knowledge flush <session-id> [<cwd>] [--date YYYY-MM-DD] [--dry-run]` | A flush by hand; `--date` backfills a missed note |
 | `knowledge compile [--force] [--dry-run]` | `--force` compiles today's still-open log |
 | `knowledge usage [--days N] [--month YYYY-MM] [--projects] [--blocks]` | Token/model/cost digest from the transcripts |
 | `knowledge records` | Commit and push the records now |
-| `knowledge setup --plan` | What setup would change on this machine; nothing is written |
+| `knowledge setup --plan [--harness <id>]` | What setup would change on this machine, for every harness found or one; nothing is written |
+| `knowledge mcp` | An MCP server on stdio: `find`, `graph`, `read` (read-only) and `note`. The desktop Chat and Codex start it themselves |
+| `knowledge note decision\|log <text>` | One line in the decision ledger, or in the day's session note: the write-back where no hook captures |
+| `knowledge config [<key>]` | The config the hooks see; the skills and commands read their paths here |
 
-The skills and commands still run four bun tools from `~/.claude/hooks`: `brain-ledger.mjs` (the
+The skills and commands still run three bun tools from `~/.claude/hooks`: `brain-ledger.mjs` (the
 decision ledger; the `/brain` skill drives it), `brain-verify.mjs` (every `[[wikilink]]` and every
-`checkout:`/`docs:` pointer resolves), `brain-graph.mjs` (merge the repo graphs into the served
-graph) and `skeleton-config.mjs` (print the config the hooks resolved).
+`checkout:`/`docs:` pointer resolves) and `brain-graph.mjs` (merge the repo graphs into the served
+graph).
 
 ## Change log
 
 - 2026-11-02: the vault starts from the knowledge-skeleton template.
 - 2026-11-22: context-mode removed (vault audit Stage 4): `brain-reindex` and `brain-prune` are gone, repo docs are `knowledge index --repo`, and `brain-flush` reads `knowledge events`.
 - 2026-11-23 (skeleton 0.10.0): every hook is the `knowledge` binary; the doctor, compile, flush, records, usage, hubs and the commit recorder are its verbs; the session start runs the daily health sweep, so no scheduled task is needed; `knowledge setup` replaces `install.ts`.
+- 2026-11-23 (skeleton 0.11.2): Claude Code's hooks come from the skeleton's plugin, not `settings.json`; Codex runs them through its own plugin, pinned to the binary's version, and opencode through a shim; `knowledge mcp` serves the desktop Chat; `note` and `config` are new verbs; the doctor gains `codex-trust`.
 
 ## Related
 
