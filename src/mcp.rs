@@ -47,6 +47,7 @@ fn handle(exe: &std::path::Path, line: &str) -> Option<Value> {
                 "protocolVersion": p["protocolVersion"].as_str().unwrap_or("2025-06-18"),
                 "capabilities": { "tools": {} },
                 "serverInfo": { "name": "knowledge", "version": env!("CARGO_PKG_VERSION") },
+                "instructions": INSTRUCTIONS,
             }),
         ),
         "ping" => ok(id, json!({})),
@@ -61,6 +62,15 @@ fn handle(exe: &std::path::Path, line: &str) -> Option<Value> {
     })
 }
 
+/// What the server is for, sent at `initialize` for a client that puts it before the model. The
+/// desktop app's chat asked "where is perkRefilled defined?" and searched its own sandbox and the
+/// disk instead (S8.2): nothing told it the owner's code is reachable only through this server.
+const INSTRUCTIONS: &str = "The owner's knowledge vault and the code map of their repositories. \
+    The repositories are not in your sandbox or working folder: for where a function, class, \
+    component or other symbol is defined, call find with code true; for what uses it, what it \
+    uses or how two symbols connect, call graph with code true. For the owner's notes, \
+    decisions and plans, call find, then read the note it names.";
+
 /// Read-only, closed-world: Codex calls a tool annotated this way without asking.
 fn tools() -> Value {
     let notes = json!({ "readOnlyHint": true, "destructiveHint": false,
@@ -68,12 +78,14 @@ fn tools() -> Value {
     json!([
         {
             "name": "find",
-            "title": "Search the knowledge vault",
-            "description": "Ranked notes for a question, each with its best passage. scope: vault \
-                (default), repo (a repository's indexed docs; repo names one) or captures \
-                (kept and fetched output, 14 days). One call per question. With code: the code \
-                map instead, symbols whose name holds every word of q (repo narrows it to one \
-                repository).",
+            "title": "Search the knowledge vault, or find where code is defined",
+            "description": "Two searches. With code true: where a function, class, component or \
+                other symbol is defined in the owner's repositories (which are not in your \
+                sandbox), one line each as repo path:line kind signature; q is the name or part \
+                of it, and repo narrows it to one repository. Without code: ranked notes for a \
+                question, each with its best passage; scope vault (default), repo (a \
+                repository's indexed docs; repo names one) or captures (kept and fetched output, \
+                14 days). One call per question.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
