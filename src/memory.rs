@@ -474,7 +474,6 @@ fn flush(cfg: &Config, args: &Args, sid: &str, cwd: &str, dry: bool) {
             state::write_watermark(sid, patch);
         }
     };
-    let counts = |outcome: &str| ev!("hook" => J::s("flush"), "sid" => J::s(sid), "outcome" => J::s(outcome), "events" => J::n(rows.len() as i64), "turns" => J::n(fresh.len() as i64));
 
     if rows.is_empty() && fresh.is_empty() {
         log(ev!("hook" => J::s("flush"), "sid" => J::s(sid), "outcome" => J::s("nothing-new")));
@@ -497,6 +496,7 @@ fn flush(cfg: &Config, args: &Args, sid: &str, cwd: &str, dry: bool) {
         .split_first()
         .map_or(("", &[][..]), |(p, r)| (p.as_str(), r));
     let rest: Vec<&str> = rest.iter().map(String::as_str).collect();
+    let started = std::time::Instant::now();
     let o = state::run(
         Path::new(program),
         &rest,
@@ -508,6 +508,10 @@ fn flush(cfg: &Config, args: &Args, sid: &str, cwd: &str, dry: bool) {
         ],
         Duration::from_secs(120),
     );
+    // How long the runner took, on every outcome after it, and on a failure stderr's last line: a
+    // timeout logged only as ETIMEDOUT (7 since 2026-11-11) cannot name the layer that hung.
+    let ms = J::n(started.elapsed().as_millis() as i64);
+    let counts = |outcome: &str| ev!("hook" => J::s("flush"), "sid" => J::s(sid), "outcome" => J::s(outcome), "events" => J::n(rows.len() as i64), "turns" => J::n(fresh.len() as i64), "ms" => ms.clone());
     if !o.ok() {
         // The watermark is not advanced: the next capture retries this material.
         let msg = if o.timed_out {
@@ -521,7 +525,7 @@ fn flush(cfg: &Config, args: &Args, sid: &str, cwd: &str, dry: bool) {
             state::record_failure("flush", &state::claude_reason(&o, &msg));
         }
         log(
-            ev!("hook" => J::s("flush"), "sid" => J::s(sid), "outcome" => J::s("failed"), "reason" => J::s(js_head(&msg, 200))),
+            ev!("hook" => J::s("flush"), "sid" => J::s(sid), "outcome" => J::s("failed"), "reason" => J::s(js_head(&msg, 200)), "ms" => ms.clone(), "stderr" => J::s(js_head(o.stderr.lines().rev().map(str::trim).find(|l| !l.is_empty()).unwrap_or(""), 200))),
         );
         return;
     }
@@ -613,5 +617,6 @@ fn flush(cfg: &Config, args: &Args, sid: &str, cwd: &str, dry: bool) {
     let mut fields = ev!("hook" => J::s("flush"), "sid" => J::s(sid), "outcome" => J::s("wrote"), "file" => J::s(state::native(&file)));
     fields.push(("events".into(), J::n(rows.len() as i64)));
     fields.push(("turns".into(), J::n(fresh.len() as i64)));
+    fields.push(("ms".into(), ms));
     state::log_event(cfg, fields);
 }
