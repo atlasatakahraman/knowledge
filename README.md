@@ -7,7 +7,13 @@ and a link graph current. The vault itself holds notes only and stays private.
 
 ```
 src/            *.rs          the `knowledge` binary: every hook, the vault index, search, link graph,
-                              the doctor and `setup` (Rust, one SQLite file per machine)
+                              the doctor, `setup` and the MCP server (Rust, one SQLite file per machine)
+src/harness/    <id>.rs       one translator per harness with hooks: its payload in, its reply shape out
+adapters/       <id>.json     one data file per harness: detection, instructions target, events,
+                              headless runner; built into the binary with include_str!
+claude/                       the Claude Code plugin: the hooks, in exec form
+codex/                        the Codex plugin: the hooks, pinned to the binary's version
+opencode/       knowledge.ts  the opencode plugin: a shim that spawns the binary
 hooks/          brain-*.mjs   the tools the skills and commands run with `bun --bun` (ledger, verify,
                               graph merge, config); the hook entry points are the binary's
 skills/brain/                 /brain new|edit <kind> - writes notes in the vault's conventions
@@ -15,7 +21,7 @@ commands/       brain-*.md    /brain-commits /brain-log /brain-sync /brain-usage
 template/                     the empty vault: folders, MOCs, conventions, system docs, Identity and
                               Hard-Rules stubs (`FILL:` marks each placeholder)
 INSTALL.md                    every step `setup` takes, by hand, for a person or an agent
-settings.hooks.json           the hook block `setup` merges into ~/.claude/settings.json
+settings.hooks.json           the hook block from before the plugin, read only by install.ts
 ```
 
 ## Install
@@ -35,6 +41,25 @@ each target's current content. It covers Claude Code and then every other harnes
 the plan and refuses if anything moved in between, then writes exactly that. `knowledge setup
 --remove --plan` is the reverse, for the same harnesses, and never touches the vault. Flags, Windows, and every step by hand: [INSTALL.md](INSTALL.md).
 
+## Harnesses
+
+The engine targets what a harness can do, not a list of names: T0 reads an instructions file, T1
+runs a shell, T2 loads skills, T3 runs hooks, T4 speaks MCP. A harness is one data file in
+`adapters/`, one translator in `src/harness/` if it has hooks, and one setup plan if it installs a
+plugin; no verb branches on a harness. "Verified" means a live session on a real install
+(Windows, 2026-11-23); the same checks on Arch wait for its pass.
+
+| Harness | Tiers used | What it gets | Enforcement points | Status |
+|---|---|---|---|---|
+| Claude Code | T0–T4 | Identity and Hard-Rules imported whole into `~/.claude/CLAUDE.md`; the plugin's hooks on nine events; `/brain`; graphify over MCP | The guard on `PreToolUse` (shell, edit and MCP calls) with deny and ask; the session-start restore; the pre-commit backstop | Verified |
+| Codex CLI | T0–T4 | The block written whole into `~/.codex/AGENTS.md`; the plugin's hooks on eight events, pinned to the binary's version; `/brain` through `~/.agents/skills`; `knowledge` and graphify over MCP | The guard on `PreToolUse` (`Bash`, `apply_patch`, MCP calls), deny only: an ask rule is a deny, since Codex cannot ask; hooks run only once you review them; restore and backstop | Verified |
+| opencode | T0–T3 | The block in `~/.config/opencode/AGENTS.md`; the shim plugin on eight events, seven of which run the binary; `/brain` | The guard in `execute.before` (`shell`, `edit`, `write`, `patch`), deny only; restore and backstop | Verified; its compaction and session-delete events only run in the interactive app and were not reached |
+| Claude desktop app, Chat | T4 | `knowledge mcp`: `find`, `graph`, `read`, and `note`, which asks before it writes | None: no shell and no hooks, so no tool call of ours to guard | Verified |
+| ChatGPT app's Codex | T0–T4 | The Codex plugin's hooks, once trusted in the CLI | As Codex; hooks not yet trusted are skipped silently | Built, not verified |
+| Any other (`generic`) | T0, T1 (T4 with `knowledge mcp`) | The block in a file you name, `knowledge find` and `graph`, and `knowledge note` to write back | None at run time: the rules are text only. The pre-commit backstop still runs in every clone `setup` set | Built, not verified |
+
+Every adapter's code path also runs in CI on fixture installs (`checks/stage-7.sh`).
+
 ## After a new vault
 
 Fill `00-Meta/Identity.md` and `00-Meta/Hard-Rules.md` (`grep -rn "FILL:" ~/knowledge/00-Meta`
@@ -51,8 +76,8 @@ skills' and commands' tools.
 
 ## The knowledge binary
 
-One native program owns the vault's index and answers every hook Claude Code runs, so no hook starts
-a JavaScript runtime. It is built from `src/` (`cargo install --path . --locked`) into
+One native program owns the vault's index and answers every hook a harness runs, so no hook starts
+a JavaScript runtime (opencode's shim runs inside opencode's own). It is built from `src/` (`cargo install --path . --locked`) into
 `~/.cargo/bin/knowledge`, and what it starts in the background (the flush, compile, the records push,
 the usage digest, the reindex) is the same binary again, detached. Its crates: `rusqlite` (SQLite
 built in, with FTS5), `serde`, `serde_json`, `jiff` (local time for the 05:00 rollover), `ring`
@@ -71,8 +96,11 @@ store (`rustls-platform-verifier`, no bundled root list) and `htmd` (HTML to Mar
 | `knowledge fetch <url> [--q <words>]…` | one page as Markdown, stored and answered the way `keep` answers |
 | `knowledge events <transcript.jsonl> [--json]` | a session's decisions, constraints, plans and refusals, for `brain-flush` |
 | `knowledge inject <prompt>` | what the prompt hook would add to a prompt |
-| `knowledge graph <note> [<note>]` | a note's links in and out, or the shortest path between two |
-| `knowledge hook session\|prompt\|pre-tool\|post-edit\|post-bash\|capture --harness claude` | the hooks themselves: JSON on stdin, always exit 0 |
+| `knowledge graph <note> [<note>] \| <note> --text` | a note's links in and out, the shortest path between two, or the note's text |
+| `knowledge note decision\|log <text>` | a line in the decision ledger, or in today's session note: the write-back for a harness with no hooks |
+| `knowledge config [<key>]` | the paths and settings the hooks see, for the skills and commands |
+| `knowledge mcp` | an MCP server on stdio with four tools: `find`, `graph`, `read` (read-only) and `note` |
+| `knowledge hook session\|prompt\|pre-tool\|post-edit\|post-bash\|capture --harness <id> [--pin <v>]` | the hooks themselves: the harness's JSON on stdin, always exit 0; with `--pin`, a binary of another version stands down |
 | `knowledge setup --plan \| --apply <id> \| --remove --plan` | this machine's setup across every harness found, planned before anything is written; `--harness <id>` for one |
 | `knowledge doctor [--pretty] [--repair] [--record]` | retrieval health, zero tokens: the index, 33 questions, links, priming, sync; `--repair` rebuilds what is derived |
 | `knowledge flush <session-id>` | a session's new turns into the daily log, once (`claude -p`, haiku) |
@@ -105,7 +133,7 @@ bullet that opens with a bold line, and that line's slug is the rule's id. `00-M
 of its whole text, and the guards. Nothing is added to the primed text. The owner edits the note,
 then runs `knowledge rules lock` in their own terminal.
 
-- **The guard** (`hook pre-tool`, on PreToolUse for shell, edit and MCP calls) splits a shell line
+- **The guard** (`hook pre-tool`, on each harness's pre-tool event for shell, edit and MCP calls) splits a shell line
   into segments and words, and answers `deny` or `ask` with the rule's id. It reads only
   `rules.lock`. It prints nothing when it allows, and on a missing or broken lock it allows with
   one stderr line.
@@ -122,7 +150,7 @@ guard puts the plain forms to the owner: an Edit, `sed -i`, a redirect, `Set-Con
 judge a wrapper (`bun -e`, a substitution, an escape). That case is caught afterwards, by the next
 start's restore and the doctor.
 
-Every target in CI builds the binary and runs `checks/stage-3.sh` to `checks/stage-6.sh` on the
+Every target in CI builds the binary and runs `checks/stage-3.sh` to `checks/stage-7.sh` on the
 template vault (x64 and ARM64: Windows, macOS, Linux glibc and musl). A target counts as verified
 once that run passes; until then it is built, not verified.
 

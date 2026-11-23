@@ -1,7 +1,9 @@
 # Installing knowledge-skeleton
 
 Build the binary, then let it plan the rest; every step the plan takes is also written out below,
-so a person or an agent can do it by hand and get the same machine.
+so a person or an agent can do it by hand and get the same machine. One plan covers Claude Code,
+then every other harness it finds installed (Codex, opencode, the Claude desktop app), each under
+its own `found` line; § Other harnesses has each one's steps.
 
 ```bash
 git clone https://github.com/atlasatakahraman/knowledge-skeleton ~/dev/knowledge-skeleton
@@ -25,6 +27,8 @@ knowledge setup --apply <id>
 | `--from-template` / `--adopt` | adopt a non-empty path, else template | A new vault from `template/`, or an existing one (it must have `00-Meta/00-MOC-Root.md`) |
 | `--signing` | off | Also this boot's commit-signing key and both clones signing (§ Signing and pull trust) |
 | `--skeleton <checkout>` | the one `~/.claude/hooks` links, else the one the binary was built in | The skeleton the links point into |
+| `--harness <id>` | every harness found | One harness alone: `claude`, `codex`, `opencode`, `claude-desktop` or `generic` |
+| `--instructions <file>` | none | With `--harness generic`: the file the vault block is written into |
 
 Each line of the plan is `ok` (already so), `create`, `change`, `WARN` or `FAIL`, with the file it
 names. Its last line is the plan id: a hash of the plan and of each target's content now.
@@ -122,6 +126,7 @@ ln -s <skeleton>/hooks ~/.claude/hooks
 mkdir -p ~/.claude/skills ~/.claude/commands
 ln -s <skeleton>/skills/brain ~/.claude/skills/brain
 ln -s <skeleton>/commands/brain-*.md ~/.claude/commands/
+mkdir -p ~/.agents/skills && ln -s <skeleton>/skills/brain ~/.agents/skills/brain
 ```
 
 ```powershell
@@ -129,16 +134,20 @@ New-Item -ItemType Junction -Path $HOME\.claude\hooks -Target C:\dev\knowledge-s
 New-Item -ItemType Junction -Path $HOME\.claude\skills\brain -Target C:\dev\knowledge-skeleton\skills\brain
 Get-ChildItem C:\dev\knowledge-skeleton\commands\brain-*.md | ForEach-Object {
   New-Item -ItemType SymbolicLink -Path "$HOME\.claude\commands\$($_.Name)" -Target $_.FullName }
+New-Item -ItemType Directory -Force $HOME\.agents\skills | Out-Null
+New-Item -ItemType Junction -Path $HOME\.agents\skills\brain -Target C:\dev\knowledge-skeleton\skills\brain
 ```
 
 A file symlink on Windows needs Developer Mode (Settings > For developers) or an elevated shell; a
 junction needs neither. Move an existing `~/.claude/hooks` folder aside first rather than deleting it.
+`~/.agents/skills` is the skills folder Codex, opencode, Gemini CLI, Cursor, Amp and Zed read, so
+`/brain` reaches them through the same link; opencode reads both folders and loads the skill once.
 
 ### 4b. The knowledge binary
 
 ```bash
 cargo install --path <skeleton> --locked
-knowledge --version    # knowledge 0.10.0 / SQLite 3.x, FTS5 on
+knowledge --version    # knowledge 0.11.2 / SQLite 3.x, FTS5 on
 ```
 
 It lands in `~/.cargo/bin` (`%USERPROFILE%\.cargo\bin` on Windows). A release build takes about a
@@ -148,22 +157,38 @@ folder, and `setup` WARNs when the binary it would register is a build folder's.
 `config.json` unless `KNOWLEDGE_HOME` says otherwise. `fetch` trusts the OS certificate store, so a
 machine whose store is out of date fails a TLS handshake rather than falling back to a bundled list.
 
-### 5. The hook block in `~/.claude/settings.json`
+### 5. The Claude Code plugin
 
-[`settings.hooks.json`](settings.hooks.json) is the block: every entry is the binary's `hook` verb.
-Merge each event's entries into the `hooks` key with `{KNOWLEDGE}` replaced by the binary's absolute
-path, forward slashes on Windows too. Keep every other hook; plugins add their own. `setup` first
-takes out every hook of ours (a `knowledge … hook` command, or a `brain-*.mjs` under
-`~/.claude/hooks` from before 0.10.0), then adds the block. By hand on Linux, once, into a
-`settings.json` that has none of ours yet:
+The hooks ship as a plugin, `claude/`, served by this repo's own marketplace
+(`.claude-plugin/marketplace.json`). Every hook is exec form: the command is
+`${user_config.knowledge_bin}` with `["hook", <verb>, "--harness", "claude"]` as its arguments, so
+no shell starts per hook and no other `knowledge` earlier on `PATH` can be picked.
 
 ```bash
-cd <skeleton> && sed "s#{KNOWLEDGE}#$HOME/.cargo/bin/knowledge#g" settings.hooks.json > /tmp/hooks.json
-jq --slurpfile b /tmp/hooks.json '.hooks = reduce ($b[0] | to_entries[]) as $e (.hooks // {}; .[$e.key] = ((.[$e.key] // []) + $e.value))' \
-  ~/.claude/settings.json > /tmp/settings.json && mv /tmp/settings.json ~/.claude/settings.json
+claude plugin marketplace add https://github.com/atlasatakahraman/knowledge-skeleton
+claude plugin install knowledge@knowledge-skeleton --scope user
 ```
 
-Run that once only: it appends. Claude Code reads hooks at session start, so open a new session after.
+Then the plugin's one option, in `~/.claude/settings.json`, beside every other key:
+
+```json
+{ "pluginConfigs": { "knowledge@knowledge-skeleton": {
+    "options": { "knowledge_bin": "/home/me/.cargo/bin/knowledge" } } } }
+```
+
+On Windows the path keeps forward slashes: `"C:/Users/me/.cargo/bin/knowledge.exe"`. Claude Code
+reads hooks at session start, so open a new session after.
+
+- **Updates are never automatic.** The marketplace is added with no `autoUpdate`: once that flag is
+  set, Claude Code copies it into `~/.claude/plugins/known_marketplaces.json`, where it stays even
+  after it is removed from `settings.json`. The plugin's version is the binary's, and Claude Code
+  replaces a cached plugin only when that version changes. When a pull changes `claude/`, the
+  session start names `claude plugin update knowledge@knowledge-skeleton`, then `/reload-plugins`.
+- **From 0.10.0's hook block.** `setup` takes every hook of ours out of `settings.json` (a
+  `knowledge … hook` command, or a `brain-*.mjs` under `~/.claude/hooks`) after the plugin installs,
+  and keeps every other hook. If the install fails, the apply stops and the old hooks keep running.
+  `settings.hooks.json` is that old block; only `install.ts` still reads it, for a boot not yet
+  moved to the binary.
 
 ### 6. Identity and Hard-Rules in `~/.claude/CLAUDE.md`
 
@@ -175,8 +200,10 @@ Both load whole into every session. Add, one import per line:
 ```
 
 Never move either behind a link or into a hook: a hook's context is cut to a 2,000-char preview past
-10,000 chars. The doctor's `priming` check guards it. `setup` writes the two lines in a marked
-section, so `--remove` can take out exactly that.
+10,000 chars. The doctor's `priming` check guards it. `setup` writes the two lines between
+`<!-- knowledge-skeleton:begin -->` and `<!-- knowledge-skeleton:end -->`, so `--remove` can take
+out exactly that; text outside the markers is never touched. The same generator writes the other
+harnesses' blocks (§ Other harnesses), and each session start restores a block that went stale.
 
 ### 6b. The rules lock and the guard
 
@@ -189,7 +216,7 @@ knowledge rules check                                   # rules: N units match 0
 ```
 
 Commit `00-Meta/rules.lock` with Hard-Rules: the session-start restore takes a changed rule back
-from `HEAD` only when `HEAD` matches the lock. The PreToolUse entry in step 5's block is the guard.
+from `HEAD` only when `HEAD` matches the lock. The plugin's PreToolUse hook (step 5) is the guard.
 Without a lock it allows everything, with one stderr line. `setup` points `core.hooksPath` at
 `githooks/` in the vault, this clone and each checkout a `10-Repos` page names. A checkout's own
 `core.hooksPath` is kept as `knowledge.ownHooksPath` and runs first. The hook needs `gitleaks` and
@@ -260,6 +287,119 @@ in `00-Meta/Identity.md` and `00-Meta/Hard-Rules.md` and replace the questions i
 Each session start runs the full doctor once per logical day, detached, with `--repair --record`;
 a FAIL opens the next session with a `!! VAULT HEALTH FAIL` line. No scheduled task is needed.
 
+## Other harnesses
+
+`setup --plan` reaches each of these when its adapter (`adapters/<id>.json`, built into the binary)
+detects it, after the Claude part has written `config.json`; `--harness <id>` plans one alone. Each
+one's instructions block comes from the same generator as step 6. Codex and opencode cannot import
+a file, so their block holds the retrieval steps, then Identity and Hard-Rules written whole. It has
+no by-hand form: `setup` writes it, and each session start restores it.
+
+### Codex
+
+Detected by `~/.codex` with `codex` on `PATH`. A Codex plugin has no option to carry an absolute
+path, so its hooks run the `knowledge` on `PATH`: `setup` FAILs without one, and WARNs when it is
+not the binary that is planning.
+
+```bash
+codex plugin marketplace add <skeleton>
+codex plugin add knowledge@knowledge-skeleton
+codex mcp add knowledge -- "$(command -v knowledge)" mcp
+codex mcp add graphify -- "$(command -v graphify-mcp)" <vault>/graphify-out/merged-graph.json
+```
+
+```powershell
+codex plugin marketplace add C:\dev\knowledge-skeleton
+codex plugin add knowledge@knowledge-skeleton
+codex mcp add knowledge -- (Get-Command knowledge).Source mcp
+codex mcp add graphify -- (Get-Command graphify-mcp).Source <vault>\graphify-out\merged-graph.json
+```
+
+The block goes into `~/.codex/AGENTS.md` (`%USERPROFILE%\.codex\AGENTS.md`). That global file does
+not count toward Codex's 32 KiB `project_doc_max_bytes`, so the cap stays as it is.
+
+- **Hook trust is yours.** Codex runs a plugin hook only after you review it: `/hooks` in the Codex
+  CLI. Trust is kept against each hook's hash, so every release asks again. `setup` never writes
+  trust: the plan's `hook trust` line and the doctor's `codex-trust` read Codex's own count
+  (`codex app-server`, `hooks/list`), and WARN while a hook waits for review. The ChatGPT app's
+  Codex runs only hooks already trusted in the CLI and skips the rest without a word.
+- **The pin.** Each hook runs `knowledge hook <verb> --harness codex --pin <version>`. A binary of
+  another version stands down, and the session start says so in one line. After a new binary,
+  `knowledge setup --plan` and `--apply` add the plugin again (a local marketplace has no upgrade
+  command); then review the hooks again.
+- **The guard denies; it cannot ask.** Codex has no ask, so an ask rule is a deny there and its
+  reason says so. An `apply_patch` call is judged by the paths in its patch text.
+- **The sandbox.** Codex's elevated Windows sandbox cannot read `~/.config/knowledge`, which also
+  holds the signing key, so that folder gets no read grant. Retrieval inside a session goes through
+  the `knowledge` MCP server instead: `mcp__knowledge__find` and `mcp__knowledge__graph`, read-only,
+  so Codex asks nothing before a call. The block names those tools first.
+- **The flush** runs `codex exec --ignore-user-config -m gpt-6-luna -s read-only
+  --skip-git-repo-check --json -`, which loads no plugin hook and no MCP server. The global
+  `AGENTS.md` still loads: about 30k input tokens a flush.
+
+### opencode
+
+Detected by `~/.config/opencode` with `opencode` on `PATH`. Two files: the plugin, a shim that only
+spawns `knowledge hook <verb> --harness opencode` and acts on the reply, and the block in
+`~/.config/opencode/AGENTS.md`. opencode loads every `.ts` in its plugins folder, with no config
+entry, in its background service, so restart the service after.
+
+```bash
+mkdir -p ~/.config/opencode/plugins && cp <skeleton>/opencode/knowledge.ts ~/.config/opencode/plugins/
+opencode service restart
+```
+
+```powershell
+New-Item -ItemType Directory -Force $HOME\.config\opencode\plugins | Out-Null
+Copy-Item C:\dev\knowledge-skeleton\opencode\knowledge.ts $HOME\.config\opencode\plugins\
+opencode service restart
+```
+
+- `setup` writes the copy built into the binary, pinned to its version, and never overwrites or
+  removes a `knowledge.ts` it did not write.
+- **The guard** runs in `execute.before` on `shell`, `edit`, `write` and `patch`, and blocks by
+  throwing. An ask rule is a deny, as in Codex.
+- **The flush** has no transcript file to read: it exports the session (`opencode session export
+  --standalone`) and runs `opencode run --standalone -m opencode/tidepool-alpha-free --format json`.
+  The model is free, and `--standalone` keeps the flush's marker out of the shared service, where it
+  would stand the plugin down in every live session.
+
+### Claude desktop app (Chat)
+
+The Chat has no shell and no hooks, so it gets the vault through `knowledge mcp`: `find`, `graph`
+and `read` (one note by name), all read-only, and `note`, which writes and so asks first. Detected by
+`~/AppData/Roaming/Claude` or `~/Library/Application Support/Claude`. One key goes into
+`claude_desktop_config.json`, every other key kept:
+
+```json
+{ "mcpServers": { "knowledge": { "command": "/home/me/.cargo/bin/knowledge", "args": ["mcp"] } } }
+```
+
+| Install | The file |
+|---|---|
+| macOS | `~/Library/Application Support/Claude/claude_desktop_config.json` |
+| Windows, installer | `%APPDATA%\Claude\claude_desktop_config.json` |
+| Windows, Store (MSIX) | `%LOCALAPPDATA%\Claude-Data\<package>\claude_desktop_config.json` |
+
+A Store install leaves only a `.user-data-left.<package>` marker in `%APPDATA%\Claude` and reads the
+moved folder; `setup` follows the marker, and WARNs "start the app once" while that folder does not
+exist. Quit the app fully and start it again after. A `knowledge` server `setup` did not write makes
+the plan FAIL rather than replace it. The desktop app's Code tab passes the same server into its
+sessions as `mcp__knowledge__*`, so the Claude plugin carries no server of its own.
+
+### Any other harness (`generic`)
+
+```bash
+knowledge setup --harness generic --instructions <file> --plan
+knowledge setup --harness generic --instructions <file> --apply <id>
+```
+
+The block goes into any file the harness reads, with one more line: no hook records this session,
+so write back with `knowledge note decision "<text>"` or `knowledge note log "<text>"`. A harness
+with a shell then has `knowledge find` and `knowledge graph`; one that speaks MCP and has no shell
+takes `knowledge mcp` as the desktop app does. Nothing restores this block at session start: plan
+again to check it.
+
 ## Signing and pull trust
 
 Commits from every machine are signed with an SSH key, and each session start pulls only a tip
@@ -310,10 +450,12 @@ still read the files, so keep shell commands on approval.
 
 ## Updating
 
-The skeleton fast-forwards itself at each session start when its tree is clean; when its
-`settings.hooks.json` changed, that session says to run `knowledge setup --plan` again. When its
-version moves past
-the vault's `.skeleton.json`, adapt the vault and bump the pin. The tools never update themselves:
+The skeleton fast-forwards itself at each session start when its tree is clean; when its `claude/`
+plugin changed, that session names `claude plugin update knowledge@knowledge-skeleton`. After a
+pull that changed `src/`, rebuild the binary (§ 4b), then `knowledge setup --plan` and `--apply`:
+that moves the Codex and opencode plugins to the new pin, and Codex asks for its hook review again.
+When the version moves past the vault's `.skeleton.json`, adapt the vault and bump the pin. The
+tools never update themselves:
 
 ```bash
 uv tool upgrade graphifyy
@@ -326,10 +468,16 @@ knowledge setup --remove --plan
 knowledge setup --remove --apply <id>
 ```
 
-It takes out the links from step 4, our hooks from `settings.json` (every other hook stays), the
-imports section `setup` wrote in `CLAUDE.md`, the githooks path (a checkout's own comes back), and the
-graphify MCP entry. It never touches the vault, and keeps `config.json`, the compile state and any
-signing key: delete those by hand if you want them gone. The vault stays a folder of Markdown notes.
+It takes out the links from step 4, the Claude plugin, its marketplace and its option in
+`settings.json` (every other key and hook stays), the block `setup` wrote in `CLAUDE.md`, the
+githooks path (a checkout's own comes back), and the graphify MCP entry. For each other harness
+found it takes out what § Other harnesses added: the Codex plugin, its marketplace, the
+`knowledge` and graphify servers setup registered, and the trust tables `codex plugin remove` leaves in `config.toml` (kept beside
+it first); opencode's `knowledge.ts`; the desktop app's `mcpServers.knowledge`; and each `AGENTS.md`
+block. A `generic` block goes with `--harness generic --instructions <file> --remove`. It never
+touches the vault, and keeps `config.json`, the compile state and any signing key: delete those by
+hand if you want them gone. The vault stays a folder of Markdown notes. Obsidian's graph colours
+stay too: they are Obsidian's view state.
 
 ## Troubleshooting
 
@@ -346,3 +494,8 @@ signing key: delete those by hand if you want them gone. The vault stays a folde
 | `pre-commit: gitleaks is not on PATH; commit refused` | Install gitleaks (§ 1), or the commit stays unscanned |
 | `pin FAIL` in the plan | The adopted vault pins another version: check out that one, or adapt the vault and bump the pin |
 | Every hook errors with `no knowledge config` | Step 3 is missing, or `$KNOWLEDGE_CONFIG` points somewhere empty |
+| `this binary is x, but the codex plugin's hooks were written for y, so they stand down` | A new binary and an old plugin: `knowledge setup --plan`, `--apply`, then the Codex hook review |
+| `WARN hook trust 0 of 9 hooks trusted in Codex` | The hooks wait for your review: `/hooks` in the Codex CLI |
+| `knowledge find` in Codex: `Access denied (os error 5)` on `config.json` | Codex's Windows sandbox: the model should use `mcp__knowledge__find`; `codex mcp list` must show `knowledge` |
+| opencode runs none of the hooks after setup | The service loaded its plugins before the file existed: `opencode service restart` |
+| The desktop Chat lists no `knowledge` tools | The config is in a folder the app left (a Store install reads `%LOCALAPPDATA%\Claude-Data\<package>`), or the app was not fully restarted |

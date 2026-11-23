@@ -56,7 +56,7 @@ const USAGE: &str = "usage:
   knowledge config [<key>]
   knowledge rules list [--json] | kernel | check [--staged] [--restore] | lock [--seed <file>]
   knowledge rules enable|disable <pack>
-  knowledge hook session|prompt|pre-tool|post-edit|post-bash|capture --harness claude
+  knowledge hook session|prompt|pre-tool|post-edit|post-bash|capture --harness <id> [--pin <version>]
   knowledge doctor [--pretty] [--repair] [--record] [--only <id,...>]
   knowledge doctor --only portable [--json]
   knowledge doctor budget [<transcript.jsonl>] [--json]
@@ -64,6 +64,7 @@ const USAGE: &str = "usage:
   knowledge setup --plan [--vault <path>] [--dev <path>] [--machine <text>] [--from-template | --adopt]
                          [--signing] [--skeleton <checkout>]
   knowledge setup --apply <id> [the same options] | --remove --plan | --remove --apply <id>
+  knowledge setup --harness claude|codex|opencode|claude-desktop|generic ...   (one harness alone)
   knowledge flush <session-id> [<cwd>] [--transcript <file>] [--date <YYYY-MM-DD>] [--dry-run [--from-start]]
   knowledge compile [--force] [--dry-run]
   knowledge post-bash [--backfill <since>] [--dry-run]
