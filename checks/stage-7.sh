@@ -361,6 +361,11 @@ mkdir -p "$HOME/AppData/Roaming/Claude" "$HOME/AppData/Local/Claude-Data/claude_
 : > "$HOME/AppData/Roaming/Claude/.user-data-left.claude_fixture"
 DC="$HOME/AppData/Local/Claude-Data/claude_fixture/claude_desktop_config.json"
 printf '{\n  "preferences": {\n    "fixture": true\n  }\n}\n' > "$DC"
+# S7.7a: the vault as Obsidian left it, zoomed and filtered, with colour groups of its own.
+GJ="$S7/vault/.obsidian/graph.json"
+printf '{\n  "search": "-[type:session]",\n  "showOrphans": true,\n  "colorGroups": [\n    {\n      "query": "path:00-Meta",\n      "color": {\n        "a": 1,\n        "rgb": 1\n      }\n    }\n  ],\n  "linkDistance": 300,\n  "scale": 0.5,\n  "close": false\n}\n' > "$GJ"
+nogroups() { awk '/^  "colorGroups": \[/{skip=1} !skip{print} skip&&/^  \],?$/{skip=0}' "$1"; }
+nogroups "$GJ" > "$TMP/out7/graph-other.txt"
 
 s7() { "$BIN" setup "$@" --vault "$(native "$S7/vault")" --dev "$(native "$S7/dev")" --skeleton "$(native "$SK7")"; }
 # Stage 6's tree snapshot and plan reader, on this fixture; `update` is a harness plan's status.
@@ -391,6 +396,8 @@ check "all: a harness folder with no CLI on PATH is skipped, saying so" \
   'printf "%s" "$plan" | grep -q "^  WARN    harness          Codex: .* codex is not on PATH: skipped"'
 check "all: the desktop config is the one the marker moved the app's data to" \
   'printf "%s" "$plan" | grep -qF "  change  knowledge MCP    $FDC: mcpServers.knowledge = "'
+check "all: --plan sets only the graph's colorGroups, in the vault's own .obsidian/graph.json" \
+  '[ "$(printf "%s" "$plan" | grep -c "graph view")" = 1 ] && printf "%s" "$plan" | grep -qF "  change  graph view       $FX7/vault/.obsidian/graph.json: colorGroups by note type, every other key kept (the old file kept as "'
 check "all: --plan leaves the tree hash unchanged" '[ "$(snap)" = "$before" ]'
 cp "$DC" "$TMP/out7/dc.json"
 printf '\n' >> "$DC"
@@ -408,6 +415,8 @@ check "all: the desktop config gains knowledge mcp and keeps its other keys" \
   'grep -q "\"knowledge\"" "$DC" && grep -q "\"mcp\"" "$DC" && grep -q "\"fixture\": true" "$DC"'
 check "all: opencode gets the shim and its block" \
   'cmp -s "$HOME/.config/opencode/plugins/knowledge.ts" "$ROOT/opencode/knowledge.ts" && grep -qF "$BEGIN" "$HOME/.config/opencode/AGENTS.md" && grep -q "^# My opencode rules$" "$HOME/.config/opencode/AGENTS.md"'
+check "all: graph.json gets the template's colour groups, every other key byte-identical" \
+  'nogroups "$GJ" | cmp -s - "$TMP/out7/graph-other.txt" && [ "$(nogroups "$ROOT/template/.obsidian/graph.json" | tr -d "\n")" = "{}" ] && grep -qF "[type:commit] OR [type:commits] OR [type:usage]" "$GJ" && ! grep -q "path:00-Meta" "$GJ"'
 check "all: a second --plan has nothing to change" 's7 --plan | grep -q "^Nothing to change.$"'
 
 # Uninstalled by hand first, so --remove has no reason to run the real `claude plugin`.

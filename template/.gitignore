@@ -6,6 +6,8 @@ graphify-out/
 .obsidian/workspace-mobile.json
 .obsidian/cache
 .obsidian/graph.json
+# The copy setup keeps when it merges the graph's colour groups in.
+.obsidian/graph.json.pre-skeleton-*
 
 # Obsidian plugin code - reinstallable from community-plugins.json
 .obsidian/plugins/

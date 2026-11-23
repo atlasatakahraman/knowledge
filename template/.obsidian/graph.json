@@ -1,0 +1,53 @@
+{
+  "colorGroups": [
+    {
+      "query": "[type:moc] OR [type:identity] OR [type:rules]",
+      "color": {
+        "a": 1,
+        "rgb": 12542314
+      }
+    },
+    {
+      "query": "[type:decision]",
+      "color": {
+        "a": 1,
+        "rgb": 11833005
+      }
+    },
+    {
+      "query": "[type:plan] OR [type:task]",
+      "color": {
+        "a": 1,
+        "rgb": 10731148
+      }
+    },
+    {
+      "query": "[type:repo] OR [type:architecture]",
+      "color": {
+        "a": 1,
+        "rgb": 15453067
+      }
+    },
+    {
+      "query": "[type:doc] OR [type:person]",
+      "color": {
+        "a": 1,
+        "rgb": 8962256
+      }
+    },
+    {
+      "query": "[type:session]",
+      "color": {
+        "a": 1,
+        "rgb": 6385288
+      }
+    },
+    {
+      "query": "[type:commit] OR [type:commits] OR [type:usage]",
+      "color": {
+        "a": 1,
+        "rgb": 6193580
+      }
+    }
+  ]
+}

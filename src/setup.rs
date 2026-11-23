@@ -2644,12 +2644,82 @@ fn plan_desktop_remove() -> Plan {
     p
 }
 
+// ---- Obsidian's graph view (S7.7a) ---------------------------------------------------------------
+
+/// The graph's colour groups, one per family of note types in Conventions (the owner's pick A,
+/// 2026-11-23, from live previews). template/ carries this file, so a new vault opens with them;
+/// setup merges the same groups into a vault that already exists.
+const GRAPH: &str = include_str!("../template/.obsidian/graph.json");
+
+/// A vault opened in Obsidian (it has `.obsidian/`) gets `colorGroups` in `.obsidian/graph.json`,
+/// and nothing else: the file is Obsidian's untracked view state (0040), so zoom, forces and the
+/// search filter stay as Obsidian left them.
+fn plan_graph(vault: &Path) -> Plan {
+    let mut p = Plan::default();
+    let dir = vault.join(".obsidian");
+    if !dir.is_dir() {
+        p.say(
+            "ok",
+            "graph view",
+            "no .obsidian/ in the vault: not opened in Obsidian",
+        );
+        return p;
+    }
+    let file = dir.join("graph.json");
+    let config = match read_obj(&file) {
+        Ok(c) => c,
+        Err(e) => {
+            p.say("FAIL", "graph view", e);
+            return p;
+        }
+    };
+    let Some(groups) = serde_json::from_str::<J>(GRAPH)
+        .ok()
+        .and_then(|g| g.get("colorGroups").cloned())
+    else {
+        return p;
+    };
+    if config.get("colorGroups") == Some(&groups) {
+        p.say(
+            "ok",
+            "graph view",
+            format!("{}: colour groups by note type", fwd(&file)),
+        );
+        return p;
+    }
+    let mut next = config.clone();
+    next.set("colorGroups", groups);
+    let seen = seen_file(&file);
+    let backup = backup(&file, &seen);
+    let kept = backup
+        .as_ref()
+        .map(|b| format!(" (the old file kept as {})", fwd(b)))
+        .unwrap_or_default();
+    p.act(
+        if file.exists() { "change" } else { "create" },
+        "graph view",
+        format!(
+            "{}: colorGroups by note type, every other key kept{kept}",
+            fwd(&file)
+        ),
+        seen,
+        vec![Act::Write {
+            path: file,
+            text: pretty(&next),
+            backup,
+        }],
+    );
+    p.next.push("If Obsidian is open, run 'Reload app without saving' from its command palette: it reads graph.json at start, and writes its own copy back when the graph's settings change".into());
+    p
+}
+
 // ---- every harness found (S7.7) ------------------------------------------------------------------
 
 /// `setup` with no `--harness`: Claude Code, the base the others build on (config.json, the vault,
 /// the links), then every harness an adapter detects, each under its own `found` line. One plan,
 /// one id, one apply. The others plan against the vault the Claude part resolves, so a first
-/// setup needs no second pass, except when that vault is still to be made from template/.
+/// setup needs no second pass, except when that vault is still to be made from template/. Last,
+/// the graph view's colour groups, for a vault opened in Obsidian.
 fn plan_all(args: &Args, remove: bool) -> Plan {
     let mut p = Plan::default();
     p.say(
@@ -2708,6 +2778,16 @@ fn plan_all(args: &Args, remove: bool) -> Plan {
         p.next.push(
             "knowledge setup --plan again, for the harnesses that waited on the vault".into(),
         );
+    }
+    // A vault still to be made from template/ gets the graph file with it.
+    if remove {
+        p.say(
+            "ok",
+            "graph view",
+            "Obsidian's view state: the colour groups stay",
+        );
+    } else if ready {
+        p.extend(plan_graph(&at.0));
     }
     p
 }
