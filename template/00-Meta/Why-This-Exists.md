@@ -23,7 +23,7 @@ of those gets written down once.
 ## The bet
 
 1. **Prime the small, always-true core.** Who the owner is and the rules, imported whole by
-   `~/.claude/CLAUDE.md`, plus what changes per session, injected by `brain-session`.
+   `~/.claude/CLAUDE.md`, plus what changes per session, injected by the session start (`knowledge hook session`).
 2. **Retrieve the long tail.** Everything else is found on demand, cheapest tier first
    ([[Retrieval-Protocol]]): the MOC, then full-text search, then the graph, a file read last.
 3. **Capture records automatically.** Sessions, commits and decisions are written by hooks, so
@@ -46,14 +46,14 @@ has a watcher:
 |---|---|---|
 | Flush canary | Sessions captured, but no daily note for 3 days | `!! FLUSH CANARY` at session start |
 | Failure record | A background `claude -p` that failed, with its reason | `!! BRAIN <TAG> FAILING` at session start |
-| `brain-doctor` | Index, retrieval, sessions, auth, frontmatter, links, reach, ignores, commits, priming, graph, engine links; hygiene as a warning | `bun --bun ~/.claude/hooks/brain-doctor.mjs --pretty` |
+| `knowledge doctor` | Index, retrieval, sessions, auth, frontmatter, links, reach, ignores, commits, priming, graph, engine links; hygiene as a warning | `knowledge doctor --pretty` |
 | Event log | Every capture and what it spawned | `50-Ops/hook-events.jsonl` (gitignored) |
-| Daily sweep | `brain-doctor --repair --record`, once a day, from a scheduled task | `50-Ops/Health/health-YYYY-MM.md` |
+| Daily sweep | `knowledge doctor --repair --record`, once per logical day, detached from the session start | `50-Ops/Health/health-YYYY-MM.md` |
 | Health alarm | The sweep's FAIL, or the sweep itself going quiet for 2+ days | `!! VAULT HEALTH` at session start |
 
 ## How to know it is working
 
-1. `bun --bun ~/.claude/hooks/brain-doctor.mjs --pretty` prints **PASS**.
+1. `knowledge doctor --pretty` prints **PASS**.
 2. The tail of `50-Ops/Health/health-YYYY-MM.md` shows a PASS line for each recent day.
 3. The session start shows **no `!!` lines**. Silence means healthy.
 

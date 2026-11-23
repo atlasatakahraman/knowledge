@@ -1,19 +1,20 @@
 # Installing knowledge-skeleton
 
-One command does all of it; every step it takes is also written out below, so a person or an agent
-can do it by hand and get the same machine. The installer is safe to run again at any time: each
-step checks first, and a step that is already done reports `ok`.
+Build the binary, then let it plan the rest; every step the plan takes is also written out below,
+so a person or an agent can do it by hand and get the same machine.
 
 ```bash
 git clone https://github.com/atlasatakahraman/knowledge-skeleton ~/dev/knowledge-skeleton
-bun ~/dev/knowledge-skeleton/install.ts --dry-run    # what it would do
-bun ~/dev/knowledge-skeleton/install.ts              # do it
+cargo install --path ~/dev/knowledge-skeleton --locked
+knowledge setup --plan            # what it would write; nothing is written
+knowledge setup --apply <id>      # exactly that, where <id> is the plan's last line
 ```
 
 ```powershell
 git clone https://github.com/atlasatakahraman/knowledge-skeleton C:\dev\knowledge-skeleton
-bun C:\dev\knowledge-skeleton\install.ts --dry-run    # what it would do
-bun C:\dev\knowledge-skeleton\install.ts              # do it
+cargo install --path C:\dev\knowledge-skeleton --locked
+knowledge setup --plan
+knowledge setup --apply <id>
 ```
 
 | Flag | Default | |
@@ -22,20 +23,26 @@ bun C:\dev\knowledge-skeleton\install.ts              # do it
 | `--dev <path>` | `config.json`'s, else `~/dev` | Where checkouts live, one folder per GitHub remote |
 | `--machine "<text>"` | empty | Free text the SessionStart banner opens with: hardware, dual-boot, dotfiles |
 | `--from-template` / `--adopt` | adopt a non-empty path, else template | A new vault from `template/`, or an existing one (it must have `00-Meta/00-MOC-Root.md`) |
-| `--dry-run` | | Print each step, change nothing |
+| `--signing` | off | Also this boot's commit-signing key and both clones signing (§ Signing and pull trust) |
+| `--skeleton <checkout>` | the one `~/.claude/hooks` links, else the one the binary was built in | The skeleton the links point into |
 
-It exits 0 only when every step and `brain-doctor` pass. On a FAIL it says what to fix; fix it and
-run it again.
+Each line of the plan is `ok` (already so), `create`, `change`, `WARN` or `FAIL`, with the file it
+names. Its last line is the plan id: a hash of the plan and of each target's content now.
+`--apply <id>` takes the same flags, recomputes the plan and writes nothing if the id differs, so a
+file that changed after the plan was read is never overwritten unseen. A plan with a FAIL has no id
+to apply: fix what it says and plan again. Nothing is deleted: a real file where a link belongs moves
+to `~/.claude/.pre-skeleton/`, and `settings.json` is copied to `settings.json.pre-skeleton-<hash>`
+before a change. A second `--plan` on a set-up machine says `Nothing to change.`
 
 ## For an agent
 
-- Run `--dry-run` first and show the output to the person before the real run.
-- Never edit a hook in `~/.claude/settings.json` that is not a `brain-*` command, and never commit
-  the vault for them. The first commit of a template vault is the installer's, and only when git
-  has an identity.
+- Run `--plan` and show the output to the person; apply its id only on their yes.
+- Never edit a hook in `~/.claude/settings.json` that is not this engine's, and never commit the
+  vault for them. The first commit of a template vault is setup's, and only when git has an
+  identity.
 - A FAIL line is the answer to report: quote it, do not work around it.
-- If `claude`, `uv` or `git` is missing, the installer stops with the command that installs it.
-  Installing one is the person's call: ask first.
+- A WARN that names a missing tool (`claude`, `uv`, `gitleaks`) carries the command that installs
+  it. Installing one is the person's call: ask first.
 
 ## What it does, by hand
 
@@ -44,9 +51,10 @@ checkout, `<vault>` the vault, `<dev>` the checkouts folder.
 
 ### 1. Prerequisites
 
-`bun`, `git`, `uv` (for graphify), `claude` (Claude Code), `gitleaks` and `cargo` (the Rust
-toolchain, for the knowledge binary), all on `PATH`. The hooks commit and push their records on
-their own and scan them with gitleaks first. Without it they commit nothing.
+`git`, `uv` (for graphify), `claude` (Claude Code), `gitleaks`, `cargo` (the Rust toolchain, for
+the knowledge binary) and `bun` (the skills' and commands' tools), all on `PATH`. The hooks commit
+and push their records on their own and scan them with gitleaks first. Without it they commit
+nothing.
 
 | Tool | Linux | Windows |
 |---|---|---|
@@ -130,26 +138,27 @@ junction needs neither. Move an existing `~/.claude/hooks` folder aside first ra
 
 ```bash
 cargo install --path <skeleton> --locked
-knowledge --version    # knowledge 0.9.0 / SQLite 3.x, FTS5 on
+knowledge --version    # knowledge 0.10.0 / SQLite 3.x, FTS5 on
 ```
 
 It lands in `~/.cargo/bin` (`%USERPROFILE%\.cargo\bin` on Windows). A release build takes about a
 minute; the C compiler SQLite needs also builds `ring` for `fetch`'s TLS (no CMake, no NASM). Rerun
-it after pulling a skeleton whose `src/` changed; `install.ts` does when the source is newer than the
-installed binary. Its three files (`vault-index.db`, `repos-index.db`, `captures.db`) live beside
+it after pulling a skeleton whose `src/` changed: the hooks run the installed copy, never the build
+folder, and `setup` WARNs when the binary it would register is a build folder's. Its three files (`vault-index.db`, `repos-index.db`, `captures.db`) live beside
 `config.json` unless `KNOWLEDGE_HOME` says otherwise. `fetch` trusts the OS certificate store, so a
 machine whose store is out of date fails a TLS handshake rather than falling back to a bundled list.
 
 ### 5. The hook block in `~/.claude/settings.json`
 
-[`settings.hooks.json`](settings.hooks.json) is the block. Merge each event's entries into the
-`hooks` key, with `{BUN}` replaced by bun's absolute path (`command -v bun`,
-`(Get-Command bun).Source`), `{HOOKS}` by `~/.claude/hooks` written out absolute, and `{KNOWLEDGE}`
-by the binary's absolute path. Use forward slashes on Windows too. Keep every other hook; plugins
-add their own. On Linux, once:
+[`settings.hooks.json`](settings.hooks.json) is the block: every entry is the binary's `hook` verb.
+Merge each event's entries into the `hooks` key with `{KNOWLEDGE}` replaced by the binary's absolute
+path, forward slashes on Windows too. Keep every other hook; plugins add their own. `setup` first
+takes out every hook of ours (a `knowledge … hook` command, or a `brain-*.mjs` under
+`~/.claude/hooks` from before 0.10.0), then adds the block. By hand on Linux, once, into a
+`settings.json` that has none of ours yet:
 
 ```bash
-cd <skeleton> && sed "s#{BUN}#$(command -v bun)#g; s#{HOOKS}#$HOME/.claude/hooks#g; s#{KNOWLEDGE}#$HOME/.cargo/bin/knowledge#g" settings.hooks.json > /tmp/hooks.json
+cd <skeleton> && sed "s#{KNOWLEDGE}#$HOME/.cargo/bin/knowledge#g" settings.hooks.json > /tmp/hooks.json
 jq --slurpfile b /tmp/hooks.json '.hooks = reduce ($b[0] | to_entries[]) as $e (.hooks // {}; .[$e.key] = ((.[$e.key] // []) + $e.value))' \
   ~/.claude/settings.json > /tmp/settings.json && mv /tmp/settings.json ~/.claude/settings.json
 ```
@@ -166,7 +175,8 @@ Both load whole into every session. Add, one import per line:
 ```
 
 Never move either behind a link or into a hook: a hook's context is cut to a 2,000-char preview past
-10,000 chars. `brain-doctor`'s `priming` check guards it.
+10,000 chars. The doctor's `priming` check guards it. `setup` writes the two lines in a marked
+section, so `--remove` can take out exactly that.
 
 ### 6b. The rules lock and the guard
 
@@ -180,16 +190,18 @@ knowledge rules check                                   # rules: N units match 0
 
 Commit `00-Meta/rules.lock` with Hard-Rules: the session-start restore takes a changed rule back
 from `HEAD` only when `HEAD` matches the lock. The PreToolUse entry in step 5's block is the guard.
-Without a lock it allows everything, with one stderr line. `install.ts` points `core.hooksPath` at
+Without a lock it allows everything, with one stderr line. `setup` points `core.hooksPath` at
 `githooks/` in the vault, this clone and each checkout a `10-Repos` page names. A checkout's own
 `core.hooksPath` is kept as `knowledge.ownHooksPath` and runs first. The hook needs `gitleaks` and
 `knowledge` on `PATH`, and refuses the commit without either.
 
 ### 7. Compile state
 
-`brain-compile` turns each finished daily log into notes once, remembered by hash in
+`knowledge compile` turns each finished daily log into notes once, remembered by hash in
 `<vault>/50-Ops/brain-compile-state.json` (untracked, per machine). An adopted vault has no state on
-a new machine, so the first session would recompile every log it ever had. Mark them done:
+a new machine, so the first session would recompile every log it ever had. `setup` marks every log
+but today's done: each log's absolute path, as the OS writes it, maps to the SHA-256 of its text.
+By hand, the same with `bun`:
 
 ```bash
 cd <skeleton>/hooks && bun --bun -e '
@@ -202,7 +214,7 @@ for (const log of new Bun.Glob("*/*/*.md").scanSync({ cwd: join(CONFIG.vault, FO
 writeFileSync(file, JSON.stringify(state, null, 1));'
 ```
 
-This marks today's log too; delete its line if today's session should still be compiled.
+This one marks today's log too; delete its line if today's session should still be compiled.
 
 ### 8. graphify (MIT)
 
@@ -211,13 +223,14 @@ uv tool install "graphifyy[mcp]"
 ```
 
 The `[mcp]` extra is required: without it `graphify-mcp` dies on import and Claude Code lists the
-server as failed, while every doctor check still passes.
+server as failed, while every doctor check still passes. `setup` does not install it: its plan WARNs
+and names this command, and registers the server (step 10) once `graphify-mcp` is on `PATH`.
 
 ### 9. First index and graph
 
 ```bash
 knowledge index
-bun --bun ~/.claude/hooks/brain-doctor.mjs --repair --pretty
+knowledge doctor --repair --pretty
 ```
 
 The first builds the vault index (about a second for 2,000 notes). The repair records commits made
@@ -236,12 +249,16 @@ claude mcp list    # graphify: ... ✔ Connected
 ### 11. Check
 
 ```bash
-bun --bun ~/.claude/hooks/brain-doctor.mjs --pretty
+knowledge doctor --pretty
 ```
 
 Every check PASS (`hygiene` may WARN). Then, for a new vault, fill the `<!-- FILL: … -->` placeholders
 in `00-Meta/Identity.md` and `00-Meta/Hard-Rules.md` and replace the questions in
-`00-Meta/retrieval-cases.json` with ones the vault must always answer.
+`00-Meta/retrieval-cases.json` with ones the vault must always answer. Last, the rules interview:
+`knowledge rules list` shows the packs, and `knowledge rules enable <pack>` turns one's guards on.
+
+Each session start runs the full doctor once per logical day, detached, with `--repair --record`;
+a FAIL opens the next session with a `!! VAULT HEALTH FAIL` line. No scheduled task is needed.
 
 ## Signing and pull trust
 
@@ -249,10 +266,10 @@ Commits from every machine are signed with an SSH key, and each session start pu
 signed by a key you listed. The key has no passphrase, because the hooks commit with nobody present;
 it signs commits and nothing else. In this order, because step 4 is the one that can refuse a pull:
 
-1. **Each machine:** `bun install.ts --signing`. It writes `~/.config/knowledge/signing_ed25519`,
+1. **Each machine:** `knowledge setup --plan --signing`, then `--apply` its id. It writes `~/.config/knowledge/signing_ed25519`,
    sets `gpg.format ssh`, `user.signingkey`, `commit.gpgsign` and `tag.gpgsign` in the vault and in
-   the skeleton clone, adds this machine's key to `~/.config/knowledge/allowed_signers`, and prints
-   the key's fingerprint. Add the public key on GitHub as a **signing** key
+   the skeleton clone, and adds this machine's key to `~/.config/knowledge/allowed_signers`.
+   `ssh-keygen -lf ~/.config/knowledge/signing_ed25519.pub` prints its fingerprint. Add the public key on GitHub as a **signing** key
    (`gh ssh-key add <key>.pub --type signing`; needs `gh auth refresh -s admin:ssh_signing_key`).
 2. **Each machine:** add the other machine's public key to `allowed_signers`, one line each:
    `<email> namespaces="git" ssh-ed25519 AAAA…`. Fetch it from
@@ -266,13 +283,13 @@ it signs commits and nothing else. In this order, because step 4 is the one that
 Only the tip of a pull is checked: a signed tip vouches for the unsigned commits under it. `%G?`
 must be `G`; `U` (a good signature from a key not in `allowed_signers`) is refused, and so is a
 missing `allowed_signers`. `allowed_signers` is passed on each call, never read from the repo's
-config. `brain-doctor`'s `pull-trust` check WARNs until step 4 and FAILs if a piece goes missing.
+config. The doctor's `pull-trust` check WARNs until step 4 and FAILs if a piece goes missing.
 Undo, at any step: `git config --unset commit.gpgsign` in a clone, or remove `pullTrust`.
 
 ## Credential fences
 
-Recommended for `~/.claude/settings.json`; the installer never writes it, since security settings
-stay yours:
+Recommended for `~/.claude/settings.json`; `setup` never writes it, since security settings stay
+yours:
 
 ```json
 {
@@ -294,7 +311,8 @@ still read the files, so keep shell commands on approval.
 ## Updating
 
 The skeleton fast-forwards itself at each session start when its tree is clean; when its
-`settings.hooks.json` changed, that session says to rerun `install.ts`. When its version moves past
+`settings.hooks.json` changed, that session says to run `knowledge setup --plan` again. When its
+version moves past
 the vault's `.skeleton.json`, adapt the vault and bump the pin. The tools never update themselves:
 
 ```bash
@@ -303,9 +321,15 @@ uv tool upgrade graphifyy
 
 ## Removing
 
-Delete the links from step 4, the `brain-*` entries from `settings.json`, the two imports from
-`CLAUDE.md`, `config.json`, and the graphify MCP (`claude mcp remove --scope local graphify`, from
-the vault). The vault stays a folder of Markdown notes.
+```bash
+knowledge setup --remove --plan
+knowledge setup --remove --apply <id>
+```
+
+It takes out the links from step 4, our hooks from `settings.json` (every other hook stays), the
+imports section `setup` wrote in `CLAUDE.md`, the githooks path (a checkout's own comes back), and the
+graphify MCP entry. It never touches the vault, and keeps `config.json`, the compile state and any
+signing key: delete those by hand if you want them gone. The vault stays a folder of Markdown notes.
 
 ## Troubleshooting
 
@@ -313,11 +337,12 @@ the vault). The vault stays a folder of Markdown notes.
 |---|---|
 | `graphify: ✘ Failed to connect` in `claude mcp list` | graphify without the `[mcp]` extra: `uv tool install --reinstall "graphifyy[mcp]"` |
 | `link FAIL ... Developer Mode` on Windows | A file symlink needs Developer Mode or an elevated shell |
+| `setup: the plan changed since --plan` | A target changed after the plan was printed (or the flags differ): plan again and read it |
 | `ignores` FAIL on a fresh clone | `.graphifyignore` names a folder git did not bring: an empty folder needs a `.gitkeep` |
 | `links` FAIL on a fresh clone, pointing at a date | A record links a daily log that was never committed: commit it, or let the flush write it |
 | `!! SKELETON x is behind the vault's pin y` at session start | The other machine moved the vault to a newer skeleton: `git -C <skeleton> pull --ff-only` |
 | `!! SKELETON x is ahead of the vault's pin y` | The skeleton moved on: read its changes since `y` (`git -C <skeleton> log vy..`), adapt the vault, set `.skeleton.json` to `x`, commit |
 | `!! VAULT PULL refused: the tip is not signed by a known key` | Pull trust is on and origin's tip is unsigned or signed by a key not in `allowed_signers`: check who pushed it (`git log --show-signature -1 @{u}`) before adding a key |
 | `pre-commit: gitleaks is not on PATH; commit refused` | Install gitleaks (§ 1), or the commit stays unscanned |
-| `pin FAIL` from the installer | The adopted vault pins another version: check out that one, or adapt the vault and bump the pin |
+| `pin FAIL` in the plan | The adopted vault pins another version: check out that one, or adapt the vault and bump the pin |
 | Every hook errors with `no knowledge config` | Step 3 is missing, or `$KNOWLEDGE_CONFIG` points somewhere empty |

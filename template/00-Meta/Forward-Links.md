@@ -11,7 +11,7 @@ status: active
 
 Links to notes that do not exist **on purpose**. [[Conventions]]: a link to a note that doesn't
 exist yet is not an error, it marks something worth writing. Every other unresolved `[[link]]` is a
-bug. `brain-doctor`'s `links` check reads this list: a broken link that isn't listed here fails it.
+bug. the doctor's `links` check reads this list: a broken link that isn't listed here fails it.
 
 One bullet per link: the link in backticks (so this list itself holds no broken links), where it
 appears, and why it is deliberate. Remove a line when the note gets written.

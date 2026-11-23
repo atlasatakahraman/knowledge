@@ -16,7 +16,7 @@ there in two hops, the vault has a gap.
    whole into every session, so this is the highest-value writing in the vault.
 2. Add a page per repository with `/brain new repo`.
 3. Replace the questions in [`00-Meta/retrieval-cases.json`](00-Meta/retrieval-cases.json) with
-   ones this vault must always answer, each naming the note that answers it. `brain-doctor`'s
+   ones this vault must always answer, each naming the note that answers it. the doctor's
    `retrieval` check runs them every day.
 4. Choose a licence for the notes, if they will ever be shared, and add it as `LICENSE.md`.
 
@@ -36,8 +36,8 @@ Installing the engine itself (hooks, config, graphify) is the knowledge-skeleton
 | [`60-Decisions/`](60-Decisions/) | ADRs: `Repos/<Remote-Name>/` per repo, `Identity/` for the vault, hooks and agent | you; `brain-compile` |
 | [`80-Assets/`](80-Assets/) | Attachments: pasted images, diagrams, brand masters | you |
 | [`90-Inbox/`](90-Inbox/) | Unsorted capture, kept empty | you |
-| `graphify-out/` | The repo graphs, merged for the graphify MCP (gitignored) | `brain-graph`, `brain-doctor --repair` |
-| `00-MOC-Sessions`, `00-MOC-Plans`, `00-MOC-Ops` | Generated hubs. Never edit by hand | `brain-hubs` |
+| `graphify-out/` | The repo graphs, merged for the graphify MCP (gitignored) | `brain-graph`, `knowledge doctor --repair` |
+| `00-MOC-Sessions`, `00-MOC-Plans`, `00-MOC-Ops` | Generated hubs. Never edit by hand | `knowledge hubs` |
 
 Every hook, its event and its cost: [Hook-Lifecycle](00-Meta/Hook-Lifecycle.md).
 
@@ -76,8 +76,8 @@ Every hook, its event and its cost: [Hook-Lifecycle](00-Meta/Hook-Lifecycle.md).
 | `/brain-usage` | This month's token/cost digest into `50-Ops/Usage/` | free |
 | `/brain-commits` | Run the commit recorder over the whole month | free |
 | `/brain-sync` | Re-index, merge the repo graphs, prune phantom rows, verify links | free |
-| `bun --bun ~/.claude/hooks/brain-doctor.mjs --pretty` | The health check | free |
-| `bun --bun ~/.claude/hooks/brain-doctor.mjs --repair --record --pretty` | The daily sweep: rebuild derived artifacts, check, record a line in `50-Ops/Health/` | free |
+| `knowledge doctor --pretty` | The health check | free |
+| `knowledge doctor --repair --record --pretty` | The daily sweep: rebuild derived artifacts, check, record a line in `50-Ops/Health/` | free |
 | `knowledge find <words>` | Search the vault: ranked notes, each with its best passage | free |
 | `knowledge graph <note> [<note>]` | A note's links in and out, or the path between two notes | free |
 | `bun --bun ~/.claude/hooks/brain-graph.mjs` | Merge the repo graphs into the served graph | free |
@@ -92,19 +92,19 @@ maintenance.
 |---|---|---|
 | `!! BRAIN FLUSH FAILING since …` (or `COMPILE`) | A background `claude -p` failed; the reason is in the line | Auth: run `claude`, then `/login`. The line clears on the next success |
 | `!! FLUSH CANARY: …` | Sessions are captured but no daily note for 3+ days | Read the tail of `50-Ops/hook-events.jsonl`, then run `brain-flush` with `--dry-run` |
-| `!! VAULT HEALTH FAIL (date): failing: …` | The last daily sweep failed | `brain-doctor --pretty` |
+| `!! VAULT HEALTH FAIL (date): failing: …` | The last daily sweep failed | `knowledge doctor --pretty` |
 | `!! VAULT PULL skipped: …` | The vault has uncommitted changes, or cannot fast-forward | Commit or stash, then `git pull --ff-only` |
 | `!! SKELETON PULL skipped: …` (or `failed`) | The skeleton checkout has uncommitted changes, or cannot fast-forward | Commit or stash there, then `git pull --ff-only` |
 | `!! RECORDS committed but not pushed` | You have unpushed commits of your own; a push would send them too | Push when they are ready; the records go with them |
 | `!! RECORDS not committed: gitleaks is not on PATH …` | Records are never committed unscanned | Install gitleaks (`INSTALL.md` § Prerequisites), then restart Claude Code so the hooks see the new `PATH` |
-| `!! BRAIN RECORDS FAILING since …` | The records commit or push failed: offline, a gitleaks finding, a rebase conflict | Follow the reason; `bun --bun ~/.claude/hooks/brain-records.mjs` retries |
+| `!! BRAIN RECORDS FAILING since …` | The records commit or push failed: offline, a gitleaks finding, a rebase conflict | Follow the reason; `knowledge records` retries |
 | `!! SKELETON x is behind the vault's pin y` | Another machine moved the vault to a newer skeleton; this one has not pulled it | `git -C <skeleton> pull --ff-only` |
 | `!! SKELETON x is ahead of the vault's pin y` | The skeleton moved on; the vault is still written for the older one | Read the skeleton's changes since `y` (`git -C <skeleton> log vy..`), adapt the vault, then set `.skeleton.json` to `x` and commit it |
-| `brain-doctor` FAIL in `vault-index` | Notes the index hasn't caught up with, or rows for files that are gone, or a CRLF note | `brain-doctor --repair`; convert the note to LF |
-| `brain-doctor` FAIL in `retrieval` | A question in `retrieval-cases.json` no longer returns its note | A renamed note, a CRLF note, or a search regression. `failed` lists each query and what it got |
-| `brain-doctor` FAIL in `frontmatter` | A note lacks `type:` or `created:` | Add them ([Conventions](00-Meta/Conventions.md)) |
-| `brain-doctor` FAIL in `links` | A `[[link]]` resolves to nothing | Fix it, or list it in `00-Meta/Forward-Links.md` |
-| `brain-doctor` FAIL in `reach` | A note more than 2 hops from the root MOC (a record, 3) | Link it from its folder's MOC |
-| `brain-doctor` FAIL in `commits` | A commit from the last 3 days has no note | `brain-commit.mjs --backfill <date>` |
-| `brain-doctor` FAIL in `skeleton-version` | `~/.claude/hooks`, the skill or a command does not point into one knowledge-skeleton checkout, or `.skeleton.json` pins another version | Re-run the skeleton's `install.ts` (or step 4 of its `INSTALL.md`); for the pin, the two `!! SKELETON` rows above |
+| `knowledge doctor` FAIL in `vault-index` | Notes the index hasn't caught up with, or rows for files that are gone, or a CRLF note | `knowledge doctor --repair`; convert the note to LF |
+| `knowledge doctor` FAIL in `retrieval` | A question in `retrieval-cases.json` no longer returns its note | A renamed note, a CRLF note, or a search regression. `failed` lists each query and what it got |
+| `knowledge doctor` FAIL in `frontmatter` | A note lacks `type:` or `created:` | Add them ([Conventions](00-Meta/Conventions.md)) |
+| `knowledge doctor` FAIL in `links` | A `[[link]]` resolves to nothing | Fix it, or list it in `00-Meta/Forward-Links.md` |
+| `knowledge doctor` FAIL in `reach` | A note more than 2 hops from the root MOC (a record, 3) | Link it from its folder's MOC |
+| `knowledge doctor` FAIL in `commits` | A commit from the last 3 days has no note | `knowledge post-bash --backfill <date>` |
+| `knowledge doctor` FAIL in `skeleton-version` | `~/.claude/hooks`, the skill or a command does not point into one knowledge-skeleton checkout, or `.skeleton.json` pins another version | Run `knowledge setup --plan`, then `--apply` its id (or step 4 of the skeleton's `INSTALL.md`); for the pin, the two `!! SKELETON` rows above |
 | The graph shrank | A rename or an ignore rule dropped files | [Conventions](00-Meta/Conventions.md) § Renaming; `brain-graph.mjs --force` |

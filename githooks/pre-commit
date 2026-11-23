@@ -1,6 +1,6 @@
 #!/bin/sh
 # The pre-commit hook for the vault, the skeleton clone and each checkout a 10-Repos page names.
-# install.ts points core.hooksPath here. In order, failing closed at each step:
+# `knowledge setup` points core.hooksPath here. In order, failing closed at each step:
 #   1. the repo's own pre-commit, if it has one (knowledge.ownHooksPath, else .git/hooks);
 #   2. gitleaks over the staged files: a commit without the scan is a commit nobody checked
 #      (0012-records-never-committed-unscanned);
@@ -17,15 +17,15 @@ if ! command -v gitleaks >/dev/null 2>&1; then
 fi
 gitleaks git --staged --no-banner --redact . || exit 1
 if ! command -v knowledge >/dev/null 2>&1; then
-  echo "pre-commit: knowledge is not on PATH; commit refused. Run install.ts, then commit again." >&2
+  echo "pre-commit: knowledge is not on PATH; commit refused. Run `cargo install --path <skeleton> --locked`, then commit again." >&2
   exit 1
 fi
-# A skeleton pull makes this hook live before install.ts rebuilds the binary: an older one answers
+# A skeleton pull makes this hook live before the binary is rebuilt: an older one answers
 # `rules` with its usage text (exit 2), so say what to run instead of printing that.
 out=$(knowledge rules check --staged 2>&1)
 code=$?
 case "$out" in
-  "knowledge: usage:"*) echo "pre-commit: the installed knowledge has no \`rules\` verb; commit refused. Run install.ts, then commit again." >&2 ;;
+  "knowledge: usage:"*) echo "pre-commit: the installed knowledge has no \`rules\` verb; commit refused. Run `cargo install --path <skeleton> --locked`, then commit again." >&2 ;;
   *) [ -n "$out" ] && printf '%s\n' "$out" >&2 ;;
 esac
 exit $code

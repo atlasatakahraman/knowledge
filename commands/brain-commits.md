@@ -26,7 +26,7 @@ done
 Write to `50-Ops/Commits/YYYY-MM.md` with frontmatter (`type: commits`, `project: brain`,
 `status: active`). Group by repo, newest first.
 
-**Do not trust the auto-recorded entries already in that file as complete.** `brain-commit` is
+**Do not trust the auto-recorded entries already in that file as complete.** The commit recorder (`knowledge hook post-bash`) is
 `PostToolUse(Bash)` with `async: true` and only ever sees commits made *through the Bash tool* —
 commits from your own terminal are invisible to it by design, and async drops more. On 2026-09-07
 it had captured 1 of the vault's 9 commits. `git log` is authoritative; the hook is a convenience.

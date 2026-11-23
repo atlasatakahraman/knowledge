@@ -6,48 +6,57 @@ commits, inject relevant note names into each prompt, promote decisions, and kee
 and a link graph current. The vault itself holds notes only and stays private.
 
 ```
-src/            *.rs          the `knowledge` binary: the vault index, search, prompt and edit hooks,
-                              link graph, portability check (Rust, one SQLite file per machine)
-hooks/          brain-*.mjs   Claude Code hooks and their tools, run with `bun --bun`
+src/            *.rs          the `knowledge` binary: every hook, the vault index, search, link graph,
+                              the doctor and `setup` (Rust, one SQLite file per machine)
+hooks/          brain-*.mjs   the tools the skills and commands run with `bun --bun` (ledger, verify,
+                              graph merge, config); the hook entry points are the binary's
 skills/brain/                 /brain new|edit <kind> - writes notes in the vault's conventions
 commands/       brain-*.md    /brain-commits /brain-log /brain-sync /brain-usage
 template/                     the empty vault: folders, MOCs, conventions, system docs, Identity and
                               Hard-Rules stubs (`FILL:` marks each placeholder)
-install.ts                    sets a machine up: prerequisites, the binary (`cargo install`), graphify,
-                              vault, config, links, hook block, CLAUDE.md imports, first index
-INSTALL.md                    the same steps by hand, for a person or an agent
-settings.hooks.json           the hook block install.ts merges into ~/.claude/settings.json
+INSTALL.md                    every step `setup` takes, by hand, for a person or an agent
+settings.hooks.json           the hook block `setup` merges into ~/.claude/settings.json
 ```
 
 ## Install
 
 ```bash
 git clone https://github.com/atlasatakahraman/knowledge-skeleton ~/dev/knowledge-skeleton
-bun ~/dev/knowledge-skeleton/install.ts --dry-run && bun ~/dev/knowledge-skeleton/install.ts
+cargo install --path ~/dev/knowledge-skeleton --locked
+knowledge setup --plan
+knowledge setup --apply <id>      # the id is the plan's last line
 ```
 
-A new vault comes from `template/` at `~/knowledge`; an existing one is adopted. Safe to run again:
-a step that is done reports `ok`. Flags, Windows, and every step by hand: [INSTALL.md](INSTALL.md).
+`--plan` writes nothing: it lists every file it would create or change (the vault, new from
+`template/` at `~/knowledge` or adopted, the config, the links into `~/.claude`, the hook block, the
+`CLAUDE.md` imports, each clone's githooks path) and ends with the plan id, a hash of the plan and of
+each target's current content. `--apply <id>` recomputes the plan and refuses if anything moved in
+between, then writes exactly that. `knowledge setup --remove --plan` is the reverse and never touches
+the vault. Flags, Windows, and every step by hand: [INSTALL.md](INSTALL.md).
 
 ## After a new vault
 
 Fill `00-Meta/Identity.md` and `00-Meta/Hard-Rules.md` (`grep -rn "FILL:" ~/knowledge/00-Meta`
 lists what is left) and replace the questions in `00-Meta/retrieval-cases.json` with ones the vault
-must always answer: `brain-doctor`'s `retrieval` check runs them. The template's own `README.md`
-has the rest.
+must always answer: the doctor's `retrieval` check runs them. Then `knowledge doctor --repair
+--pretty` builds the first index, hubs and graph, and `knowledge rules list` with `rules enable
+<pack>` turns on the rule packs you want. The template's own `README.md` has the rest.
 
 ## Requirements
 
-`bun`, `git`, Claude Code (`claude`), `gitleaks`, `uv` for graphify, and the Rust toolchain
-(`rustup`; `rust-toolchain.toml` pins 1.100.0 and rustup fetches it on the first build).
+`git`, Claude Code (`claude`), `gitleaks`, `uv` for graphify, the Rust toolchain (`rustup`;
+`rust-toolchain.toml` pins 1.100.0 and rustup fetches it on the first build), and `bun` for the
+skills' and commands' tools.
 
 ## The knowledge binary
 
-One native program owns the vault's index and answers the hooks that run on every prompt and edit,
-so neither starts a JavaScript runtime. It is built from `src/` by `install.ts`
-(`cargo install --path . --locked`) into `~/.cargo/bin/knowledge`. Its crates: `rusqlite` (SQLite
-built in, with FTS5), `serde`, `serde_json`, and for `fetch` only `ureq` with `rustls` on `ring`,
-the OS trust store (`rustls-platform-verifier`, no bundled root list) and `htmd` (HTML to Markdown).
+One native program owns the vault's index and answers every hook Claude Code runs, so no hook starts
+a JavaScript runtime. It is built from `src/` (`cargo install --path . --locked`) into
+`~/.cargo/bin/knowledge`, and what it starts in the background (the flush, compile, the records push,
+the usage digest, the reindex) is the same binary again, detached. Its crates: `rusqlite` (SQLite
+built in, with FTS5), `serde`, `serde_json`, `jiff` (local time for the 05:00 rollover), `ring`
+(SHA-256 for compile's state), and for `fetch` only `ureq` with `rustls` on `ring`, the OS trust
+store (`rustls-platform-verifier`, no bundled root list) and `htmd` (HTML to Markdown).
 `checks/crates.txt` lists every crate in the tree; CI fails on any other.
 
 | Verb | What it does |
@@ -62,7 +71,12 @@ the OS trust store (`rustls-platform-verifier`, no bundled root list) and `htmd`
 | `knowledge events <transcript.jsonl> [--json]` | a session's decisions, constraints, plans and refusals, for `brain-flush` |
 | `knowledge inject <prompt>` | what the prompt hook would add to a prompt |
 | `knowledge graph <note> [<note>]` | a note's links in and out, or the shortest path between two |
-| `knowledge hook prompt\|post-edit\|pre-tool --harness claude` | the hooks themselves: JSON on stdin, always exit 0 |
+| `knowledge hook session\|prompt\|pre-tool\|post-edit\|post-bash\|capture --harness claude` | the hooks themselves: JSON on stdin, always exit 0 |
+| `knowledge setup --plan \| --apply <id> \| --remove --plan` | this machine's setup, planned before anything is written |
+| `knowledge doctor [--pretty] [--repair] [--record]` | retrieval health, zero tokens: the index, 33 questions, links, priming, sync; `--repair` rebuilds what is derived |
+| `knowledge flush <session-id>` | a session's new turns into the daily log, once (`claude -p`, haiku) |
+| `knowledge compile [--force]` | a finished daily log into notes, once (`claude -p`, sonnet) |
+| `knowledge records \| hubs \| usage \| post-bash` | the records push, the MOC hubs, the monthly usage digest, the commit notes |
 | `knowledge rules list [--json] \| kernel` | the packs, rules and guards in the lock; the rules that are code, not text |
 | `knowledge rules check [--staged] [--restore]` | Hard-Rules against the lock; the staged copy and the guards' backstops; a changed rule back from `HEAD` |
 | `knowledge rules lock [--seed <file>] \| enable\|disable <pack>` | re-stamps the lock after the owner edits Hard-Rules; turns a pack's guards on or off |
@@ -96,7 +110,7 @@ then runs `knowledge rules lock` in their own terminal.
   one stderr line.
 - **The backstop** is `githooks/pre-commit`. It runs the repo's own hook, gitleaks, then
   `rules check --staged`, which fails a commit holding a guard's staged names (`package-lock.json`)
-  or a Hard-Rules that disagrees with the lock. `install.ts` sets it in the vault, the skeleton and
+  or a Hard-Rules that disagrees with the lock. `setup` sets it in the vault, the skeleton and
   each checkout a `10-Repos` page names.
 - **The restore.** Each session start runs `rules check --restore`. A rule that differs from the
   lock comes back from `HEAD` when `HEAD` matches the lock, and one line says so. Otherwise the
@@ -107,8 +121,8 @@ guard puts the plain forms to the owner: an Edit, `sed -i`, a redirect, `Set-Con
 judge a wrapper (`bun -e`, a substitution, an escape). That case is caught afterwards, by the next
 start's restore and the doctor.
 
-Every target in CI builds the binary and runs `checks/stage-3.sh`, `checks/stage-4.sh` and
-`checks/stage-5.sh` on the template vault (x64 and ARM64: Windows, macOS, Linux glibc and musl). A target counts as verified
+Every target in CI builds the binary and runs `checks/stage-3.sh` to `checks/stage-6.sh` on the
+template vault (x64 and ARM64: Windows, macOS, Linux glibc and musl). A target counts as verified
 once that run passes; until then it is built, not verified.
 
 ## Per-machine config
@@ -127,7 +141,7 @@ The hooks read their paths from one untracked file, written once per machine:
 
 `vault` and `devRoot` are required. `"pullTrust": "signed"` makes each session start pull only a
 tip signed by a key in `allowed_signers` beside the config (INSTALL.md § Signing and pull trust). `rolloverHour` (default 5) is when a daily note starts, local
-time. `install.ts` writes it. Check what the hooks see with `bun --bun hooks/skeleton-config.mjs`.
+time. `setup` writes it. Check what the hooks see with `bun --bun hooks/skeleton-config.mjs`.
 
 ## Sync
 
@@ -135,14 +149,14 @@ Each session start fast-forwards the vault and this checkout, each only when its
 A checkout on a detached HEAD (a tag) is pinned on purpose and left alone.
 
 The vault pushes one thing on its own: the records the hooks write (daily logs, commit notes, the
-decision ledger, health and usage). After the SessionEnd flush, `brain-records` commits them alone
+decision ledger, health and usage). After the SessionEnd flush, `knowledge records` commits them alone
 and pushes when every unpushed commit is a record, so another machine pulls the session it did not
 run. Your own commits never push on their own and hold the records push while unpushed. The next
 session start retries what a shutdown cut off; `.gitattributes` merges the records by union.
 
 The vault's `.skeleton.json` (`{"version":"0.3.0"}`) pins the skeleton version its notes are
-written for; `install.ts` writes it into a new vault. When the running checkout is another
-version, the session opens with one line saying which side moves, and `brain-doctor`'s
+written for; `setup` writes it into a new vault. When the running checkout is another
+version, the session opens with one line saying which side moves, and the doctor's
 `skeleton-version` fails. A vault without the file is not checked.
 
 Every version bump in `package.json` is tagged `v<version>` on the commit that makes it, so

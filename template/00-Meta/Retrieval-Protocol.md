@@ -76,7 +76,7 @@ sweep. When a large output will be filtered rather than edited, `<cmd> | knowled
 
 ## Keeping it honest
 
-An edit reindexes its note at once, and `brain-doctor`'s `vault-index` check compares the index
+An edit reindexes its note at once, and the doctor's `vault-index` check compares the index
 with the disk. A write outside Claude (Obsidian, a shell) is picked up by `knowledge index`, which
 the daily sweep runs.
 

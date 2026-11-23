@@ -46,4 +46,4 @@ in two hops, the vault has a gap: fix the gap, don't grep around it.
 | `/brain-usage` | Token/model/cost digest into `50-Ops/Usage/` |
 | `/brain-commits` | Record every commit this month into `50-Ops/Commits/` |
 | `/brain-sync` | Rebuild graphs, re-index, prune phantom rows, verify links |
-| `bun --bun ~/.claude/hooks/brain-doctor.mjs --pretty` | Zero-token health check |
+| `knowledge doctor --pretty` | Zero-token health check |

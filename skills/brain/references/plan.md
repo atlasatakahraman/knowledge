@@ -13,7 +13,7 @@ re-author from memory.
 3. Frontmatter `type: plan`, `status: draft`, and `project: <repo>` when it concerns one repo.
 4. Keep the **Context** section — why, not just what. A plan without its reasoning is unreviewable
    six months later.
-5. Run `bun --bun ~/.claude/hooks/brain-hubs.mjs` so it appears in `40-Plans/00-MOC-Plans.md`.
+5. Run `knowledge hubs` so it appears in `40-Plans/00-MOC-Plans.md`.
 
 ## edit — recording the outcome
 
