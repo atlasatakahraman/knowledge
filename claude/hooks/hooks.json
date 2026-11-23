@@ -28,10 +28,10 @@
       { "matcher": "Edit|Write", "hooks": [
         { "type": "command", "command": "${user_config.knowledge_bin}", "args": ["hook", "post-edit", "--harness", "claude"] }
       ] },
-      { "matcher": "Bash", "hooks": [{ "type": "command", "command": "${user_config.knowledge_bin}", "args": ["hook", "post-bash", "--harness", "claude"], "timeout": 15, "async": true }] }
+      { "matcher": "Bash|PowerShell", "hooks": [{ "type": "command", "command": "${user_config.knowledge_bin}", "args": ["hook", "post-bash", "--harness", "claude"], "timeout": 15, "async": true }] }
     ],
     "PostToolUseFailure": [
-      { "matcher": "Bash", "hooks": [{ "type": "command", "command": "${user_config.knowledge_bin}", "args": ["hook", "post-bash", "--harness", "claude"], "timeout": 15, "async": true }] }
+      { "matcher": "Bash|PowerShell", "hooks": [{ "type": "command", "command": "${user_config.knowledge_bin}", "args": ["hook", "post-bash", "--harness", "claude"], "timeout": 15, "async": true }] }
     ]
   }
 }
