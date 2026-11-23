@@ -88,7 +88,7 @@ else
   echo "SKIP  claude plugin validate: no claude on PATH"
 fi
 # The plan only: --plan writes nothing, so the real `claude plugin` never runs here.
-sp() { k setup --plan --vault "$V" --dev "$(native "$TMP")" --skeleton "$(native "$ROOT")" 2>&1; }
+sp() { k setup --harness claude --plan --vault "$V" --dev "$(native "$TMP")" --skeleton "$(native "$ROOT")" 2>&1; }
 url=$(git -C "$ROOT" config remote.origin.url)
 check "no plugin installed: the plan installs it from the checkout's origin" \
   'sp | grep -qF "plugin           claude plugin install knowledge@knowledge-skeleton, from $url (git, no autoUpdate)"'
@@ -327,6 +327,99 @@ k setup --harness generic --instructions "$(native "$GEN")" --remove --apply "$(
 check "generic remove: the block gone, the owner's text kept" '[ "$(cat "$GEN")" = "My own line." ]'
 check "no skill or command names ~/.claude/hooks or skeleton-config.mjs" \
   '! grep -rqE "claude/hooks|skeleton-config" "$ROOT/skills" "$ROOT/commands"'
+
+# --- S7.7: setup across harnesses ----------------------------------------------------------------
+# A fresh fixture HOME holding Claude Code, a Codex folder with no codex on PATH, opencode (an empty
+# stand-in on PATH: its setup only writes files), and the Claude desktop app as the Store installs
+# it, its data moved behind a marker. No codex and no graphify-mcp on PATH, and the Claude plugin
+# recorded as installed at this version, so no real CLI ever runs against the fixture.
+S7="$TMP/s77"
+FX7=$(native "$S7")
+SK7="$S7/sk"
+export HOME="$S7/home" USERPROFILE="$S7/home" KNOWLEDGE_BIN="$BIN"
+unset KNOWLEDGE_HOME KNOWLEDGE_CONFIG XDG_CONFIG_HOME CLAUDE_CONFIG_DIR
+mkdir -p "$S7/bin" "$SK7" "$HOME/.claude/plugins" "$HOME/.codex" "$HOME/.config/opencode" "$TMP/out7"
+: > "$S7/bin/opencode"
+: > "$S7/bin/opencode.cmd"
+printf '# My opencode rules\n' > "$HOME/.config/opencode/AGENTS.md"
+clean() { for x in codex graphify-mcp; do for e in "" .exe .cmd; do [ -e "$1/$x$e" ] && return 1; done; done; return 0; }
+PATH="$(dirname "$BIN"):$S7/bin:$(printf '%s' "$PATH" | tr ':' '\n' | while IFS= read -r d; do clean "$d" && printf '%s\n' "$d"; done | paste -sd: -)"
+export PATH
+for d in hooks commands skills githooks template claude; do cp -R "$ROOT/$d" "$SK7/$d"; done
+rm -rf "$SK7/hooks/.state"
+cp "$ROOT/package.json" "$SK7/"
+git -C "$SK7" init -q
+cp -R "$ROOT/template" "$S7/vault"
+git -C "$S7/vault" init -q
+printf '{"knowledge-skeleton": {"source": {"source": "git", "url": "fixture"}}}\n' > "$HOME/.claude/plugins/known_marketplaces.json"
+printf '{"version": 2, "plugins": {"knowledge@knowledge-skeleton": [{"scope": "user", "version": "%s"}]}}\n' "$VER" > "$HOME/.claude/plugins/installed_plugins.json"
+mkdir -p "$HOME/AppData/Roaming/Claude" "$HOME/AppData/Local/Claude-Data/claude_fixture"
+: > "$HOME/AppData/Roaming/Claude/.user-data-left.claude_fixture"
+DC="$HOME/AppData/Local/Claude-Data/claude_fixture/claude_desktop_config.json"
+printf '{\n  "preferences": {\n    "fixture": true\n  }\n}\n' > "$DC"
+
+s7() { "$BIN" setup "$@" --vault "$(native "$S7/vault")" --dev "$(native "$S7/dev")" --skeleton "$(native "$SK7")"; }
+# Stage 6's tree snapshot and plan reader, on this fixture; `update` is a harness plan's status.
+snap() {
+  (cd "$S7" && find . \( ! -type d -o -type d -empty \) -print | grep -v -e '/\.git/objects/' -e '/\.git/logs/' -e '/\.git/index$' | LC_ALL=C sort |
+    while IFS= read -r f; do
+      if [ -L "$f" ]; then printf '%s L %s\n' "$FX7/${f#./}" "$(readlink "$f")"
+      elif [ -d "$f" ]; then printf '%s D\n' "$FX7/${f#./}"; else printf '%s %s\n' "$FX7/${f#./}" "$(cksum < "$f")"; fi
+    done)
+}
+changed() { diff <(printf '%s\n' "$1") <(printf '%s\n' "$2") | sed -n 's/^[<>] \([^ ]*\) .*/\1/p' | LC_ALL=C sort -u; }
+listed() {
+  printf '%s\n' "$1" | grep -E '^  (create|change|update|remove) ' | cut -c28- | while IFS= read -r l; do
+    first="${l%%: *}"; first="${first%% -> *}"; printf '%s\n' "$first"
+    case "$l" in *"kept as "*) kept="${l##*kept as }"; printf '%s\n' "${kept%)}" ;; esac
+  done | LC_ALL=C sort -u
+}
+plan_id() { printf '%s\n' "$1" | tail -n 1 | sed -n 's/^plan \([0-9a-f]\{16\}\)$/\1/p'; }
+FDC=$(native "$DC")
+
+before=$(snap)
+plan=$(s7 --plan); code=$?
+id=$(plan_id "$plan")
+check "all: --plan exits 0 and ends with the plan id" '[ "$code" = 0 ] && [ -n "$id" ]'
+check "all: --plan lists Claude Code, opencode and the desktop app, each under its own line" \
+  'printf "%s" "$plan" | grep -q "^  found   harness          Claude Code: " && printf "%s" "$plan" | grep -q "^  found   harness          opencode: " && printf "%s" "$plan" | grep -q "^  found   harness          Claude desktop app: "'
+check "all: a harness folder with no CLI on PATH is skipped, saying so" \
+  'printf "%s" "$plan" | grep -q "^  WARN    harness          Codex: .* codex is not on PATH: skipped"'
+check "all: the desktop config is the one the marker moved the app's data to" \
+  'printf "%s" "$plan" | grep -qF "  change  knowledge MCP    $FDC: mcpServers.knowledge = "'
+check "all: --plan leaves the tree hash unchanged" '[ "$(snap)" = "$before" ]'
+cp "$DC" "$TMP/out7/dc.json"
+printf '\n' >> "$DC"
+touched=$(snap)
+s7 --apply "$id" > "$TMP/out7/refused.txt" 2>&1; code=$?
+check "all: a harness file touched between plan and apply makes --apply refuse" \
+  '[ "$code" != 0 ] && grep -q "the plan changed since --plan" "$TMP/out7/refused.txt" && [ "$(snap)" = "$touched" ]'
+cp "$TMP/out7/dc.json" "$DC"
+s7 --apply "$id" > "$TMP/out7/apply.txt" 2>&1; code=$?
+after=$(snap)
+check "all: --apply exits 0" '[ "$code" = 0 ]'
+check "all: --apply changes exactly the files the plan lists" '[ "$(changed "$before" "$after")" = "$(listed "$plan")" ]'
+[ "$(changed "$before" "$after")" = "$(listed "$plan")" ] || diff <(changed "$before" "$after") <(listed "$plan") | sed 's/^/      /'
+check "all: the desktop config gains knowledge mcp and keeps its other keys" \
+  'grep -q "\"knowledge\"" "$DC" && grep -q "\"mcp\"" "$DC" && grep -q "\"fixture\": true" "$DC"'
+check "all: opencode gets the shim and its block" \
+  'cmp -s "$HOME/.config/opencode/plugins/knowledge.ts" "$ROOT/opencode/knowledge.ts" && grep -qF "$BEGIN" "$HOME/.config/opencode/AGENTS.md" && grep -q "^# My opencode rules$" "$HOME/.config/opencode/AGENTS.md"'
+check "all: a second --plan has nothing to change" 's7 --plan | grep -q "^Nothing to change.$"'
+
+# Uninstalled by hand first, so --remove has no reason to run the real `claude plugin`.
+rm -rf "$HOME/.claude/plugins"
+after=$(snap)
+rplan=$(s7 --remove --plan); code=$?
+rid=$(plan_id "$rplan")
+check "all: --remove --plan exits 0, covers every harness found, and names no note" \
+  '[ "$code" = 0 ] && [ -n "$rid" ] && [ "$(printf "%s" "$rplan" | grep -c "^  found   harness ")" = 3 ] && ! listed "$rplan" | grep -q "^$FX7/vault/.*\.md$"'
+check "all: --remove --plan leaves the tree unchanged" '[ "$(snap)" = "$after" ]'
+s7 --remove --apply "$rid" > "$TMP/out7/remove.txt" 2>&1; code=$?
+# The folders the removed links and plugin leave empty stay: setup cannot tell whether it made them.
+check "all: --remove --apply changes exactly the files its plan lists" \
+  '[ "$code" = 0 ] && [ "$(changed "$after" "$(snap)" | grep -v -e "^$FX7/home/.claude/commands$" -e "^$FX7/home/.claude/skills$" -e "^$FX7/home/.agents/skills$" -e "^$FX7/home/.config/opencode/plugins$")" = "$(listed "$rplan")" ]'
+check "all: --remove takes knowledge out of the desktop config and keeps the rest" \
+  '! grep -q "knowledge\|mcpServers" "$DC" && grep -q "\"fixture\": true" "$DC"'
 
 rm -rf "$TMP"
 if [ "$fails" -eq 0 ]; then echo "stage 7: all checks pass"; else echo "stage 7: $fails check(s) FAIL"; exit 1; fi

@@ -2,6 +2,7 @@
   "id": "codex",
   "name": "Codex",
   "translator": "codex",
+  "detect": { "paths": ["~/.codex"], "bin": "codex" },
   "instructions": { "global": "~/.codex/AGENTS.md", "form": "inline" },
   "events": {
     "session-start": ["SessionStart"],

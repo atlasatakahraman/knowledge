@@ -2,6 +2,7 @@
   "id": "opencode",
   "name": "opencode",
   "translator": "opencode",
+  "detect": { "paths": ["~/.config/opencode"], "bin": "opencode" },
   "instructions": { "global": "~/.config/opencode/AGENTS.md", "form": "inline" },
   "events": {
     "session-start": ["session.created"],

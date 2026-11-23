@@ -13,6 +13,9 @@
 //! `--harness opencode` (S7.5): its plugin file, compiled into this binary, and its AGENTS.md block.
 //! `--harness generic --instructions <file>` (S7.6): the inline block in any file a harness reads.
 //! Nothing restores it at session start (a generic harness has no hooks): plan again to check it.
+//! `--harness claude-desktop` (S7.7): `knowledge mcp` in the app's claude_desktop_config.json.
+//! With no `--harness` (S7.7), one plan covers Claude Code and then every harness an adapter
+//! detects, each under its own `found` line; `--remove` covers the same set.
 use crate::config::{self, Config};
 use crate::instructions::{self, Form};
 use crate::state::{self, J};
@@ -23,12 +26,14 @@ use std::time::Duration;
 
 const USAGE: &str = "usage:
   knowledge setup --plan [--vault <path>] [--dev <path>] [--machine <text>] [--from-template | --adopt]
-                         [--signing] [--skeleton <checkout>]
+                         [--signing] [--skeleton <checkout>]       (Claude Code and every harness found)
   knowledge setup --apply <id> [the same options]
   knowledge setup --remove --plan | --remove --apply <id>
+  knowledge setup --harness claude [the options above]               (Claude Code alone)
   knowledge setup --harness codex --plan | --apply <id> [--skeleton <checkout>]   (after the Claude setup)
   knowledge setup --harness codex --remove --plan | --remove --apply <id>
   knowledge setup --harness opencode [--remove] --plan | --apply <id>
+  knowledge setup --harness claude-desktop [--remove] --plan | --apply <id>
   knowledge setup --harness generic --instructions <file> [--remove] --plan | --apply <id>";
 
 const GIT: Duration = Duration::from_secs(20);
@@ -134,6 +139,15 @@ impl Plan {
             seen,
             acts,
         });
+    }
+    /// Another plan's steps and next lines, after this one's.
+    fn extend(&mut self, other: Plan) {
+        self.steps.extend(other.steps);
+        for n in other.next {
+            if !self.next.contains(&n) {
+                self.next.push(n);
+            }
+        }
     }
     fn failed(&self) -> bool {
         self.steps.iter().any(|s| s.status == "FAIL")
@@ -509,9 +523,11 @@ fn pretty(v: &J) -> String {
     format!("{}\n", serde_json::to_string_pretty(v).unwrap_or_default())
 }
 
-fn settings_backup(file: &Path, seen: &str) -> Option<PathBuf> {
+/// `<name>.pre-skeleton-<hash>` beside a JSON file setup is about to change, when there is one.
+fn backup(file: &Path, seen: &str) -> Option<PathBuf> {
+    let name = file.file_name()?.to_string_lossy();
     file.exists()
-        .then(|| file.with_file_name(format!("settings.json.pre-skeleton-{}", &seen[..8])))
+        .then(|| file.with_file_name(format!("{name}.pre-skeleton-{}", &seen[..8])))
 }
 
 // ---- CLAUDE.md -----------------------------------------------------------------------------------
@@ -557,6 +573,21 @@ const PREREQS: [(&str, &str, &str, &str); 3] = [
     ),
 ];
 
+/// The vault and the checkouts folder: the flags, else config.json, else ~/knowledge and ~/dev.
+fn place(args: &Args, config: &J) -> Place {
+    let pick = |flag: &str, key: &str, default: &str| {
+        expand(
+            args.get(flag)
+                .or_else(|| config.get(key).and_then(J::str).filter(|s| !s.is_empty()))
+                .unwrap_or(default),
+        )
+    };
+    (
+        pick("vault", "vault", "~/knowledge"),
+        pick("dev", "devRoot", "~/dev"),
+    )
+}
+
 fn plan_setup(args: &Args) -> Plan {
     let mut p = Plan::default();
     let home = state::home();
@@ -599,7 +630,6 @@ fn plan_setup(args: &Args) -> Plan {
         return p;
     }
 
-    // Where things go: the flags, else config.json, else ~/knowledge and ~/dev.
     let cpath = config::config_path();
     let existing = match read_obj(&cpath) {
         Ok(v) => v,
@@ -615,20 +645,7 @@ fn plan_setup(args: &Args) -> Plan {
             .filter(|s| !s.is_empty())
             .map(str::to_string)
     };
-    let vault = expand(
-        &args
-            .get("vault")
-            .map(str::to_string)
-            .or_else(|| str_of("vault"))
-            .unwrap_or_else(|| "~/knowledge".into()),
-    );
-    let dev = expand(
-        &args
-            .get("dev")
-            .map(str::to_string)
-            .or_else(|| str_of("devRoot"))
-            .unwrap_or_else(|| "~/dev".into()),
-    );
+    let (vault, dev) = place(args, &existing);
     // Claude Code's @import and the doctor's `priming` check read a path up to the first space.
     if fwd(&vault).contains(char::is_whitespace) {
         p.say(
@@ -960,7 +977,7 @@ fn plan_setup(args: &Args) -> Plan {
                 );
             } else {
                 let seen = seen_file(&file);
-                let backup = settings_backup(&file, &seen);
+                let backup = backup(&file, &seen);
                 let n = sig(settings.get("hooks")).len();
                 let kept = backup
                     .as_ref()
@@ -1283,7 +1300,7 @@ fn plan_remove(args: &Args) -> Plan {
                 p.say("ok", "settings.json", "no hook or plugin option of ours");
             } else {
                 let seen = seen_file(&file);
-                let backup = settings_backup(&file, &seen);
+                let backup = backup(&file, &seen);
                 let kept = backup
                     .as_ref()
                     .map(|b| format!(" (the old file kept as {})", fwd(b)))
@@ -1847,7 +1864,7 @@ fn names_path(body: &str, path: &Path) -> bool {
 /// `setup --harness codex`: the plugin from this checkout's local marketplace, the AGENTS.md block,
 /// and two MCP servers, retrieval's and graphify's. Trust is never written: the owner reviews the hooks once in the Codex CLI
 /// (C1), and this plan only says how many are reviewed.
-fn plan_codex(args: &Args) -> Plan {
+fn plan_codex(args: &Args, at: Option<&Place>) -> Plan {
     let mut p = Plan::default();
     let codex = state::home().join(".codex");
     let config = codex.join("config.toml");
@@ -1863,7 +1880,7 @@ fn plan_codex(args: &Args) -> Plan {
     let Some(bin) = on_path(&mut p, "Codex") else {
         return p;
     };
-    let Some((vault, dev)) = configured(&mut p) else {
+    let Some((vault, dev)) = at.cloned().or_else(|| configured(&mut p)) else {
         return p;
     };
     let Some(root) = skeleton(args, &dev) else {
@@ -2163,8 +2180,11 @@ fn on_path(p: &mut Plan, harness: &str) -> Option<PathBuf> {
     }
 }
 
+/// The vault and the checkouts folder a harness's plan writes for.
+type Place = (PathBuf, PathBuf);
+
 /// The vault and checkouts folder config.json names: the Claude setup writes it first.
-fn configured(p: &mut Plan) -> Option<(PathBuf, PathBuf)> {
+fn configured(p: &mut Plan) -> Option<Place> {
     let existing = read_obj(&config::config_path()).unwrap_or(J::Obj(Vec::new()));
     let str_of = |k: &str| {
         existing
@@ -2315,7 +2335,7 @@ fn opencode_ours(text: &str) -> bool {
 
 /// `setup --harness opencode`: the plugin file and the AGENTS.md block. Retrieval is the shell's
 /// `knowledge find`: opencode has no sandbox between its shell and `~/.config/knowledge`.
-fn plan_opencode() -> Plan {
+fn plan_opencode(at: Option<&Place>) -> Plan {
     let mut p = Plan::default();
     if which("opencode").is_none() {
         p.say(
@@ -2328,7 +2348,7 @@ fn plan_opencode() -> Plan {
     if on_path(&mut p, "opencode").is_none() {
         return p;
     }
-    let Some((vault, _)) = configured(&mut p) else {
+    let Some((vault, _)) = at.cloned().or_else(|| configured(&mut p)) else {
         return p;
     };
     let path = opencode_plugin();
@@ -2396,6 +2416,264 @@ fn plan_opencode_remove() -> Plan {
     p
 }
 
+// ---- the Claude desktop app (S7.7) ---------------------------------------------------------------
+
+/// The app's MCP config file, following an MSIX install's marker to the folder it really reads.
+/// None, with the reason said, when there is no file to write: the app is not here, or it moved
+/// its data to a folder it has not made yet.
+fn desktop_config(p: &mut Plan, remove: bool) -> Option<PathBuf> {
+    let a = crate::harness::adapter("claude-desktop")?;
+    let mcp = a.mcp.as_ref()?;
+    let Some(dir) = a.found() else {
+        if remove {
+            p.say("ok", "knowledge MCP", "no Claude desktop app here");
+        } else {
+            p.say("FAIL", "prerequisites", "the Claude desktop app is not installed here. Install it, start it once, then plan again");
+        }
+        return None;
+    };
+    let package = fs::read_dir(&dir).ok().and_then(|rd| {
+        rd.flatten().find_map(|e| {
+            e.file_name()
+                .to_string_lossy()
+                .strip_prefix(".user-data-left.")
+                .map(String::from)
+        })
+    });
+    let dir = match (package, &mcp.moved) {
+        (Some(pkg), Some(moved)) => {
+            let to = crate::harness::at_home(moved).join(pkg);
+            if !to.is_dir() {
+                let (status, what) = if remove {
+                    ("ok", "nothing of ours there")
+                } else {
+                    ("WARN", "start the app once, then plan again")
+                };
+                p.say(
+                    status,
+                    "knowledge MCP",
+                    format!(
+                        "{} moved the app's data to {}, which does not exist yet: {what}",
+                        fwd(&dir),
+                        fwd(&to)
+                    ),
+                );
+                return None;
+            }
+            to
+        }
+        _ => dir,
+    };
+    Some(dir.join(&mcp.file))
+}
+
+/// Ours: some knowledge binary's `mcp` verb, with nothing else in it.
+fn desktop_ours(entry: &J) -> bool {
+    entry.get("args") == Some(&J::Arr(vec![J::s("mcp")]))
+        && entry
+            .get("command")
+            .and_then(J::str)
+            .and_then(|c| {
+                Path::new(c)
+                    .file_stem()
+                    .map(|s| s.to_string_lossy().into_owned())
+            })
+            .is_some_and(|s| s == "knowledge")
+}
+
+/// The config with `mcpServers.knowledge` set (`Some`) or taken out (`None`), every other key kept;
+/// an `mcpServers` left empty goes, since setup made it.
+fn desktop_with(config: &J, entry: Option<J>) -> J {
+    let mut next = config.clone();
+    let mut servers = next
+        .get("mcpServers")
+        .cloned()
+        .unwrap_or(J::Obj(Vec::new()));
+    match entry {
+        Some(e) => servers.set("knowledge", e),
+        None => servers.remove("knowledge"),
+    }
+    if servers == J::Obj(Vec::new()) {
+        next.remove("mcpServers");
+    } else {
+        next.set("mcpServers", servers);
+    }
+    next
+}
+
+/// The step that writes `next` over the config, the old file kept beside it.
+fn desktop_step(p: &mut Plan, status: &'static str, file: &Path, next: &J, what: String) {
+    let seen = seen_file(file);
+    let backup = backup(file, &seen);
+    let kept = backup
+        .as_ref()
+        .map(|b| format!(" (the old file kept as {})", fwd(b)))
+        .unwrap_or_default();
+    p.act(
+        status,
+        "knowledge MCP",
+        format!("{}: {what}, every other key kept{kept}", fwd(file)),
+        seen,
+        vec![Act::Write {
+            path: file.to_path_buf(),
+            text: pretty(next),
+            backup,
+        }],
+    );
+}
+
+/// `setup --harness claude-desktop`: the chat's retrieval tools, `knowledge mcp` by absolute path
+/// (the app starts it with no shell PATH). The Code tab bridges the same server into its sessions,
+/// so the Claude plugin declares none (0.11.2).
+fn plan_desktop() -> Plan {
+    let mut p = Plan::default();
+    let Some(file) = desktop_config(&mut p, false) else {
+        return p;
+    };
+    let config = match read_obj(&file) {
+        Ok(c) => c,
+        Err(e) => {
+            p.say("FAIL", "knowledge MCP", e);
+            return p;
+        }
+    };
+    let bin = state::knowledge_bin();
+    let have = config.get("mcpServers").and_then(|s| s.get("knowledge"));
+    let current = have.is_some_and(|e| {
+        desktop_ours(e)
+            && e.get("command")
+                .and_then(J::str)
+                .is_some_and(|c| same(Path::new(c), &bin))
+    });
+    if current {
+        p.say(
+            "ok",
+            "knowledge MCP",
+            format!("{}: {} mcp", fwd(&file), fwd(&bin)),
+        );
+    } else if have.is_some_and(|e| !desktop_ours(e)) {
+        p.say("FAIL", "knowledge MCP", format!("{}: an mcpServers.knowledge not set by setup: rename or remove it, then plan again", fwd(&file)));
+    } else {
+        let entry = state::obj([
+            ("command", J::s(bin.to_string_lossy())),
+            ("args", J::Arr(vec![J::s("mcp")])),
+        ]);
+        let status = if file.exists() { "change" } else { "create" };
+        let next = desktop_with(&config, Some(entry));
+        desktop_step(
+            &mut p,
+            status,
+            &file,
+            &next,
+            format!("mcpServers.knowledge = {} mcp", fwd(&bin)),
+        );
+        p.next.push("Quit the Claude desktop app from its tray icon and start it again: it reads claude_desktop_config.json only at start".into());
+    }
+    p
+}
+
+/// `setup --harness claude-desktop --remove`: our server out; one set by hand stays.
+fn plan_desktop_remove() -> Plan {
+    let mut p = Plan::default();
+    let Some(file) = desktop_config(&mut p, true) else {
+        return p;
+    };
+    let config = match read_obj(&file) {
+        Ok(c) => c,
+        Err(e) => {
+            p.say("FAIL", "knowledge MCP", e);
+            return p;
+        }
+    };
+    match config.get("mcpServers").and_then(|s| s.get("knowledge")) {
+        Some(e) if desktop_ours(e) => {
+            let next = desktop_with(&config, None);
+            desktop_step(
+                &mut p,
+                "remove",
+                &file,
+                &next,
+                "mcpServers.knowledge".into(),
+            );
+        }
+        Some(_) => p.say(
+            "ok",
+            "knowledge MCP",
+            "an mcpServers.knowledge not set by setup: left as it is",
+        ),
+        None => p.say("ok", "knowledge MCP", "not registered"),
+    }
+    p
+}
+
+// ---- every harness found (S7.7) ------------------------------------------------------------------
+
+/// `setup` with no `--harness`: Claude Code, the base the others build on (config.json, the vault,
+/// the links), then every harness an adapter detects, each under its own `found` line. One plan,
+/// one id, one apply. The others plan against the vault the Claude part resolves, so a first
+/// setup needs no second pass, except when that vault is still to be made from template/.
+fn plan_all(args: &Args, remove: bool) -> Plan {
+    let mut p = Plan::default();
+    p.say(
+        "found",
+        "harness",
+        "Claude Code: the vault, config.json, the plugin, the links",
+    );
+    p.extend(if remove {
+        plan_remove(args)
+    } else {
+        plan_setup(args)
+    });
+    let at = place(
+        args,
+        &read_obj(&config::config_path()).unwrap_or(J::Obj(Vec::new())),
+    );
+    let ready = remove || at.0.join(state::META).join("Identity.md").is_file();
+    let mut waited = false;
+    for a in crate::harness::all() {
+        let Some(dir) = a.found() else {
+            continue;
+        };
+        let name = &a.name;
+        if let Some(bin) = a.bin().filter(|b| which(b).is_none()) {
+            p.say(
+                "WARN",
+                "harness",
+                format!(
+                    "{name}: {} is here, but {bin} is not on PATH: skipped",
+                    fwd(&dir)
+                ),
+            );
+            continue;
+        }
+        if !ready {
+            p.say(
+                "WARN",
+                "harness",
+                format!("{name}: {} found, set up once the vault exists", fwd(&dir)),
+            );
+            waited = true;
+            continue;
+        }
+        p.say("found", "harness", format!("{name}: {}", fwd(&dir)));
+        p.extend(match (a.id.as_str(), remove) {
+            ("codex", false) => plan_codex(args, Some(&at)),
+            ("codex", true) => plan_codex_remove(),
+            ("opencode", false) => plan_opencode(Some(&at)),
+            ("opencode", true) => plan_opencode_remove(),
+            ("claude-desktop", false) => plan_desktop(),
+            ("claude-desktop", true) => plan_desktop_remove(),
+            _ => Plan::default(),
+        });
+    }
+    if waited {
+        p.next.push(
+            "knowledge setup --plan again, for the harnesses that waited on the vault".into(),
+        );
+    }
+    p
+}
+
 // ---- the verb ------------------------------------------------------------------------------------
 
 /// The options again, for the apply line: `--apply` must be given the plan's own inputs.
@@ -2443,18 +2721,21 @@ pub fn run(raw: &[String]) -> Result<u8, Fault> {
     if args.has("plan") == args.get("apply").is_some() {
         return Err(Fault::Usage(USAGE.into()));
     }
-    let plan = match (args.get("harness").unwrap_or("claude"), remove) {
-        ("claude", false) => plan_setup(&args),
-        ("claude", true) => plan_remove(&args),
-        ("codex", false) => plan_codex(&args),
-        ("codex", true) => plan_codex_remove(),
-        ("opencode", false) => plan_opencode(),
-        ("opencode", true) => plan_opencode_remove(),
-        ("generic", false) => plan_generic(&args),
-        ("generic", true) => plan_generic_remove(&args),
-        (h, _) => {
+    let plan = match (args.get("harness"), remove) {
+        (None, _) => plan_all(&args, remove),
+        (Some("claude"), false) => plan_setup(&args),
+        (Some("claude"), true) => plan_remove(&args),
+        (Some("codex"), false) => plan_codex(&args, None),
+        (Some("codex"), true) => plan_codex_remove(),
+        (Some("opencode"), false) => plan_opencode(None),
+        (Some("opencode"), true) => plan_opencode_remove(),
+        (Some("claude-desktop"), false) => plan_desktop(),
+        (Some("claude-desktop"), true) => plan_desktop_remove(),
+        (Some("generic"), false) => plan_generic(&args),
+        (Some("generic"), true) => plan_generic_remove(&args),
+        (Some(h), _) => {
             return Err(Fault::Usage(format!(
-                "setup: no harness `{h}` (claude, codex, opencode, generic)\n{USAGE}"
+                "setup: no harness `{h}` (claude, codex, opencode, claude-desktop, generic)\n{USAGE}"
             )));
         }
     };

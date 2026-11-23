@@ -30,9 +30,10 @@ knowledge setup --apply <id>      # the id is the plan's last line
 `--plan` writes nothing: it lists every file it would create or change (the vault, new from
 `template/` at `~/knowledge` or adopted, the config, the links into `~/.claude`, the hook block, the
 `CLAUDE.md` imports, each clone's githooks path) and ends with the plan id, a hash of the plan and of
-each target's current content. `--apply <id>` recomputes the plan and refuses if anything moved in
-between, then writes exactly that. `knowledge setup --remove --plan` is the reverse and never touches
-the vault. Flags, Windows, and every step by hand: [INSTALL.md](INSTALL.md).
+each target's current content. It covers Claude Code and then every other harness it finds installed
+(Codex, opencode, the Claude desktop app), each under its own `found` line. `--apply <id>` recomputes
+the plan and refuses if anything moved in between, then writes exactly that. `knowledge setup
+--remove --plan` is the reverse, for the same harnesses, and never touches the vault. Flags, Windows, and every step by hand: [INSTALL.md](INSTALL.md).
 
 ## After a new vault
 
@@ -72,7 +73,7 @@ store (`rustls-platform-verifier`, no bundled root list) and `htmd` (HTML to Mar
 | `knowledge inject <prompt>` | what the prompt hook would add to a prompt |
 | `knowledge graph <note> [<note>]` | a note's links in and out, or the shortest path between two |
 | `knowledge hook session\|prompt\|pre-tool\|post-edit\|post-bash\|capture --harness claude` | the hooks themselves: JSON on stdin, always exit 0 |
-| `knowledge setup --plan \| --apply <id> \| --remove --plan` | this machine's setup, planned before anything is written |
+| `knowledge setup --plan \| --apply <id> \| --remove --plan` | this machine's setup across every harness found, planned before anything is written; `--harness <id>` for one |
 | `knowledge doctor [--pretty] [--repair] [--record]` | retrieval health, zero tokens: the index, 33 questions, links, priming, sync; `--repair` rebuilds what is derived |
 | `knowledge flush <session-id>` | a session's new turns into the daily log, once (`claude -p`, haiku) |
 | `knowledge compile [--force]` | a finished daily log into notes, once (`claude -p`, sonnet) |

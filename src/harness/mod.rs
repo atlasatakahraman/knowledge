@@ -18,10 +18,11 @@ mod claude;
 mod codex;
 mod opencode;
 
-const ADAPTERS: [&str; 4] = [
+const ADAPTERS: [&str; 5] = [
     include_str!("../../adapters/claude.json"),
     include_str!("../../adapters/codex.json"),
     include_str!("../../adapters/opencode.json"),
+    include_str!("../../adapters/claude-desktop.json"),
     include_str!("../../adapters/generic.json"),
 ];
 
@@ -44,6 +45,36 @@ pub struct Adapter {
     /// translator's `turns` reads it, the session id appended (opencode's `session export`).
     #[serde(default)]
     pub export: Vec<String>,
+    /// How `setup` finds the harness installed (S7.7); none for Claude Code, the base every plan
+    /// starts from, and for `generic`, which is named by hand.
+    detect: Option<Detect>,
+    /// An app that reads its MCP servers from a JSON config file (the Claude desktop app).
+    pub mcp: Option<McpFile>,
+}
+
+/// Installed when one of `paths` exists (`~/` for the home folder) and, when `bin` is given, that
+/// command is on PATH: a folder an uninstall left behind is not an install.
+#[derive(Deserialize)]
+struct Detect {
+    paths: Vec<String>,
+    bin: Option<String>,
+}
+
+/// `file` sits in the folder the harness was detected by. An MSIX install (the Windows Store
+/// build) moved its data out of that folder: it leaves a `.user-data-left.<package>` marker there
+/// and reads `<moved>/<package>` instead, so a file written beside the marker is never read.
+#[derive(Deserialize)]
+pub struct McpFile {
+    pub file: String,
+    pub moved: Option<String>,
+}
+
+/// `~/x` under the home folder; any other path as given.
+pub fn at_home(p: &str) -> PathBuf {
+    match p.strip_prefix("~/") {
+        Some(rel) => crate::state::home().join(rel),
+        None => PathBuf::from(p),
+    }
 }
 
 /// A one-shot model call: the prompt goes in on stdin, and `reply` says how to read stdout.
@@ -187,8 +218,18 @@ impl Adapter {
     /// The global instructions file, `~/` expanded, and the block's form.
     pub fn instructions(&self) -> Option<(PathBuf, Form)> {
         let i = self.instructions.as_ref()?;
-        let rel = i.global.strip_prefix("~/").unwrap_or(&i.global);
-        Some((crate::state::home().join(rel), i.form))
+        Some((at_home(&i.global), i.form))
+    }
+
+    /// The first detect folder that exists, or None for an adapter that detects nothing.
+    pub fn found(&self) -> Option<PathBuf> {
+        let d = self.detect.as_ref()?;
+        d.paths.iter().map(|p| at_home(p)).find(|p| p.is_dir())
+    }
+
+    /// The command the harness must have on PATH to count as installed.
+    pub fn bin(&self) -> Option<&str> {
+        self.detect.as_ref()?.bin.as_deref()
     }
 
     pub fn translator(&self) -> Option<&'static dyn Translator> {
