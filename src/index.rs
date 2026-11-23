@@ -30,7 +30,7 @@ pub fn db_path(cfg: &Config) -> PathBuf {
     cfg.db.clone()
 }
 
-fn remove_db(path: &Path) {
+pub fn remove_db(path: &Path) {
     for ext in ["", "-wal", "-shm"] {
         let _ = fs::remove_file(format!("{}{ext}", path.display()));
     }

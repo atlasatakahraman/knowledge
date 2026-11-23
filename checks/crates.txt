@@ -1,7 +1,9 @@
 # Every crate `cargo tree -e normal` may list on any of CI's eight targets: the crates the owner
 # approved (spec D22, D23: rusqlite, serde, serde_json; Stage 4, 2026-11-22: ureq with rustls on
-# ring and rustls-platform-verifier, htmd; Stage 6, 2026-11-22: jiff) and what they pull in.
+# ring and rustls-platform-verifier, htmd; Stage 6, 2026-11-22: jiff; Stage 8, 2026-11-23:
+# tree-sitter with the TypeScript, JavaScript, Rust and Python grammars) and what they pull in.
 # checks/stage-3.sh fails on any other name. A new name here is a dependency decision, made by the owner in a compared question (D18).
+aho-corasick
 base64
 bitflags
 bytes
@@ -42,6 +44,9 @@ portable-atomic-util
 precomputed-hash
 proc-macro2
 quote
+regex
+regex-automata
+regex-syntax
 ring
 rusqlite
 rustls
@@ -58,10 +63,17 @@ serde_derive
 serde_json
 siphasher
 smallvec
+streaming-iterator
 string_cache
 subtle
 syn
 tendril
+tree-sitter
+tree-sitter-javascript
+tree-sitter-language
+tree-sitter-python
+tree-sitter-rust
+tree-sitter-typescript
 unicode-ident
 untrusted
 ureq

@@ -1,44 +1,12 @@
-//! knowledge: the engine's one binary (spec D9, K30). Every hook, the doctor and `setup` (Stage 6).
-//! Stable Rust, no async runtime, arguments parsed by hand. `unsafe` is denied everywhere except
-//! the one Windows call in `win.rs` (owner, 2026-11-22: a detached child must not hold the hook's pipe).
+//! knowledge: the engine's main binary (spec D9, K30). Every hook, the doctor and `setup` (Stage 6).
+//! The code map is `knowledge-code`, beside it (spec item 44); its verbs are handed off.
 #![deny(unsafe_code)]
 
-mod budget;
-mod capture;
-mod compile;
-mod config;
-mod doctor;
-mod events;
-mod fetch;
-mod graph;
-mod guard;
-mod harness;
-mod health;
-mod hook;
-mod hubs;
-mod index;
-mod instructions;
-mod linkcheck;
-mod mcp;
-mod memory;
-mod note;
-mod recorder;
-mod records;
-mod rules;
-mod search;
-mod session;
-mod setup;
-mod state;
-mod usage;
-mod vault;
-#[cfg(windows)]
-mod win;
-
-use std::collections::HashMap;
-use std::fmt;
-use std::io::Write;
-use std::path::Path;
-use std::process::ExitCode;
+use knowledge::{
+    Fault, capture, compile, config, doctor, emit, events, fetch, graph, hook, hubs, index, mcp,
+    memory, note, recorder, records, report, rules, search, setup, usage,
+};
+use std::process::{Command, ExitCode};
 
 const USAGE: &str = "usage:
   knowledge --version
@@ -52,6 +20,7 @@ const USAGE: &str = "usage:
   knowledge events <transcript.jsonl> [--json]
   knowledge inject <text> [--format lines|tagged] [--no-passage | --passage-max N --passage-score S]
   knowledge graph <note> [<other note>] [--json] | <note> --text
+  knowledge code index [<repo>|--all] [--rebuild]   (run by knowledge-code)
   knowledge note decision <text> [--question <q>] [--promoted <path>] | note log <text>
   knowledge config [<key>]
   knowledge rules list [--json] | kernel | check [--staged] [--restore] | lock [--seed <file>]
@@ -72,102 +41,6 @@ const USAGE: &str = "usage:
   knowledge usage [--month <YYYY-MM>] [--days N] [--projects] [--blocks]
   knowledge mcp   (an MCP server on stdio: find, graph, read and note)";
 
-/// Every fallible function returns this ([[Hard-Rules]] § Working preferences: `Fault`, never
-/// `Result<_, String>`). Named `Fault` so it never collides with an `Error` already in scope.
-#[derive(Debug)]
-pub enum Fault {
-    Io(String, std::io::Error),
-    Sql(rusqlite::Error),
-    Json(serde_json::Error),
-    Config(String),
-    Usage(String),
-    Net(String),
-}
-
-impl Fault {
-    pub fn io(path: &Path, e: std::io::Error) -> Fault {
-        Fault::Io(path.display().to_string(), e)
-    }
-}
-
-impl fmt::Display for Fault {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Fault::Io(path, e) => write!(f, "{path}: {e}"),
-            Fault::Sql(e) => write!(f, "index: {e}"),
-            Fault::Json(e) => write!(f, "json: {e}"),
-            Fault::Config(m) | Fault::Usage(m) | Fault::Net(m) => f.write_str(m),
-        }
-    }
-}
-
-impl From<rusqlite::Error> for Fault {
-    fn from(e: rusqlite::Error) -> Self {
-        Fault::Sql(e)
-    }
-}
-
-impl From<serde_json::Error> for Fault {
-    fn from(e: serde_json::Error) -> Self {
-        Fault::Json(e)
-    }
-}
-
-/// Positional words, `--flag` switches and `--flag value` options. `valued` names the options
-/// that take a value; any other `--x` is a switch.
-pub struct Args {
-    pub words: Vec<String>,
-    flags: HashMap<String, String>,
-}
-
-impl Args {
-    pub fn parse(raw: &[String], valued: &[&str]) -> Result<Args, Fault> {
-        let mut words = Vec::new();
-        let mut flags = HashMap::new();
-        let mut it = raw.iter();
-        while let Some(a) = it.next() {
-            match a.strip_prefix("--") {
-                Some(name) if valued.contains(&name) => {
-                    let v = it
-                        .next()
-                        .ok_or_else(|| Fault::Usage(format!("--{name} needs a value")))?;
-                    flags.insert(name.to_string(), v.clone());
-                }
-                Some(name) => {
-                    flags.insert(name.to_string(), String::new());
-                }
-                None => words.push(a.clone()),
-            }
-        }
-        Ok(Args { words, flags })
-    }
-
-    pub fn has(&self, name: &str) -> bool {
-        self.flags.contains_key(name)
-    }
-
-    pub fn get(&self, name: &str) -> Option<&str> {
-        self.flags.get(name).map(String::as_str)
-    }
-
-    /// A numeric option, or `default` when absent.
-    pub fn num<T: std::str::FromStr>(&self, name: &str, default: T) -> Result<T, Fault> {
-        match self.get(name) {
-            None => Ok(default),
-            Some(v) => v
-                .parse()
-                .map_err(|_| Fault::Usage(format!("--{name}: not a number: {v}"))),
-        }
-    }
-}
-
-/// Write to stdout, ignoring a closed pipe: `knowledge find x | head` must not abort.
-pub fn emit(text: &str) {
-    let mut out = std::io::stdout().lock();
-    let _ = out.write_all(text.as_bytes());
-    let _ = out.flush();
-}
-
 /// The version, and the SQLite build's FTS5 flag: an index without FTS5 cannot search, and the
 /// `bundled` feature is what promises it. The stage check fails when this line says "off".
 fn version() -> Result<u8, Fault> {
@@ -186,12 +59,28 @@ fn version() -> Result<u8, Fault> {
     Ok(if fts5 { 0 } else { 1 })
 }
 
+/// Run a code verb in `knowledge-code`, with this process's arguments and stdio. One extra spawn
+/// for a code query, so that no hook spawn pays for the grammars (spec item 44).
+fn hand_off(argv: &[String]) -> Result<u8, Fault> {
+    let exe = knowledge::code_exe()?;
+    let status = Command::new(&exe).args(argv).status().map_err(|e| {
+        Fault::Config(format!(
+            "{}: {e}: `cargo install --path <checkout> --locked` installs it beside knowledge",
+            exe.display()
+        ))
+    })?;
+    Ok(status
+        .code()
+        .and_then(|c| u8::try_from(c).ok())
+        .unwrap_or(2))
+}
+
 fn main() -> ExitCode {
     let argv: Vec<String> = std::env::args().skip(1).collect();
     let (verb, rest) = argv
         .split_first()
         .map_or(("", &[][..]), |(v, r)| (v.as_str(), r));
-    let result = match verb {
+    report(match verb {
         "--version" | "-V" | "version" => version(),
         "index" => index::run(rest),
         "find" => search::run_find(rest),
@@ -200,6 +89,7 @@ fn main() -> ExitCode {
         "events" => events::run(rest),
         "inject" => search::run_inject(rest),
         "graph" => graph::run(rest),
+        "code" => hand_off(&argv),
         "note" => note::run(rest),
         "config" => config::run(rest),
         "rules" => rules::run(rest),
@@ -218,12 +108,5 @@ fn main() -> ExitCode {
         "setup" => setup::run(rest),
         "mcp" => mcp::run(rest),
         _ => Err(Fault::Usage(USAGE.to_string())),
-    };
-    match result {
-        Ok(code) => ExitCode::from(code),
-        Err(f) => {
-            eprintln!("knowledge: {f}");
-            ExitCode::from(2)
-        }
-    }
+    })
 }

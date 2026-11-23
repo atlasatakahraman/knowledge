@@ -26,6 +26,14 @@ rusqlite = { version = "0.43.0", default-features = false, features = ["bundled"
 rustls = { version = "0.23.46", default-features = false, features = ["ring"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
+# The code map (Stage 8, owner's pick 2026-11-23: tree-sitter over a scanner per language or a
+# parser per language). One parser API and one query language; each grammar ships its tags query.
+# Grammars only for languages in tracked use (spec item 41): TS/JS, Rust, Python.
+tree-sitter = "0.27.2"
+tree-sitter-javascript = "0.25.0"
+tree-sitter-python = "0.25.0"
+tree-sitter-rust = "0.24.2"
+tree-sitter-typescript = "0.23.2"
 ureq = { version = "3.5.2", default-features = false, features = ["rustls-no-provider", "platform-verifier"] }
 
 [profile.release]
