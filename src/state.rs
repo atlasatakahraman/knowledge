@@ -205,6 +205,11 @@ impl J {
             }
         }
     }
+    pub fn remove(&mut self, k: &str) {
+        if let J::Obj(items) = self {
+            items.retain(|(key, _)| key != k);
+        }
+    }
     pub fn text(&self) -> String {
         serde_json::to_string(self).unwrap_or_default()
     }

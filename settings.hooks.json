@@ -1,21 +1,21 @@
 {
   "SessionStart": [
-    { "hooks": [{ "type": "command", "command": "{BUN} --bun {HOOKS}/brain-session.mjs" }] }
+    { "hooks": [{ "type": "command", "command": "{KNOWLEDGE} hook session --harness claude" }] }
   ],
   "UserPromptSubmit": [
     { "hooks": [{ "type": "command", "command": "{KNOWLEDGE} hook prompt --harness claude" }] }
   ],
   "SessionEnd": [
-    { "hooks": [{ "type": "command", "command": "{BUN} --bun {HOOKS}/brain-capture.mjs", "timeout": 10 }] }
+    { "hooks": [{ "type": "command", "command": "{KNOWLEDGE} hook capture --harness claude", "timeout": 10 }] }
   ],
   "PreCompact": [
-    { "hooks": [{ "type": "command", "command": "{BUN} --bun {HOOKS}/brain-capture.mjs", "timeout": 10 }] }
+    { "hooks": [{ "type": "command", "command": "{KNOWLEDGE} hook capture --harness claude", "timeout": 10 }] }
   ],
   "Stop": [
-    { "hooks": [{ "type": "command", "command": "{BUN} --bun {HOOKS}/brain-capture.mjs", "timeout": 10, "async": true }] }
+    { "hooks": [{ "type": "command", "command": "{KNOWLEDGE} hook capture --harness claude", "timeout": 10, "async": true }] }
   ],
   "SubagentStop": [
-    { "hooks": [{ "type": "command", "command": "{BUN} --bun {HOOKS}/brain-capture.mjs", "timeout": 10, "async": true }] }
+    { "hooks": [{ "type": "command", "command": "{KNOWLEDGE} hook capture --harness claude", "timeout": 10, "async": true }] }
   ],
   "PreToolUse": [
     { "matcher": "Bash|PowerShell|Edit|Write|MultiEdit|NotebookEdit|mcp__.*", "hooks": [
@@ -26,9 +26,9 @@
     { "matcher": "Edit|Write", "hooks": [
       { "type": "command", "command": "{KNOWLEDGE} hook post-edit --harness claude" }
     ] },
-    { "matcher": "Bash", "hooks": [{ "type": "command", "command": "{BUN} --bun {HOOKS}/brain-commit.mjs", "timeout": 15, "async": true }] }
+    { "matcher": "Bash", "hooks": [{ "type": "command", "command": "{KNOWLEDGE} hook post-bash --harness claude", "timeout": 15, "async": true }] }
   ],
   "PostToolUseFailure": [
-    { "matcher": "Bash", "hooks": [{ "type": "command", "command": "{BUN} --bun {HOOKS}/brain-commit.mjs", "timeout": 15, "async": true }] }
+    { "matcher": "Bash", "hooks": [{ "type": "command", "command": "{KNOWLEDGE} hook post-bash --harness claude", "timeout": 15, "async": true }] }
   ]
 }

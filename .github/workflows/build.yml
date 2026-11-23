@@ -47,6 +47,8 @@ jobs:
         shell: bash
       - run: bash checks/stage-5.sh target/${{ matrix.target }}/release/knowledge
         shell: bash
+      - run: bash checks/stage-6.sh target/${{ matrix.target }}/release/knowledge
+        shell: bash
 
   deny:
     runs-on: ubuntu-latest

@@ -23,6 +23,7 @@ mod records;
 mod rules;
 mod search;
 mod session;
+mod setup;
 mod state;
 mod usage;
 mod vault;
@@ -54,6 +55,9 @@ const USAGE: &str = "usage:
   knowledge doctor --only portable [--json]
   knowledge doctor budget [<transcript.jsonl>] [--json]
   knowledge doctor profile <note>
+  knowledge setup --plan [--vault <path>] [--dev <path>] [--machine <text>] [--from-template | --adopt]
+                         [--signing] [--skeleton <checkout>]
+  knowledge setup --apply <id> [the same options] | --remove --plan | --remove --apply <id>
   knowledge flush <session-id> [<cwd>] [--transcript <file>] [--date <YYYY-MM-DD>] [--dry-run [--from-start]]
   knowledge compile [--force] [--dry-run]
   knowledge post-bash [--backfill <since>] [--dry-run]
@@ -201,6 +205,7 @@ fn main() -> ExitCode {
         "records" => records::run(rest),
         "usage" => usage::run(rest),
         "hubs" => hubs::run(rest),
+        "setup" => setup::run(rest),
         _ => Err(Fault::Usage(USAGE.to_string())),
     };
     match result {
