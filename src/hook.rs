@@ -27,7 +27,7 @@ pub fn run(raw: &[String]) {
 }
 
 fn handle(raw: &[String]) -> Result<(), Fault> {
-    let args = Args::parse(raw, &["harness"])?;
+    let args = Args::parse(raw, &["harness", "record"])?;
     if args.get("harness") != Some("claude") {
         return Ok(());
     }
@@ -35,9 +35,32 @@ fn handle(raw: &[String]) -> Result<(), Fault> {
     std::io::stdin()
         .read_to_string(&mut input)
         .map_err(|e| Fault::Io("stdin".into(), e))?;
-    if args.words.first().map(String::as_str) == Some("pre-tool") {
-        crate::guard::run(&input);
+    if let Some(dir) = args.get("record") {
+        record(dir, &input);
+    }
+    if args.words.first().map(String::as_str) == Some("record") {
         return Ok(());
+    }
+    match args.words.first().map(String::as_str) {
+        Some("pre-tool") => {
+            crate::guard::run(&input);
+            return Ok(());
+        }
+        // A `claude -p` this engine started fires the hooks too: these stand down inside it.
+        Some("post-bash") if !crate::state::invoked() => {
+            crate::recorder::hook(&input);
+            return Ok(());
+        }
+        Some("post-bash") => return Ok(()),
+        Some("session") => {
+            crate::session::hook(args.has("dry"));
+            return Ok(());
+        }
+        Some("capture") => {
+            crate::memory::hook(&input, args.has("dry-run"));
+            return Ok(());
+        }
+        _ => {}
     }
     let cfg = config::load()?;
     let (event, context) = match args.words.first().map(String::as_str) {
@@ -49,6 +72,27 @@ fn handle(raw: &[String]) -> Result<(), Fault> {
         emit(&serde_json::json!({"hookSpecificOutput": {"hookEventName": event, "additionalContext": context}}).to_string());
     }
     Ok(())
+}
+
+/// `--record <dir>`: append the raw payload, one line, to `<dir>/<hook_event_name>.jsonl`, then
+/// carry on as usual. The parity gate replays these (spec item 2); the folder holds real prompts and
+/// paths, so it is the caller's to keep out of git.
+fn record(dir: &str, input: &str) {
+    let Ok(v) = serde_json::from_str::<serde_json::Value>(input) else {
+        return;
+    };
+    let event = v["hook_event_name"].as_str().unwrap_or("unknown");
+    let event: String = event.chars().filter(char::is_ascii_alphanumeric).collect();
+    let _ = std::fs::create_dir_all(dir);
+    let path = std::path::Path::new(dir).join(format!("{event}.jsonl"));
+    if let Ok(mut f) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+    {
+        use std::io::Write;
+        let _ = writeln!(f, "{v}");
+    }
 }
 
 fn prompt(cfg: &Config, input: &str) -> Result<Option<String>, Fault> {

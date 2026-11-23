@@ -417,10 +417,22 @@ pub fn run(raw: &[String]) -> Result<u8, Fault> {
             name: format!("MCP server instructions ({})", arr(&mi["addedNames"]).len()),
             ch: arr(&mi["addedBlocks"]).iter().map(len).sum(),
         },
+        // A hook no plugin's files name is one settings.json registers: the engine's own.
         Slice {
             owner: "plugins",
-            name: format!("SessionStart hook output ({} hooks)", hooks.len()),
-            ch: hooks.iter().map(|h| h.2).sum(),
+            name: format!(
+                "SessionStart, plugin hooks ({})",
+                hooks.iter().filter(|h| !h.1.is_empty()).count()
+            ),
+            ch: hooks.iter().filter(|h| !h.1.is_empty()).map(|h| h.2).sum(),
+        },
+        Slice {
+            owner: "ours",
+            name: format!(
+                "SessionStart, settings.json hooks ({})",
+                hooks.iter().filter(|h| h.1.is_empty()).count()
+            ),
+            ch: hooks.iter().filter(|h| h.1.is_empty()).map(|h| h.2).sum(),
         },
         Slice {
             owner: "harness",
@@ -539,7 +551,7 @@ pub fn run(raw: &[String]) -> Result<u8, Fault> {
         out.push_str(&format!("  {n:<60} {:>7}\n", tok(*ch)));
     }
     out.push_str(&format!(
-        "\nper prompt: brain-inject {inject_n} prompts, {} tokens each\n",
+        "\nper prompt: the prompt hook, {inject_n} prompts, {} tokens each\n",
         inject_ch.checked_div(inject_n).map_or(0, tok)
     ));
     for (k, t) in &idle {

@@ -114,8 +114,10 @@ pub fn run(raw: &[String]) -> Result<u8, Fault> {
         _ => {}
     }
     let args = Args::parse(raw, &["only"])?;
+    // `--only portable` alone keeps its own line and exit code: checks/stage-3.sh and the README
+    // use it that way. Everything else is the full doctor (Stage 6).
     if args.get("only") != Some("portable") {
-        return Err(Fault::Usage("knowledge doctor --only portable [--json] | budget [<transcript>] [--json] | profile <note> (the rest of the doctor is brain-doctor's until Stage 6)".into()));
+        return crate::health::run(&args);
     }
     let cfg = config::load()?;
     let (files, found) = portable(&cfg)?;

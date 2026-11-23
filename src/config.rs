@@ -23,16 +23,26 @@ pub struct Config {
     pub dev: PathBuf,
     /// The index file this config reads and writes.
     pub db: PathBuf,
+    /// The label stamped on records (`windows`, `arch`): config's `os`, else detected.
+    pub os: String,
+    /// Free text the session start's Machine block opens with.
+    pub machine: String,
+    /// When a daily note starts, local time: a session at 02:00 belongs to the day before with 5.
+    pub rollover: i64,
+    /// `pullTrust: "signed"`: pulls take only a tip signed by a key in `trust_dir/allowed_signers`.
+    pub pull_trust: bool,
+    /// The folder config.json is in: allowed_signers and this boot's signing key.
+    pub trust_dir: PathBuf,
 }
 
-/// The keys the bun hooks read, validated the same way. Only `vault` is used by the binary today;
-/// the rest are checked so a config the hooks would reject is rejected here too.
+/// The keys the bun hooks read, validated the same way.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Raw {
     vault: Option<String>,
     dev_root: Option<String>,
     os: Option<String>,
+    machine: Option<String>,
     rollover_hour: Option<serde_json::Number>,
     pull_trust: Option<String>,
 }
@@ -43,7 +53,7 @@ fn env_path(key: &str) -> Option<PathBuf> {
         .map(PathBuf::from)
 }
 
-fn config_path() -> PathBuf {
+pub fn config_path() -> PathBuf {
     if let Some(p) = env_path("KNOWLEDGE_CONFIG") {
         return p;
     }
@@ -71,7 +81,7 @@ pub fn load() -> Result<Config, Fault> {
     };
     let vault = need(raw.vault, "vault")?;
     let dev = need(raw.dev_root, "devRoot")?;
-    if let Some(h) = raw.rollover_hour
+    if let Some(h) = &raw.rollover_hour
         && h.as_u64().is_none_or(|h| h > 23)
     {
         return Err(Fault::Config(format!(
@@ -84,7 +94,15 @@ pub fn load() -> Result<Config, Fault> {
             "knowledge config {src}: \"pullTrust\" must be \"signed\" or absent"
         )));
     }
-    let _ = raw.os;
+    let os = raw.os.filter(|s| !s.is_empty()).unwrap_or_else(|| {
+        match std::env::consts::OS {
+            "windows" => "windows",
+            "linux" => "arch",
+            other => other,
+        }
+        .to_string()
+    });
+    let trust_dir = path.parent().map(Path::to_path_buf).unwrap_or_default();
     let home = env_path("KNOWLEDGE_HOME")
         .unwrap_or_else(|| path.parent().map(Path::to_path_buf).unwrap_or_default());
     Ok(Config {
@@ -92,6 +110,15 @@ pub fn load() -> Result<Config, Fault> {
         db: home.join("vault-index.db"),
         dev: PathBuf::from(dev),
         home,
+        os,
+        machine: raw.machine.unwrap_or_default(),
+        rollover: raw
+            .rollover_hour
+            .as_ref()
+            .and_then(serde_json::Number::as_i64)
+            .unwrap_or(5),
+        pull_trust: raw.pull_trust.is_some(),
+        trust_dir,
     })
 }
 

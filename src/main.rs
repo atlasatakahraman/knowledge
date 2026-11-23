@@ -1,20 +1,33 @@
-//! knowledge: the engine's one binary (spec D9, K30). Verbs: index, find, inject, graph, hook, doctor.
-//! Stable Rust, no async runtime, arguments parsed by hand, and no `unsafe` anywhere in the crate.
-#![forbid(unsafe_code)]
+//! knowledge: the engine's one binary (spec D9, K30). Every hook, the doctor and `setup` (Stage 6).
+//! Stable Rust, no async runtime, arguments parsed by hand. `unsafe` is denied everywhere except
+//! the one Windows call in `win.rs` (owner, 2026-11-22: a detached child must not hold the hook's pipe).
+#![deny(unsafe_code)]
 
 mod budget;
 mod capture;
+mod compile;
 mod config;
 mod doctor;
 mod events;
 mod fetch;
 mod graph;
 mod guard;
+mod health;
 mod hook;
+mod hubs;
 mod index;
+mod linkcheck;
+mod memory;
+mod recorder;
+mod records;
 mod rules;
 mod search;
+mod session;
+mod state;
+mod usage;
 mod vault;
+#[cfg(windows)]
+mod win;
 
 use std::collections::HashMap;
 use std::fmt;
@@ -36,10 +49,16 @@ const USAGE: &str = "usage:
   knowledge graph <note> [<other note>] [--json]
   knowledge rules list [--json] | kernel | check [--staged] [--restore] | lock [--seed <file>]
   knowledge rules enable|disable <pack>
-  knowledge hook prompt|post-edit|pre-tool --harness claude
+  knowledge hook session|prompt|pre-tool|post-edit|post-bash|capture --harness claude
+  knowledge doctor [--pretty] [--repair] [--record] [--only <id,...>]
   knowledge doctor --only portable [--json]
   knowledge doctor budget [<transcript.jsonl>] [--json]
-  knowledge doctor profile <note>";
+  knowledge doctor profile <note>
+  knowledge flush <session-id> [<cwd>] [--transcript <file>] [--date <YYYY-MM-DD>] [--dry-run [--from-start]]
+  knowledge compile [--force] [--dry-run]
+  knowledge post-bash [--backfill <since>] [--dry-run]
+  knowledge records | hubs
+  knowledge usage [--month <YYYY-MM>] [--days N] [--projects] [--blocks]";
 
 /// Every fallible function returns this ([[Hard-Rules]] § Working preferences: `Fault`, never
 /// `Result<_, String>`). Named `Fault` so it never collides with an `Error` already in scope.
@@ -176,6 +195,12 @@ fn main() -> ExitCode {
             return ExitCode::SUCCESS;
         }
         "doctor" => doctor::run(rest),
+        "post-bash" => recorder::run(rest),
+        "compile" => compile::run(rest),
+        "flush" => memory::run_flush(rest),
+        "records" => records::run(rest),
+        "usage" => usage::run(rest),
+        "hubs" => hubs::run(rest),
         _ => Err(Fault::Usage(USAGE.to_string())),
     };
     match result {

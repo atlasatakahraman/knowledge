@@ -1,7 +1,7 @@
 # Every crate `cargo tree -e normal` may list on any of CI's eight targets: the crates the owner
 # approved (spec D22, D23: rusqlite, serde, serde_json; Stage 4, 2026-11-22: ureq with rustls on
-# ring and rustls-platform-verifier, htmd) and what they pull in. checks/stage-3.sh fails on any
-# other name. A new name here is a dependency decision, made by the owner in a compared question (D18).
+# ring and rustls-platform-verifier, htmd; Stage 6, 2026-11-22: jiff) and what they pull in.
+# checks/stage-3.sh fails on any other name. A new name here is a dependency decision, made by the owner in a compared question (D18).
 base64
 bitflags
 bytes
@@ -17,6 +17,11 @@ html5ever
 http
 httparse
 itoa
+jiff
+jiff-core
+jiff-static
+jiff-tzdb
+jiff-tzdb-platform
 knowledge
 libc
 libsqlite3-sys
@@ -32,6 +37,8 @@ parking_lot_core
 percent-encoding
 phf
 phf_shared
+portable-atomic
+portable-atomic-util
 precomputed-hash
 proc-macro2
 quote

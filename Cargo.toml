@@ -13,8 +13,15 @@ publish = false
 # checks/stage-3.sh fails on anything else. A new one is a question for the owner, never quiet.
 [dependencies]
 htmd = "0.6.0"
+# Local time for the 05:00 rollover (Stage 6, owner's pick 2026-11-22: jiff over time, chrono and a
+# fixed offset). No default features: the system zone and the zoneinfo database, bundled where the
+# platform has none (Windows), and nothing else.
+jiff = { version = "1.0.2", default-features = false, features = ["std", "tz-system", "tzdb-zoneinfo", "tzdb-bundle-platform"] }
 # default-features off: the default `cache` feature pulls hashlink, and nothing here needs a
 # statement cache beyond rusqlite's own prepare. `bundled` compiles SQLite with FTS5 into the binary.
+# SHA-256 for compile's state file (Stage 6, owner's pick 2026-11-22: ring over sha2 and a
+# hand-written one). Already in the tree through rustls, so it adds no crate.
+ring = { version = "0.17.14", default-features = false }
 rusqlite = { version = "0.43.0", default-features = false, features = ["bundled"] }
 rustls = { version = "0.23.46", default-features = false, features = ["ring"] }
 serde = { version = "1.0.229", features = ["derive"] }
