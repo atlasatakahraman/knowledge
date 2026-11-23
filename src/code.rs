@@ -16,7 +16,8 @@ use tree_sitter::{
     Language, Node, ParseOptions, ParseState, Parser, Query, QueryCursor, StreamingIterator, Tree,
 };
 
-const SCHEMA_VERSION: i32 = 1;
+// 2: refs prefer a definition in the using file and stay in one language (S8.2). A cache of another version is rebuilt.
+const SCHEMA_VERSION: i32 = 2;
 
 // `uses` holds each symbol's raw reference names; `refs` is them resolved, rebuilt in one
 // statement after any change (index.rs keeps notes' `refs` and `links` the same way).
@@ -33,7 +34,7 @@ CREATE TABLE uses    (src INTEGER NOT NULL, name TEXT NOT NULL, kind TEXT NOT NU
 CREATE TABLE refs    (src INTEGER NOT NULL, dst INTEGER NOT NULL, kind TEXT NOT NULL,
                       PRIMARY KEY (src, dst, kind)) WITHOUT ROWID;
 CREATE INDEX refs_dst ON refs (dst);
-PRAGMA user_version = 1;";
+PRAGMA user_version = 2;";
 
 /// Generated or minified code: not worth a parse, and the likeliest to be slow.
 const MAX_BYTES: u64 = 1 << 20;
@@ -463,13 +464,26 @@ pub fn sync(conn: &mut Connection, root: &Path) -> Result<Stats, Fault> {
         s.removed += 1;
     }
     if s.parsed + s.skipped + s.removed > 0 {
-        // Name-only resolution in one statement: an ambiguous name links to every candidate.
+        // Name-only resolution in one statement. A name the using file defines itself means that
+        // definition, as an unqualified call does in Rust, Python and a JS module (S8.2: three
+        // `open_rw`s, and `code.rs`'s own call linked to all three). Any other name links to every
+        // candidate, and the verbs mark it ambiguous. A name never crosses languages: JS and TS
+        // import each other, Rust and Python reach no other (S8.2: Rust's `conn.prepare` linked to
+        // a method in a `.mjs`).
         tx.execute_batch(
             "DELETE FROM refs;
              INSERT OR IGNORE INTO refs (src, dst, kind)
                SELECT u.src, s.id, u.kind FROM uses u
+               JOIN symbols us ON us.id = u.src
+               JOIN files uf ON uf.id = us.file
                JOIN symbols s ON s.name = u.name AND s.kind != 'file'
-               WHERE s.id != u.src;",
+               JOIN files sf ON sf.id = s.file
+               WHERE s.id != u.src
+                 AND (CASE WHEN uf.lang IN ('rust', 'python') THEN uf.lang ELSE 'js' END)
+                   = (CASE WHEN sf.lang IN ('rust', 'python') THEN sf.lang ELSE 'js' END)
+                 AND (s.file = us.file OR NOT EXISTS (
+                   SELECT 1 FROM symbols l WHERE l.name = u.name AND l.file = us.file
+                     AND l.kind != 'file' AND l.id != u.src));",
         )?;
     }
     s.symbols = tx.query_row(
@@ -482,39 +496,394 @@ pub fn sync(conn: &mut Connection, root: &Path) -> Result<Stats, Fault> {
     Ok(s)
 }
 
-/// The checkouts to work on: the named one, every one (`--all`), or the one the working
-/// directory is in.
+/// Every checkout under the checkouts folder.
+fn every(cfg: &Config) -> Result<Vec<String>, Fault> {
+    let mut names: Vec<String> = fs::read_dir(&cfg.dev)
+        .map_err(|e| Fault::io(&cfg.dev, e))?
+        .filter_map(Result::ok)
+        .filter(|e| e.path().join(".git").exists())
+        .filter_map(|e| e.file_name().into_string().ok())
+        .collect();
+    names.sort();
+    Ok(names)
+}
+
+/// The checkout the working directory is in.
+fn here(cfg: &Config) -> Option<String> {
+    let cwd = std::env::current_dir().ok()?;
+    let rel = cfg.repos().rel_of(&cwd)?;
+    rel.split('/').next().map(str::to_string)
+}
+
+/// A named checkout. The name is a folder name and never a path: it reaches here from a model
+/// through `knowledge mcp`, and it names a folder under the checkouts and a file under the home.
+fn named(cfg: &Config, name: &str) -> Result<String, Fault> {
+    if name.is_empty() || name == "." || name == ".." || name.contains(['/', '\\', ':']) {
+        return Err(Fault::Usage(format!("{name}: a checkout's folder name")));
+    }
+    if !cfg.dev.join(name).join(".git").exists() {
+        return Err(Fault::Usage(format!(
+            "{name}: no checkout at {}",
+            cfg.dev.join(name).display()
+        )));
+    }
+    Ok(name.to_string())
+}
+
+/// The checkouts to index: the named one, every one (`--all`), or the one the working directory
+/// is in.
 fn checkouts(cfg: &Config, args: &Args) -> Result<Vec<String>, Fault> {
     if args.has("all") {
-        let mut names: Vec<String> = fs::read_dir(&cfg.dev)
-            .map_err(|e| Fault::io(&cfg.dev, e))?
-            .filter_map(Result::ok)
-            .filter(|e| e.path().join(".git").exists())
-            .filter_map(|e| e.file_name().into_string().ok())
-            .collect();
-        names.sort();
-        return Ok(names);
+        return every(cfg);
     }
     let name = match args.words.first() {
         Some(w) => w.clone(),
-        None => std::env::current_dir()
-            .ok()
-            .and_then(|cwd| cfg.repos().rel_of(&cwd))
-            .and_then(|rel| rel.split('/').next().map(str::to_string))
-            .ok_or_else(|| {
-                Fault::Usage(format!(
-                    "not inside a checkout under {}: name one, or --all",
-                    cfg.dev.display()
-                ))
-            })?,
+        None => here(cfg).ok_or_else(|| {
+            Fault::Usage(format!(
+                "not inside a checkout under {}: name one, or --all",
+                cfg.dev.display()
+            ))
+        })?,
     };
-    if !cfg.dev.join(&name).join(".git").exists() {
-        return Err(Fault::Usage(format!(
-            "{name}: no checkout at {}",
-            cfg.dev.join(&name).display()
-        )));
+    Ok(vec![named(cfg, &name)?])
+}
+
+/// The maps a query reads, each refreshed first so an answer never lags the files: `--repo`'s,
+/// else the working directory's checkout, else every checkout.
+fn scoped(cfg: &Config, repo: Option<&str>) -> Result<Vec<(String, Connection)>, Fault> {
+    let names = match (repo, here(cfg)) {
+        (Some(r), _) => vec![named(cfg, r)?],
+        (None, Some(h)) => vec![h],
+        (None, None) => every(cfg)?,
+    };
+    let mut maps = Vec::with_capacity(names.len());
+    for name in names {
+        let mut conn = open_rw(cfg, &name)?;
+        sync(&mut conn, &cfg.dev.join(&name))?;
+        maps.push((name, conn));
     }
-    Ok(vec![name])
+    Ok(maps)
+}
+
+/// Output held to a character budget, as every verb's is: a line that does not fit is counted,
+/// never cut in half.
+struct Out {
+    text: String,
+    budget: usize,
+    dropped: usize,
+}
+
+impl Out {
+    fn new(args: &Args) -> Result<Out, Fault> {
+        Ok(Out {
+            text: String::new(),
+            budget: args.num("budget", crate::capture::BUDGET)?.max(200),
+            dropped: 0,
+        })
+    }
+
+    fn line(&mut self, l: &str) {
+        if self.dropped == 0 && self.text.len() + l.len() < self.budget {
+            self.text.push_str(l);
+            self.text.push('\n');
+        } else {
+            self.dropped += 1;
+        }
+    }
+
+    fn finish(mut self) -> String {
+        if self.dropped > 0 {
+            self.text.push_str(&format!(
+                "… {} more lines past the {}-char budget (--budget N)\n",
+                self.dropped, self.budget
+            ));
+        }
+        self.text
+    }
+}
+
+/// How well a name matches the query: exact, exact but for case, a prefix, then inside the name.
+fn match_rank(name: &str, query: &str) -> u8 {
+    if name == query {
+        0
+    } else if name.eq_ignore_ascii_case(query) {
+        1
+    } else if name.to_lowercase().starts_with(&query.to_lowercase()) {
+        2
+    } else {
+        3
+    }
+}
+
+/// Types before functions before the rest: "where is X" most often means where X is declared.
+fn kind_rank(kind: &str) -> u8 {
+    match kind {
+        "class" | "interface" | "struct" | "enum" | "type" | "trait" => 0,
+        "function" | "method" | "macro" => 1,
+        "module" => 2,
+        _ => 3,
+    }
+}
+
+/// `find --code <q> [--repo <name>] [--limit N] [--budget N]`: symbols whose name holds every
+/// word of the query, ranked by name match, then kind. One line each: `repo path:line kind
+/// signature`.
+pub fn run_find(raw: &[String]) -> Result<u8, Fault> {
+    let args = Args::parse(raw, &["repo", "limit", "budget"])?;
+    let query = args.words.join(" ");
+    let terms: Vec<String> = query.split_whitespace().map(str::to_lowercase).collect();
+    let Some(first) = terms.first() else {
+        return Err(Fault::Usage(
+            "knowledge find <query> --code [--repo <name>] [--limit N] [--budget N]".into(),
+        ));
+    };
+    let limit = args.num("limit", 10usize)?.clamp(1, 50);
+    let mut out = Out::new(&args)?;
+    let cfg = config::load()?;
+    let mut hits = Vec::new();
+    for (repo, conn) in scoped(&cfg, args.get("repo"))? {
+        // The first word narrows in SQL (a scan of one table: ~10,000 rows in the largest
+        // checkout), the rest in Rust.
+        let mut stmt = conn.prepare(
+            "SELECT s.name, s.kind, f.path, s.line, s.signature FROM symbols s
+             JOIN files f ON f.id = s.file
+             WHERE s.kind != 'file' AND instr(lower(s.name), ?1) > 0",
+        )?;
+        let rows = stmt.query_map([first], |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, String>(2)?,
+                r.get::<_, i64>(3)?,
+                r.get::<_, String>(4)?,
+            ))
+        })?;
+        for row in rows {
+            let (name, kind, path, line, sig) = row?;
+            let lower = name.to_lowercase();
+            if terms.iter().all(|t| lower.contains(t.as_str())) {
+                let rank = (match_rank(&name, &query), kind_rank(&kind), name.len());
+                hits.push((rank, format!("{repo} {path}:{line} {kind} {sig}")));
+            }
+        }
+    }
+    if hits.is_empty() {
+        out.line(&format!("no symbol named like {query}"));
+    }
+    hits.sort();
+    for (_, l) in hits.iter().take(limit) {
+        out.line(l);
+    }
+    if hits.len() > limit {
+        out.line(&format!(
+            "… and {} more matches (--limit N)",
+            hits.len() - limit
+        ));
+    }
+    emit(&out.finish());
+    Ok(0)
+}
+
+/// A symbol's definitions by exact name, or failing that by name without case. File symbols are
+/// never asked for by name.
+fn defs(conn: &Connection, name: &str) -> Result<Vec<i64>, Fault> {
+    for sql in [
+        "SELECT id FROM symbols WHERE name = ?1 AND kind != 'file' ORDER BY id",
+        "SELECT id FROM symbols WHERE lower(name) = lower(?1) AND kind != 'file' ORDER BY id",
+    ] {
+        let mut stmt = conn.prepare(sql)?;
+        let ids: Vec<i64> = stmt
+            .query_map([name], |r| r.get(0))?
+            .collect::<Result<_, _>>()?;
+        if !ids.is_empty() {
+            return Ok(ids);
+        }
+    }
+    Ok(Vec::new())
+}
+
+/// `path:line name kind`, or the path alone for a file's top level.
+fn label(conn: &Connection, id: i64) -> Result<String, Fault> {
+    Ok(conn.query_row(
+        "SELECT s.name, s.kind, f.path, s.line FROM symbols s JOIN files f ON f.id = s.file
+         WHERE s.id = ?1",
+        [id],
+        |r| {
+            let (name, kind, path, line): (String, String, String, i64) =
+                (r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?);
+            Ok(if kind == "file" {
+                format!("{path} (top level)")
+            } else {
+                format!("{path}:{line} {name} {kind}")
+            })
+        },
+    )?)
+}
+
+/// The ref from `src` to `dst` as a line: the other end's label, the ref's kind when it is not a
+/// call, and how many symbols the name could mean when name-only resolution had to guess.
+fn edge(conn: &Connection, src: i64, dst: i64, other: i64, kind: &str) -> Result<String, Fault> {
+    let n: i64 = conn.query_row(
+        "SELECT count(*) FROM refs r JOIN symbols s ON s.id = r.dst
+         WHERE r.src = ?1 AND s.name = (SELECT name FROM symbols WHERE id = ?2)",
+        [src, dst],
+        |r| r.get(0),
+    )?;
+    let mut l = label(conn, other)?;
+    if kind != "call" {
+        l.push_str(&format!(" [{kind}]"));
+    }
+    if n > 1 {
+        l.push_str(&format!(" [ambiguous: {n} by this name]"));
+    }
+    Ok(l)
+}
+
+/// What uses one symbol (`callers`), or what it uses.
+fn ends(conn: &Connection, id: i64, callers: bool) -> Result<Vec<String>, Fault> {
+    let sql = if callers {
+        "SELECT src, min(kind) FROM refs WHERE dst = ?1 GROUP BY src ORDER BY src"
+    } else {
+        "SELECT dst, min(kind) FROM refs WHERE src = ?1 GROUP BY dst ORDER BY dst"
+    };
+    let mut stmt = conn.prepare(sql)?;
+    let rows: Vec<(i64, String)> = stmt
+        .query_map([id], |r| Ok((r.get(0)?, r.get(1)?)))?
+        .collect::<Result<_, _>>()?;
+    rows.into_iter()
+        .map(|(other, kind)| {
+            let (src, dst) = if callers { (other, id) } else { (id, other) };
+            edge(conn, src, dst, other, &kind)
+        })
+        .collect()
+}
+
+/// A symbol's definitions, each with what uses it and what it uses.
+fn neighbours(maps: &[(String, Connection)], sym: &str, out: &mut Out) -> Result<(), Fault> {
+    let mut found = false;
+    for (repo, conn) in maps {
+        for id in defs(conn, sym)? {
+            found = true;
+            let (sig, place): (String, String) = conn.query_row(
+                "SELECT s.signature, f.path || ':' || s.line || ' ' || s.kind FROM symbols s
+                 JOIN files f ON f.id = s.file WHERE s.id = ?1",
+                [id],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )?;
+            let (callers, callees) = (ends(conn, id, true)?, ends(conn, id, false)?);
+            out.line(&format!("{sym} — {repo} {place}"));
+            out.line(&format!("  {sig}"));
+            for (head, list) in [("used by", &callers), ("uses", &callees)] {
+                out.line(&format!("  {head} ({}):", list.len()));
+                for l in list {
+                    out.line(&format!("    {l}"));
+                }
+            }
+        }
+    }
+    if !found {
+        out.line(&format!(
+            "no symbol named {sym}; `knowledge find {sym} --code` lists near names"
+        ));
+    }
+    Ok(())
+}
+
+/// The shortest chain of refs from any definition of `a` to any of `b`, at most DEPTH hops, walked
+/// back from `b` one hop closer each step (graph.rs does the same over notes' links).
+fn chain(conn: &Connection, a: &[i64], b: &[i64]) -> Result<Option<Vec<i64>>, Fault> {
+    let mut stmt = conn.prepare(
+        "WITH RECURSIVE reach(id, d) AS (
+           SELECT value, 0 FROM json_each(?1)
+           UNION SELECT r.dst, reach.d + 1 FROM reach JOIN refs r ON r.src = reach.id
+             WHERE reach.d < ?2
+         )
+         SELECT id, min(d) FROM reach GROUP BY id",
+    )?;
+    let seeds = serde_json::to_string(a)?;
+    let dist: HashMap<i64, i64> = stmt
+        .query_map(params![seeds, DEPTH], |r| Ok((r.get(0)?, r.get(1)?)))?
+        .collect::<Result<_, _>>()?;
+    let Some((&end, &d)) = b
+        .iter()
+        .filter_map(|id| dist.get_key_value(id))
+        .min_by_key(|(_, d)| **d)
+    else {
+        return Ok(None);
+    };
+    let mut back = conn.prepare("SELECT src FROM refs WHERE dst = ?1 ORDER BY src")?;
+    let (mut path, mut at) = (vec![end], end);
+    for step in (0..d).rev() {
+        let prev: Vec<i64> = back
+            .query_map([at], |r| r.get(0))?
+            .collect::<Result<_, _>>()?;
+        at = *prev
+            .iter()
+            .find(|n| dist.get(n) == Some(&step))
+            .ok_or_else(|| Fault::Config("the code map changed mid-query".into()))?;
+        path.push(at);
+    }
+    path.reverse();
+    Ok(Some(path))
+}
+
+/// How far `graph --code <a> <b>` looks, as `graph` does for notes: past four hops a chain runs
+/// through a name a hundred symbols share and says nothing.
+const DEPTH: i64 = 4;
+
+/// The chain from `a` to `b`, or failing that from `b` to `a`, in the first checkout that defines
+/// both and joins them.
+fn between(maps: &[(String, Connection)], a: &str, b: &str, out: &mut Out) -> Result<(), Fault> {
+    let mut both = false;
+    for (repo, conn) in maps {
+        let (da, db) = (defs(conn, a)?, defs(conn, b)?);
+        if da.is_empty() || db.is_empty() {
+            continue;
+        }
+        both = true;
+        if let Some(path) = chain(conn, &da, &db)?.or(chain(conn, &db, &da)?) {
+            out.line(&format!("{repo}:"));
+            out.line(&format!("  {}", label(conn, path[0])?));
+            for hop in path.windows(2) {
+                let kind: String = conn.query_row(
+                    "SELECT min(kind) FROM refs WHERE src = ?1 AND dst = ?2",
+                    [hop[0], hop[1]],
+                    |r| r.get(0),
+                )?;
+                out.line(&format!(
+                    "  → {}",
+                    edge(conn, hop[0], hop[1], hop[1], &kind)?
+                ));
+            }
+            return Ok(());
+        }
+    }
+    out.line(&if both {
+        format!("no chain of uses between {a} and {b} within {DEPTH} hops")
+    } else {
+        format!("no checkout defines both {a} and {b}")
+    });
+    Ok(())
+}
+
+/// `graph --code <symbol> [<other>] [--repo <name>] [--budget N]`: a symbol's definition, what
+/// uses it and what it uses; or the chain of uses between two symbols.
+pub fn run_graph(raw: &[String]) -> Result<u8, Fault> {
+    let args = Args::parse(raw, &["repo", "budget"])?;
+    let mut out = Out::new(&args)?;
+    let cfg = config::load()?;
+    match args.words.as_slice() {
+        [sym] => neighbours(&scoped(&cfg, args.get("repo"))?, sym, &mut out)?,
+        [a, b] => between(&scoped(&cfg, args.get("repo"))?, a, b, &mut out)?,
+        _ => {
+            return Err(Fault::Usage(
+                "knowledge graph <symbol> [<other symbol>] --code [--repo <name>] [--budget N]"
+                    .into(),
+            ));
+        }
+    }
+    emit(&out.finish());
+    Ok(0)
 }
 
 /// `knowledge code index [<repo>|--all] [--rebuild]`.

@@ -8,7 +8,9 @@ use std::process::ExitCode;
 
 const USAGE: &str = "usage:
   knowledge-code --version
-  knowledge-code code index [<repo>|--all] [--rebuild]";
+  knowledge-code code index [<repo>|--all] [--rebuild]
+  knowledge-code find <query> --code [--repo <name>] [--limit N] [--budget N]
+  knowledge-code graph <symbol> [<other symbol>] --code [--repo <name>] [--budget N]";
 
 fn main() -> ExitCode {
     let argv: Vec<String> = std::env::args().skip(1).collect();
@@ -21,6 +23,8 @@ fn main() -> ExitCode {
             Ok(0)
         }
         "code" => code::run(rest),
+        "find" => code::run_find(rest),
+        "graph" => code::run_graph(rest),
         _ => Err(Fault::Usage(USAGE.to_string())),
     })
 }

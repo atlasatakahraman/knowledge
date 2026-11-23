@@ -20,7 +20,9 @@ const USAGE: &str = "usage:
   knowledge events <transcript.jsonl> [--json]
   knowledge inject <text> [--format lines|tagged] [--no-passage | --passage-max N --passage-score S]
   knowledge graph <note> [<other note>] [--json] | <note> --text
-  knowledge code index [<repo>|--all] [--rebuild]   (run by knowledge-code)
+  knowledge find <query> --code [--repo <name>] [--limit N] [--budget N]   (run by knowledge-code)
+  knowledge graph <symbol> [<other symbol>] --code [--repo <name>] [--budget N]   (the same)
+  knowledge code index [<repo>|--all] [--rebuild]   (the same)
   knowledge note decision <text> [--question <q>] [--promoted <path>] | note log <text>
   knowledge config [<key>]
   knowledge rules list [--json] | kernel | check [--staged] [--restore] | lock [--seed <file>]
@@ -80,8 +82,10 @@ fn main() -> ExitCode {
     let (verb, rest) = argv
         .split_first()
         .map_or(("", &[][..]), |(v, r)| (v.as_str(), r));
+    let code = rest.iter().any(|a| a == "--code");
     report(match verb {
         "--version" | "-V" | "version" => version(),
+        "find" | "graph" if code => hand_off(&argv),
         "index" => index::run(rest),
         "find" => search::run_find(rest),
         "keep" => capture::run_keep(rest),

@@ -77,6 +77,44 @@ rm "$FIX/tools/run.py"
 check "a deleted file is removed" 'k code index fixture | grep -q "1 removed"'
 check "a name that is not a checkout is refused" '! k code index nope 2>/dev/null'
 
+# --- S8.2: find --code and graph --code -------------------------------------------------------
+# A second Rust `beta`, a chain epsilon -> delta -> beta inside one file, and a JS `beta` that no
+# Rust call may reach.
+cat > "$FIX/src/other.rs" <<'EOF'
+pub fn beta(n: u32) -> u32 {
+    n
+}
+pub fn delta() -> u32 {
+    beta(1)
+}
+pub fn epsilon() -> u32 {
+    delta()
+}
+EOF
+printf 'export function beta() {\n  return 0;\n}\n' > "$FIX/web/lib.mjs"
+g add -A && g commit -q -m s8.2
+out=$(k find beta --code --repo fixture)
+check "find --code: the definition, as repo path:line kind signature" 'echo "$out" | grep -qx "fixture src/beta.rs:1 function pub fn beta(n: u32) -> u32"'
+check "find --code: every definition of the name (3)" '[ "$(echo "$out" | grep -c " beta")" = 3 ]'
+check "find --code: inside a checkout, no --repo needed" '(cd "$FIX/web" && k find badge --code) | grep -q "^fixture web/page.tsx:4 function"'
+out=$(k graph beta --code --repo fixture)
+check "graph --code: a caller in the same file links to that file's definition only" 'echo "$out" | grep -qx "    src/beta.rs:4 gamma function"'
+check "graph --code: a caller with two candidates is marked ambiguous" 'echo "$out" | grep -qx "    src/alpha.rs:1 alpha function \[ambiguous: 2 by this name\]"'
+check "graph --code: a Rust call never reaches a JS symbol" '[ "$(echo "$out" | awk "/^beta — fixture web\/lib.mjs/{f=1} f&&/used by/{print; exit}")" = "  used by (0):" ]'
+check "graph --code: a JSX use is a render" 'k graph Badge --code --repo fixture | grep -qx "    web/page.tsx:1 Page function \[render\]"'
+chain=$'fixture:\n  src/other.rs:7 epsilon function\n  → src/other.rs:4 delta function\n  → src/other.rs:1 beta function'
+check "graph --code <a> <b>: the chain of calls between them" '[ "$(k graph epsilon beta --code --repo fixture)" = "$chain" ]'
+check "graph --code <b> <a>: the same chain, in call order" '[ "$(k graph beta epsilon --code --repo fixture)" = "$chain" ]'
+check "graph --code: no chain is said so" 'k graph label alpha --code --repo fixture | grep -q "^no chain of uses between label and alpha"'
+check "graph --code: held to the budget" 'k graph beta --code --repo fixture --budget 200 | grep -q "past the 200-char budget"'
+check "a --repo that is a path is refused" '! k find beta --code --repo ../fixture 2>/dev/null'
+mcp() { printf '%s\n' "$1" | k mcp; }
+call() { printf '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"%s","arguments":%s}}' "$1" "$2"; }
+check "mcp: find with code answers from the code map" 'mcp "$(call find "{\"q\":\"epsilon\",\"code\":true,\"repo\":\"fixture\"}")" | grep -q "fixture src/other.rs:7 function"'
+check "mcp: graph with code lists the uses" 'mcp "$(call graph "{\"note\":\"delta\",\"code\":true,\"repo\":\"fixture\"}")" | grep -q "src/other.rs:7 epsilon function"'
+check "mcp: a path for repo is an error, not a read" 'mcp "$(call find "{\"q\":\"beta\",\"code\":true,\"repo\":\"../fixture\"}")" | grep -q "\"isError\":true"'
+check "mcp: repo without code is refused" 'mcp "$(call graph "{\"note\":\"x\",\"repo\":\"fixture\"}")" | grep -q "repo: only with code"'
+
 rm -rf "$TMP"
 echo "$fails failed"
 [ "$fails" -eq 0 ]

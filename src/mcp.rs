@@ -71,13 +71,16 @@ fn tools() -> Value {
             "title": "Search the knowledge vault",
             "description": "Ranked notes for a question, each with its best passage. scope: vault \
                 (default), repo (a repository's indexed docs; repo names one) or captures \
-                (kept and fetched output, 14 days). One call per question.",
+                (kept and fetched output, 14 days). One call per question. With code: the code \
+                map instead, symbols whose name holds every word of q (repo narrows it to one \
+                repository).",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "q": { "type": "string", "description": "The question, in words." },
+                    "q": { "type": "string", "description": "The question, in words; with code, a symbol's name or part of it." },
                     "scope": { "type": "string", "enum": ["vault", "repo", "captures"] },
-                    "repo": { "type": "string", "description": "With scope repo: the repository's name." }
+                    "repo": { "type": "string", "description": "With scope repo or code: the repository's name." },
+                    "code": { "type": "boolean", "description": "Search the repositories' code symbols." }
                 },
                 "required": ["q"],
                 "additionalProperties": false
@@ -86,13 +89,17 @@ fn tools() -> Value {
         },
         {
             "name": "graph",
-            "title": "A vault note's links",
-            "description": "A note's links in and out, or with other, the path between two notes.",
+            "title": "A vault note's links, or a code symbol's uses",
+            "description": "A note's links in and out, or with other, the path between two notes. \
+                With code: a code symbol's definition, what uses it and what it uses, or with \
+                other, the chain of uses between two symbols (repo narrows it to one repository).",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "note": { "type": "string", "description": "A note's name or vault path." },
-                    "other": { "type": "string" }
+                    "note": { "type": "string", "description": "A note's name or vault path; with code, a symbol's name." },
+                    "other": { "type": "string" },
+                    "repo": { "type": "string", "description": "With code: the repository's name." },
+                    "code": { "type": "boolean", "description": "Read the repositories' code map." }
                 },
                 "required": ["note"],
                 "additionalProperties": false
@@ -150,7 +157,28 @@ fn argv(name: &Value, a: &Value) -> Result<Vec<String>, Option<String>> {
     if !(a.is_object() || a.is_null()) {
         return Err(Some("arguments: an object".into()));
     }
+    let code = match &a["code"] {
+        Value::Null => false,
+        Value::Bool(b) => *b,
+        _ => return Err(Some("code: true or false".into())),
+    };
+    // The code map's flags: `--code`, and `--repo <name>` when one is named.
+    let code_flags = |v: &mut Vec<String>| -> Result<(), Option<String>> {
+        v.push("--code".into());
+        if let Some(r) = field("repo", false)? {
+            v.extend(["--repo".into(), r]);
+        }
+        Ok(())
+    };
     match name.as_str() {
+        Some("find") if code => {
+            let mut v = vec!["find".into(), field("q", true)?.unwrap_or_default()];
+            if !(a["scope"].is_null() || a["scope"] == "repo") {
+                return Err(Some("scope: none, or repo, with code".into()));
+            }
+            code_flags(&mut v)?;
+            Ok(v)
+        }
         Some("find") => {
             let mut v = vec!["find".into(), field("q", true)?.unwrap_or_default()];
             let scope = if a["scope"].is_null() {
@@ -176,6 +204,11 @@ fn argv(name: &Value, a: &Value) -> Result<Vec<String>, Option<String>> {
         Some("graph") => {
             let mut v = vec!["graph".into(), field("note", true)?.unwrap_or_default()];
             v.extend(field("other", false)?);
+            if code {
+                code_flags(&mut v)?;
+            } else if !a["repo"].is_null() {
+                return Err(Some("repo: only with code".into()));
+            }
             Ok(v)
         }
         Some("read") => Ok(vec![
@@ -195,8 +228,22 @@ fn argv(name: &Value, a: &Value) -> Result<Vec<String>, Option<String>> {
     }
 }
 
-/// Run the verb; its stdout is the result, its stderr the error text when it fails.
+/// Run the verb; its stdout is the result, its stderr the error text when it fails. A code verb
+/// runs in `knowledge-code` directly, not through this binary's hand-off (spec item 44). `argv`
+/// is the only source of a `--code`: no field can carry a flag.
 fn call(exe: &std::path::Path, args: &[String]) -> Value {
+    let code;
+    let exe = if args.iter().any(|a| a == "--code") {
+        match crate::code_exe() {
+            Ok(p) => {
+                code = p;
+                code.as_path()
+            }
+            Err(e) => return result(e.to_string(), true),
+        }
+    } else {
+        exe
+    };
     let refs: Vec<&str> = args.iter().map(String::as_str).collect();
     let o = crate::state::run(exe, &refs, None, None, &[], CALL_TIMEOUT);
     let failed = !o.ok();
