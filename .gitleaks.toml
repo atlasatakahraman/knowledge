@@ -1,0 +1,13 @@
+# gitleaks config for this repo. Extends the default ruleset; it only narrows it.
+title = "knowledge-skeleton"
+
+[extend]
+useDefault = true
+
+# docs/verify.md prints ssh-keygen's output, "... ED25519 key SHA256:<fingerprint>", and the
+# generic-api-key rule reads "key" followed by a high-entropy string as a secret. A fingerprint is a
+# hash of the public key, not a secret. Only this one fingerprint is allowed; a new release key
+# (docs/release.md, rotation) replaces it here.
+[[allowlists]]
+description = "the release key's public fingerprint, printed in docs/verify.md"
+regexes = ['''4lk0qVkGnFfrnKNselpgVf9e55AvCRSy5OkdhcCq6uc''']

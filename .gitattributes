@@ -1,2 +1,5 @@
 # githooks/ is POSIX sh. With core.autocrlf=true (Git for Windows) a checkout would give it CRLF endings, which sh cannot run.
 githooks/* text eol=lf
+# allowed_signers is read byte for byte by ssh-keygen and built into the binary by include_str!:
+# one LF line on every OS, so a Windows build prints the same line a Linux one does.
+allowed_signers text eol=lf

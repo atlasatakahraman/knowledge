@@ -7,6 +7,10 @@ use crate::{Args, Fault, config, emit, fetch, setup, state};
 
 const USAGE: &str = "knowledge update --plan";
 
+/// The release key, built in from the repo's `allowed_signers` (docs/release.md): an update is
+/// checked against the key the user already trusts, not one fetched beside the new archive.
+const SIGNERS: &str = include_str!("../allowed_signers");
+
 /// The release archive this binary came from: one of `build.yml`'s eight targets.
 const TARGET: &str = if cfg!(all(windows, target_arch = "x86_64")) {
     "x86_64-pc-windows-msvc"
@@ -111,13 +115,34 @@ pub fn run(raw: &[String]) -> Result<u8, Fault> {
     let dir = exe
         .parent()
         .map_or_else(|| "<its folder>".to_string(), state::native);
-    let check = if cfg!(windows) {
-        format!(
-            "(Get-FileHash {file} -Algorithm SHA256).Hash.ToLower()   equals its line in SHA256SUMS"
+    // docs/verify.md's three checks, in its order. PowerShell has no `<`, and a pipe through it
+    // would change the file's bytes, so `cmd` feeds SHA256SUMS to ssh-keygen.
+    let who = SIGNERS.split_whitespace().next().unwrap_or_default();
+    let verify = format!(
+        "ssh-keygen -Y verify -f allowed_signers -I {who} -n file -s SHA256SUMS.sig < SHA256SUMS"
+    );
+    let (signed, check) = if cfg!(windows) {
+        (
+            format!("cmd /c \"{verify}\""),
+            format!(
+                "$f = \"{file}\"; ((Get-FileHash $f -Algorithm SHA256).Hash + \"  $f\") -in (Get-Content SHA256SUMS)"
+            ),
         )
     } else {
-        "sha256sum --ignore-missing -c SHA256SUMS".to_string()
+        let sum = if cfg!(target_os = "macos") {
+            "shasum -a 256"
+        } else {
+            "sha256sum"
+        };
+        (
+            verify,
+            format!("grep -F \"  {file}\" SHA256SUMS | {sum} -c -"),
+        )
     };
+    let provenance = format!(
+        "gh attestation verify {file} --repo {slug} --signer-workflow \
+         {slug}/.github/workflows/release.yml --source-ref refs/tags/{tag} --deny-self-hosted-runners"
+    );
     let quit = if cfg!(windows) {
         "Quit every app that runs `knowledge mcp` (the Claude desktop app, its tray icon too; Codex; \
          opencode): Windows will not replace a running .exe."
@@ -126,11 +151,15 @@ pub fn run(raw: &[String]) -> Result<u8, Fault> {
     };
     out.push_str(&format!(
         "\n1. Download into an empty folder:\n   {archive}\n   {sums}\n   {sig}\n\
-         2. Verify before extracting (docs/verify.md has each step):\n   {check}\n   \
-         the signature over SHA256SUMS and the build provenance: docs/verify.md\n\
+         2. Verify before extracting (docs/verify.md has each step). Save this line as\n   \
+         allowed_signers beside them: the release key this binary was built with, so the new\n   \
+         release is checked against a key you already trust, not one fetched beside it:\n     \
+         {signers}\n   \
+         {signed}\n   {check}\n   {provenance}\n\
          3. {quit}\n   Then extract knowledge and knowledge-code over the ones in {dir}\n\
          4. knowledge setup --plan, then --apply <id>: the Codex and opencode plugins move to the \
-         new version, and Codex asks for its hook review again\n"
+         new version, and Codex asks for its hook review again\n",
+        signers = SIGNERS.trim()
     ));
     emit(&out);
     Ok(0)
