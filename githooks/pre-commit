@@ -5,7 +5,9 @@
 #   2. gitleaks over the staged files: a commit without the scan is a commit nobody checked
 #      (0012-records-never-committed-unscanned);
 #   3. `knowledge rules check --staged`: each guard's backstop on the staged names, and in the
-#      vault, the staged Hard-Rules against the staged rules.lock (K40).
+#      vault, the staged Hard-Rules against the staged rules.lock (K40);
+#   4. `knowledge code duplicate --staged`, which only warns: a staged symbol the repo already
+#      has, by body or, across `apps/`, by name (spec item 42). It never fails the commit.
 own_dir=$(git config knowledge.ownHooksPath)
 [ -n "$own_dir" ] || own_dir="$(git rev-parse --git-common-dir)/hooks"
 if [ -x "$own_dir/pre-commit" ]; then
@@ -28,4 +30,10 @@ case "$out" in
   "knowledge: usage:"*) echo "pre-commit: the installed knowledge has no \`rules\` verb; commit refused. Run `cargo install --path <skeleton> --locked`, then commit again." >&2 ;;
   *) [ -n "$out" ] && printf '%s\n' "$out" >&2 ;;
 esac
-exit $code
+[ "$code" -eq 0 ] || exit $code
+out=$(knowledge code duplicate --staged 2>&1)
+case "$out" in
+  *"usage: knowledge code index"*"--rebuild]") echo "pre-commit: the installed knowledge-code has no duplicate audit; the commit goes on. Run \`cargo install --path <skeleton> --locked\` for it." >&2 ;;
+  *) [ -n "$out" ] && printf '%s\n' "$out" >&2 ;;
+esac
+exit 0

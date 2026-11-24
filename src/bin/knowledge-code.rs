@@ -9,6 +9,7 @@ use std::process::ExitCode;
 const USAGE: &str = "usage:
   knowledge-code --version
   knowledge-code code index [<repo>|--all] [--rebuild]
+  knowledge-code code duplicate [--staged] [<repo>] [--budget N]
   knowledge-code find <query> --code [--repo <name>] [--limit N] [--budget N]
   knowledge-code graph <symbol> [<other symbol>] --code [--repo <name>] [--budget N]";
 

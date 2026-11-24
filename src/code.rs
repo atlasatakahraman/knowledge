@@ -42,7 +42,9 @@ const MAX_BYTES: u64 = 1 << 20;
 /// tracked file measured 22.6 ms (S8.0).
 const BUDGET: Duration = Duration::from_millis(200);
 /// Bodies shorter than this get no shape: a two-line getter matches a hundred others and says
-/// nothing about copying. A guess to tune against `duplicate`'s fixture (S8.3).
+/// nothing about copying. Measured at S8.3 (2026-11-24): shapes shared by two or more symbols, 7
+/// among TheAtlas's 961, 2 among the skeleton's 671 (one a real copy, `is_log_name`), 0 among
+/// TheAtlas-Queue's 646.
 const MIN_SHAPE_TOKENS: usize = 32;
 const MAX_SIGNATURE: usize = 160;
 
@@ -886,15 +888,264 @@ pub fn run_graph(raw: &[String]) -> Result<u8, Fault> {
     Ok(0)
 }
 
-/// `knowledge code index [<repo>|--all] [--rebuild]`.
+/// Next.js's App Router file conventions: every app defines its own `page.tsx` and `layout.tsx`,
+/// so one name in two apps' convention files is the framework, not a copy. Measured on TheAtlas
+/// (2026-11-24): 7 of the 9 names defined in more than one app were these; the other two,
+/// `AppNav` and `NotFoundView`, are the copies the turborepo rule means.
+const NEXT_FILES: [&str; 10] = [
+    "page",
+    "layout",
+    "template",
+    "loading",
+    "error",
+    "global-error",
+    "not-found",
+    "default",
+    "route",
+    "middleware",
+];
+
+/// A copy listed against more symbols than this says "and N more": six crates' `check!` macros
+/// would otherwise fill the budget with one finding.
+const MAX_MATCHES: usize = 3;
+
+/// The language family a name stays in, as `sync`'s refs do: JS and TS together, Rust and Python
+/// each alone (TheAtlas's Rust `run` and a TSX `run` are not one thing).
+fn family(lang: &str) -> &str {
+    match lang {
+        "rust" | "python" => lang,
+        _ => "js",
+    }
+}
+
+/// The app an `apps/<name>/…` file belongs to, unless it is one of Next.js's convention files.
+fn app_of(path: &str) -> Option<&str> {
+    let app = path.strip_prefix("apps/")?.split('/').next()?;
+    let stem = path.rsplit('/').next()?.split('.').next()?;
+    (!NEXT_FILES.contains(&stem)).then_some(app)
+}
+
+fn git_bytes(root: &Path, args: &[&str]) -> Option<Vec<u8>> {
+    let out = Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args(args)
+        .output()
+        .ok()?;
+    out.status.success().then_some(out.stdout)
+}
+
+/// The definitions in one file's text; none when the parse budget cancels it.
+fn defs_of(g: &mut Grammars, lang: Lang, src: &[u8]) -> Result<Vec<Def>, Fault> {
+    let Some(tree) = g.parse(lang, src)? else {
+        return Ok(Vec::new());
+    };
+    Ok(extract(g.query(lang)?, &tree, src).0)
+}
+
+/// Blobs by revision spec (`HEAD:path`, `:path`), all through one `git cat-file --batch`: a git
+/// spawn costs ~100 ms on the owner's Windows desktop (S8.3), so one per blob would make a commit
+/// of five files wait a second. None for a spec git does not have (a new file at HEAD).
+fn blobs(root: &Path, specs: &[String]) -> Result<Vec<Option<Vec<u8>>>, Fault> {
+    use std::io::Write;
+    use std::process::Stdio;
+    if specs.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut child = Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args(["cat-file", "--batch"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|e| Fault::io(root, e))?;
+    let input = specs.join("\n") + "\n";
+    let mut stdin = child.stdin.take().expect("piped above");
+    // Written from a thread: git answers each line as it reads it, and a full stdout pipe would
+    // stop it reading the rest while this thread still writes.
+    let writer = std::thread::spawn(move || stdin.write_all(input.as_bytes()));
+    let out = child.wait_with_output().map_err(|e| Fault::io(root, e))?;
+    let _ = writer.join();
+    let (mut rest, mut found) = (&out.stdout[..], Vec::with_capacity(specs.len()));
+    for _ in specs {
+        let Some(nl) = rest.iter().position(|b| *b == b'\n') else {
+            break;
+        };
+        let header = String::from_utf8_lossy(&rest[..nl]).into_owned();
+        rest = &rest[nl + 1..];
+        // `<sha> blob <size>`, then the bytes and a newline; or `<spec> missing`.
+        match header
+            .rsplit(' ')
+            .next()
+            .and_then(|s| s.parse::<usize>().ok())
+        {
+            Some(size) if header.contains(" blob ") && rest.len() > size => {
+                found.push(Some(rest[..size].to_vec()));
+                rest = &rest[size + 1..];
+            }
+            _ => found.push(None),
+        }
+    }
+    found.resize(specs.len(), None);
+    Ok(found)
+}
+
+/// The changed files a grammar covers, each with its new text and HEAD's: the index against HEAD
+/// with `staged`, else the working tree against HEAD. A new file's old text is empty.
+type Change = (String, Lang, Vec<u8>, Vec<u8>);
+
+fn changed(root: &Path, staged: bool) -> Result<Vec<Change>, Fault> {
+    let against = if staged { "--cached" } else { "HEAD" };
+    let names = git_bytes(
+        root,
+        &["diff", "--name-only", "-z", "--diff-filter=ACMR", against],
+    )
+    .ok_or_else(|| Fault::Config(format!("{}: git diff failed", root.display())))?;
+    let files: Vec<(String, Lang)> = names
+        .split(|b| *b == 0)
+        .filter(|s| !s.is_empty())
+        .map(|s| String::from_utf8_lossy(s).into_owned())
+        .filter_map(|rel| Lang::of(&rel).map(|l| (rel, l)))
+        .collect();
+    let mut specs: Vec<String> = files.iter().map(|(r, _)| format!("HEAD:{r}")).collect();
+    if staged {
+        specs.extend(files.iter().map(|(r, _)| format!(":{r}")));
+    }
+    let mut got = blobs(root, &specs)?.into_iter();
+    let olds: Vec<Option<Vec<u8>>> = got.by_ref().take(files.len()).collect();
+    let mut out = Vec::new();
+    for ((rel, lang), old) in files.into_iter().zip(olds) {
+        let new = if staged {
+            got.next().flatten()
+        } else {
+            fs::read(root.join(&rel)).ok()
+        };
+        if let Some(new) = new.filter(|t| t.len() as u64 <= MAX_BYTES) {
+            out.push((rel, lang, new, old.unwrap_or_default()));
+        }
+    }
+    Ok(out)
+}
+
+/// `code duplicate [--staged] [<repo>] [--budget N]`: each symbol a change adds or alters whose
+/// body has the same shape as another symbol's, or whose name and kind another app under `apps/`
+/// defines (the turborepo rule). It warns and exits 0: a same-shaped `new()` is often right, and
+/// the rules it backs are agent rules the agent reads at commit time (S8.3, spec item 42).
+fn run_duplicate(raw: &[String]) -> Result<u8, Fault> {
+    let args = Args::parse(raw, &["budget"])?;
+    let staged = args.has("staged");
+    let cfg = config::load()?;
+    let name = match args.words.first() {
+        Some(w) => named(&cfg, w)?,
+        None => match here(&cfg) {
+            Some(h) => h,
+            // The pre-commit hook runs in every repo it guards, and the vault is not a checkout.
+            None if staged => return Ok(0),
+            None => {
+                return Err(Fault::Usage(format!(
+                    "not inside a checkout under {}: name one",
+                    cfg.dev.display()
+                )));
+            }
+        },
+    };
+    let root = cfg.dev.join(&name);
+    let mut conn = open_rw(&cfg, &name)?;
+    sync(&mut conn, &root)?;
+    let mut same = conn.prepare(
+        "SELECT s.name, f.path, s.line, f.lang FROM symbols s JOIN files f ON f.id = s.file
+         WHERE s.shape = ?1 AND NOT (f.path = ?2 AND s.name = ?3) ORDER BY f.path, s.line",
+    )?;
+    let mut alike = conn.prepare(
+        "SELECT f.path, s.line, f.lang FROM symbols s JOIN files f ON f.id = s.file
+         WHERE s.name = ?1 AND s.kind = ?2 AND f.path LIKE 'apps/%' ORDER BY f.path, s.line",
+    )?;
+    let mut g = Grammars::new();
+    let mut found = Vec::new();
+    for (rel, lang, new, old) in changed(&root, staged)? {
+        let before: HashSet<(String, String, Option<String>)> = defs_of(&mut g, lang, &old)?
+            .into_iter()
+            .map(|d| (d.name, d.kind, d.shape))
+            .collect();
+        let fam = family(lang.name());
+        let app = app_of(&rel);
+        for d in defs_of(&mut g, lang, &new)? {
+            if before.contains(&(d.name.clone(), d.kind.clone(), d.shape.clone())) {
+                continue;
+            }
+            let at = format!("{rel}:{} {} {}", d.line, d.kind, d.name);
+            let mut copies = Vec::new();
+            if let Some(shape) = &d.shape {
+                for row in same.query_map(params![shape, rel, d.name], |r| {
+                    Ok((
+                        r.get::<_, String>(0)?,
+                        r.get::<_, String>(1)?,
+                        r.get::<_, i64>(2)?,
+                        r.get::<_, String>(3)?,
+                    ))
+                })? {
+                    let (n, p, l, lg) = row?;
+                    if family(&lg) == fam {
+                        copies.push(format!("the same body as {p}:{l} {n}"));
+                    }
+                }
+            }
+            if let Some(a) = app {
+                for row in alike.query_map(params![d.name, d.kind], |r| {
+                    Ok((
+                        r.get::<_, String>(0)?,
+                        r.get::<_, i64>(1)?,
+                        r.get::<_, String>(2)?,
+                    ))
+                })? {
+                    let (p, l, lg) = row?;
+                    if family(&lg) == fam
+                        && let Some(b) = app_of(&p).filter(|b| *b != a)
+                    {
+                        copies.push(format!("also in apps/{b}: {p}:{l}"));
+                    }
+                }
+            }
+            let more = copies.len().saturating_sub(MAX_MATCHES);
+            for c in copies.into_iter().take(MAX_MATCHES) {
+                found.push(format!("duplicate: {at}: {c}"));
+            }
+            if more > 0 {
+                found.push(format!("duplicate: {at}: and {more} more"));
+            }
+        }
+    }
+    if found.is_empty() {
+        return Ok(0);
+    }
+    let mut out = Out::new(&args)?;
+    out.line(
+        "duplicate: a warning, not a block. Each line is a symbol this change adds that the repo \
+         already has: reuse the one that exists, or move both to one shared place.",
+    );
+    for f in &found {
+        out.line(f);
+    }
+    emit(&out.finish());
+    Ok(0)
+}
+
+/// `knowledge code index [<repo>|--all] [--rebuild]` and `code duplicate`.
 pub fn run(raw: &[String]) -> Result<u8, Fault> {
     let (sub, rest) = raw
         .split_first()
         .map_or(("", &[][..]), |(v, r)| (v.as_str(), r));
-    if sub != "index" {
-        return Err(Fault::Usage(
-            "usage: knowledge code index [<repo>|--all] [--rebuild]".to_string(),
-        ));
+    match sub {
+        "index" => {}
+        "duplicate" => return run_duplicate(rest),
+        _ => {
+            return Err(Fault::Usage(
+                "usage: knowledge code index [<repo>|--all] [--rebuild] | code duplicate [--staged] [<repo>] [--budget N]"
+                    .to_string(),
+            ));
+        }
     }
     let args = Args::parse(rest, &[])?;
     let cfg = config::load()?;

@@ -115,6 +115,59 @@ check "mcp: graph with code lists the uses" 'mcp "$(call graph "{\"note\":\"delt
 check "mcp: a path for repo is an error, not a read" 'mcp "$(call find "{\"q\":\"beta\",\"code\":true,\"repo\":\"../fixture\"}")" | grep -q "\"isError\":true"'
 check "mcp: repo without code is refused" 'mcp "$(call graph "{\"note\":\"x\",\"repo\":\"fixture\"}")" | grep -q "repo: only with code"'
 
+# --- S8.3: the duplicate audit ------------------------------------------------------------------
+# Committed: a body long enough to have a shape, a component in one app, and that app's Next.js
+# page. Then staged: the body under a new name, the component in a second app, the second app's
+# page, and an unrelated new function. Only the first two are copies.
+mkdir -p "$FIX/apps/one/src/app" "$FIX/apps/two/src/app"
+cat > "$FIX/src/sum.rs" <<'EOF'
+pub fn total(xs: &[u32]) -> u32 {
+    let mut t = 0;
+    for x in xs {
+        if *x > 10 {
+            t += x * 2;
+        } else {
+            t += x + 1;
+        }
+    }
+    t
+}
+EOF
+printf 'export function AppNav() {\n  return <nav>one</nav>;\n}\n' > "$FIX/apps/one/src/nav.tsx"
+printf 'export default function Page() {\n  return <main>one</main>;\n}\n' > "$FIX/apps/one/src/app/page.tsx"
+g add -A && g commit -q -m s8.3-base
+sed 's/fn total/fn grand_total/' "$FIX/src/sum.rs" > "$FIX/src/copy.rs"
+printf 'export function AppNav() {\n  return <nav>two</nav>;\n}\n' > "$FIX/apps/two/src/nav.tsx"
+printf 'export default function Page() {\n  return <main>two</main>;\n}\n' > "$FIX/apps/two/src/app/page.tsx"
+printf 'pub fn fresh() -> u32 {\n    7\n}\n' > "$FIX/src/fresh.rs"
+g add -A
+out=$(cd "$FIX" && k code duplicate --staged)
+check "duplicate: a copy under a new name is listed" 'echo "$out" | grep -qx "duplicate: src/copy.rs:1 function grand_total: the same body as src/sum.rs:1 total"'
+check "duplicate: a same-name component in a sibling app is listed" 'echo "$out" | grep -qx "duplicate: apps/two/src/nav.tsx:1 function AppNav: also in apps/one: apps/one/src/nav.tsx:1"'
+check "duplicate: a Next.js convention file in a sibling app is not" '! echo "$out" | grep -q "Page"'
+check "duplicate: an unrelated new function is not" '! echo "$out" | grep -q "fresh"'
+check "duplicate: exactly the two findings, under one heading" '[ "$(echo "$out" | grep -c "^duplicate: ")" = 3 ]'
+if command -v gitleaks >/dev/null 2>&1; then
+  # The real hook, with this build first on PATH and a HOME of its own: its `rules check` reads
+  # the instructions files under HOME, and the owner's are not this check's to read.
+  ROOT=$(cd "$(dirname "$0")/.." && pwd)
+  mkdir -p "$TMP/bin" "$TMP/user"
+  for b in knowledge knowledge-code; do
+    src="$(dirname "$BIN")/$b"; [ -f "$src.exe" ] && src="$src.exe"
+    cp "$src" "$TMP/bin/"
+  done
+  rm -rf "$TMP/vault" && cp -R "$ROOT/template" "$TMP/vault"
+  hooked=$(HOME="$TMP/user" USERPROFILE="$TMP/user" PATH="$TMP/bin:$PATH" \
+    git -C "$FIX" -c user.name=check -c user.email=check@example.invalid \
+      -c core.hooksPath="$(native "$ROOT/githooks")" commit -q -m s8.3 2>&1)
+  check "duplicate: the commit goes through the hook" '[ "$(g log -1 --format=%s)" = s8.3 ]'
+  check "duplicate: and the hook shows the warning" 'echo "$hooked" | grep -q "^duplicate: src/copy.rs:1"'
+else
+  echo "SKIP  duplicate through the pre-commit hook: gitleaks not on PATH"
+  g commit -q -m s8.3
+fi
+check "duplicate: what HEAD already has is not listed again" '[ -z "$(cd "$FIX" && k code duplicate)" ]'
+
 rm -rf "$TMP"
 echo "$fails failed"
 [ "$fails" -eq 0 ]

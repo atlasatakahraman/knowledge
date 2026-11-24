@@ -23,6 +23,7 @@ const USAGE: &str = "usage:
   knowledge find <query> --code [--repo <name>] [--limit N] [--budget N]   (run by knowledge-code)
   knowledge graph <symbol> [<other symbol>] --code [--repo <name>] [--budget N]   (the same)
   knowledge code index [<repo>|--all] [--rebuild]   (the same)
+  knowledge code duplicate [--staged] [<repo>] [--budget N]   (the same)
   knowledge note decision <text> [--question <q>] [--promoted <path>] | note log <text>
   knowledge config [<key>]
   knowledge rules list [--json] | kernel | check [--staged] [--restore] | lock [--seed <file>]
