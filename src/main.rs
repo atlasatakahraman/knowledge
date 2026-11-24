@@ -4,7 +4,7 @@
 
 use knowledge::{
     Fault, capture, compile, config, doctor, emit, events, fetch, graph, hook, hubs, index, ledger,
-    mcp, memory, note, recorder, records, report, rules, search, setup, usage,
+    mcp, memory, note, recorder, records, report, rules, search, setup, update, usage,
 };
 use std::process::{Command, ExitCode};
 
@@ -38,6 +38,7 @@ const USAGE: &str = "usage:
                          [--signing] [--skeleton <checkout>]
   knowledge setup --apply <id> [the same options] | --remove --plan | --remove --apply <id>
   knowledge setup --harness claude|codex|opencode|claude-desktop|generic ...   (one harness alone)
+  knowledge update --plan   (the latest release and the steps to take; downloads nothing)
   knowledge flush <session-id> [<cwd>] [--transcript <file>] [--date <YYYY-MM-DD>] [--dry-run [--from-start]]
   knowledge compile [--force] [--dry-run]
   knowledge post-bash [--backfill <since>] [--dry-run]
@@ -113,6 +114,7 @@ fn main() -> ExitCode {
         "usage" => usage::run(rest),
         "hubs" => hubs::run(rest),
         "setup" => setup::run(rest),
+        "update" => update::run(rest),
         "mcp" => mcp::run(rest),
         _ => Err(Fault::Usage(USAGE.to_string())),
     })

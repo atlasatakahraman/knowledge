@@ -219,6 +219,16 @@ fn text_of(content_type: &str, body: &[u8]) -> Result<String, Fault> {
 
 /// GET with the checks above. Returns the final URL, its content type and the body.
 pub fn get(url: &str, allow_private: bool) -> Result<(String, String, Vec<u8>), Fault> {
+    let (status, uri, ct, body) = request(url, allow_private)?;
+    if !(200..300).contains(&status) {
+        return Err(Fault::Net(format!("{uri}: HTTP {status}")));
+    }
+    Ok((uri, ct, body))
+}
+
+/// `get` with any final status returned rather than refused, for a caller that reads a 404 as an
+/// answer (`update --plan`: no release yet). Redirects are still followed and checked.
+pub fn request(url: &str, allow_private: bool) -> Result<(u16, String, String, Vec<u8>), Fault> {
     let start = Instant::now();
     let lower = url.to_ascii_lowercase();
     if !lower.starts_with("http://") && !lower.starts_with("https://") {
@@ -244,9 +254,6 @@ pub fn get(url: &str, allow_private: bool) -> Result<(String, String, Vec<u8>), 
             uri = join(&uri, loc)?;
             continue;
         }
-        if !status.is_success() {
-            return Err(Fault::Net(format!("{uri}: HTTP {}", status.as_u16())));
-        }
         let ct = resp
             .headers()
             .get("content-type")
@@ -259,7 +266,7 @@ pub fn get(url: &str, allow_private: bool) -> Result<(String, String, Vec<u8>), 
             .limit(MAX_BODY)
             .read_to_vec()
             .map_err(|e| Fault::Net(format!("{uri}: {e}")))?;
-        return Ok((uri.to_string(), ct, body));
+        return Ok((status.as_u16(), uri.to_string(), ct, body));
     }
     Err(Fault::Net(format!(
         "{url}: more than {MAX_REDIRECTS} redirects"

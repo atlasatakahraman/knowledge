@@ -33,6 +33,7 @@ pub mod search;
 pub mod session;
 pub mod setup;
 pub mod state;
+pub mod update;
 pub mod usage;
 pub mod vault;
 #[cfg(windows)]
