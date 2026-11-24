@@ -9,7 +9,7 @@
 //!
 //! Every failure of this system so far was SILENT; each check exists because of one. A `fail` check
 //! makes the report FAIL, a `warn` check is reported and does not. `--repair` runs only what is safe
-//! to run twice and cannot lose data (spec D9): commit notes, hubs, the index, the repo-graph merge.
+//! to run twice and cannot lose data (spec D9): commit notes, hubs, the index.
 //! It never edits, moves or deletes a note. The session start runs `--repair --record` detached,
 //! once per logical day (spec item 28). The checks run on their own threads: most of their time is
 //! child processes and file reads, and none depends on another.
@@ -506,27 +506,9 @@ fn check_reach(cfg: &Config, v: &Vault) -> Check {
     )
 }
 
-/// Stale ignore paths broke Obsidian (33 GB indexable) and shrank the graph, both silently.
+/// Stale ignore paths broke Obsidian (33 GB indexable), silently.
 fn check_ignores(cfg: &Config) -> Check {
     let mut stale = Vec::new();
-    if let Ok(text) = fs::read_to_string(cfg.vault.join(".graphifyignore")) {
-        for raw in text.split('\n') {
-            let line = raw.trim();
-            if line.is_empty() || line.starts_with('#') {
-                continue;
-            }
-            let fixed = line
-                .strip_prefix('!')
-                .unwrap_or(line)
-                .split('*')
-                .next()
-                .unwrap_or("")
-                .trim_end_matches('/');
-            if !fixed.is_empty() && !cfg.vault.join(fixed).exists() {
-                stale.push(format!(".graphifyignore: {line}"));
-            }
-        }
-    }
     if let Ok(v) = serde_json::from_str::<serde_json::Value>(&state::read(
         &cfg.vault.join(".obsidian").join("app.json"),
     )) && let Some(filters) = v["userIgnoreFilters"].as_array()
@@ -879,7 +861,6 @@ fn check_hygiene(cfg: &Config) -> Check {
             ".obsidian/".to_string(),
             format!("{OPS}/"),
             format!("{SESSIONS}/"),
-            "graphify-out/".into(),
         ];
         uncommitted = st
             .stdout
@@ -1002,59 +983,13 @@ fn run_checks(cfg: &Config, only: &Option<HashSet<String>>) -> Vec<Check> {
 
 // ---- repair (derived artifacts only) -------------------------------------------------------------
 
-/// The served graph: the repo graphs merged into the vault's graphify-out/merged-graph.json, what
-/// .mcp.json serves. A repo with no graphify-out yet is absent from the merge.
-fn rebuild_graph(cfg: &Config) -> Result<(), String> {
-    let mut graphs: Vec<PathBuf> = fs::read_dir(&cfg.dev)
-        .map_err(|e| e.to_string())?
-        .flatten()
-        .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))
-        .map(|e| e.path().join("graphify-out").join("graph.json"))
-        .filter(|p| p.exists())
-        .collect();
-    graphs.sort();
-    let merged = cfg.vault.join("graphify-out").join("merged-graph.json");
-    if let Some(dir) = merged.parent() {
-        fs::create_dir_all(dir).map_err(|e| e.to_string())?;
-    }
-    match graphs.len() {
-        0 => fs::write(
-            &merged,
-            r#"{"directed":false,"multigraph":false,"graph":{},"nodes":[],"links":[]}"#,
-        )
-        .map_err(|e| e.to_string()),
-        1 => fs::copy(&graphs[0], &merged)
-            .map(|_| ())
-            .map_err(|e| e.to_string()),
-        _ => {
-            let mut args = vec!["merge-graphs".to_string()];
-            args.extend(graphs.iter().map(|g| state::native(g)));
-            args.extend(["--out".into(), state::native(&merged)]);
-            let refs: Vec<&str> = args.iter().map(String::as_str).collect();
-            let o = state::run(
-                Path::new("graphify"),
-                &refs,
-                Some(&cfg.vault),
-                None,
-                &[],
-                Duration::from_secs(600),
-            );
-            if o.ok() {
-                Ok(())
-            } else {
-                Err(format!("Command failed: graphify {}", refs.join(" ")))
-            }
-        }
-    }
-}
-
 /// One repair step: it runs, and says why when it fails.
 type Repair<'a> = Box<dyn Fn() -> Result<(), String> + 'a>;
 
 fn run_repairs(cfg: &Config) -> Vec<J> {
     // checkCommits' window, as a UTC date.
     let since = state::iso(state::now_ms() - 3 * 86_400_000)[..10].to_string();
-    let steps: [(&str, Repair<'_>); 4] = [
+    let steps: [(&str, Repair<'_>); 3] = [
         // Commits made outside a Claude Bash call get no PostToolUse note: recorded here, before
         // the reindex, so the new notes are indexed.
         (
@@ -1078,7 +1013,6 @@ fn run_repairs(cfg: &Config) -> Vec<J> {
                     .map_err(|e| e.to_string())
             }),
         ),
-        ("graph", Box::new(|| rebuild_graph(cfg))),
     ];
     steps
         .iter()

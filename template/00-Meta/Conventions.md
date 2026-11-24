@@ -39,7 +39,7 @@ replaced it.
 - **Files:** kebab-case. `retry-backoff.md`, not `Retry Backoff.md`. A repo's folder note takes its
   remote's exact casing (`My-App.md`).
 - **MOCs:** `00-MOC-<Scope>.md`, one per folder. Always sorts first.
-- **Every basename is unique across the vault.** Obsidian and graphify resolve `[[name]]` by
+- **Every basename is unique across the vault.** Obsidian and `knowledge` resolve `[[name]]` by
   filename, so two notes with one name make every link to either ambiguous. That is why there is no
   `about.md`, `plan.md` or `index.md` anywhere.
 - **Folder notes:** a folder's main note is `<Folder>/<Folder>.md` (`10-Repos/My-App/My-App.md`,
@@ -59,7 +59,7 @@ replaced it.
 
 ## Links
 
-**Wikilinks for every cross-reference:** `[[note-name]]`. Obsidian and graphify both traverse them;
+**Wikilinks for every cross-reference:** `[[note-name]]`. Obsidian and `knowledge graph` both traverse them;
 a markdown path link is invisible to the graph.
 
 Link liberally. A `[[link]]` to a note that doesn't exist yet is not an error, it marks something
@@ -109,13 +109,14 @@ links to them.
 
 ## Renaming a repository
 
-Path-based ignores go stale on a rename, silently: Obsidian's `userIgnoreFilters` and
-`.graphifyignore` just stop matching, and a graph shrinks with no error. After renaming a repo:
+Path-based ignores go stale on a rename, silently: Obsidian's `userIgnoreFilters` just stops
+matching (the doctor's `ignores` check names a stale one). After renaming a repo:
 
 1. Rename its `10-Repos/<Remote-Name>/` folder and folder note, and `60-Decisions/Repos/<Remote-Name>/`,
    to the remote's exact casing; update the `checkout:` pointer (`brain-verify` fails on a dead one).
-2. `bun --bun ~/.claude/hooks/brain-graph.mjs --force` and compare the node count. `--force` is
-   needed because graphify refuses to shrink a graph without it.
+2. The code map is kept per checkout folder (`code/<Remote-Name>.db` in the knowledge home): the
+   first `knowledge find <symbol> --code` under the new name builds its map. Delete the old name's
+   file.
 
 On a case-insensitive filesystem a stale lowercase path resolves to the renamed folder and appears
 to work. A wrong-but-working link is worse than a broken one.

@@ -13,7 +13,6 @@
 // It never deletes: a real ~/.claude/hooks directory or a file where a link belongs moves to
 // ~/.claude/.pre-skeleton-<stamp>/<same path>, and settings.json before a change is kept beside
 // the original as `settings.json.pre-skeleton-<stamp>`.
-// It installs graphify when missing and never updates it: updates are opt-in.
 import { cpSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { homedir } from "node:os";
@@ -91,7 +90,6 @@ if (process.env.CLAUDE_CONFIG_DIR) die("CLAUDE_CONFIG_DIR is set; the hooks read
 
 const PREREQS: Record<string, { linux: string; windows: string }> = {
   git: { linux: "your package manager (pacman -S git, apt install git)", windows: "winget install Git.Git" },
-  uv: { linux: "curl -LsSf https://astral.sh/uv/install.sh | sh", windows: 'powershell -c "irm https://astral.sh/uv/install.ps1 | iex"' },
   claude: { linux: "curl -fsSL https://claude.ai/install.sh | bash", windows: "irm https://claude.ai/install.ps1 | iex" },
   // syncRecords commits nothing without it: records push on their own, never unscanned.
   gitleaks: { linux: "your package manager (pacman -S gitleaks, brew install gitleaks)", windows: "winget install Gitleaks.Gitleaks" },
@@ -420,25 +418,10 @@ else {
   }
 }
 
-// ---- 9. graphify (MIT) ---------------------------------------------------------------------------
+// ---- 9. first index: brain-doctor, then --repair if it fails ------------------------------------
 
-// graphify-mcp imports the `mcp` package, which only the [mcp] extra brings: without it the server
-// dies on import and Claude Code lists it as failed, while every doctor check passes (Stage 4 check).
-const GRAPHIFY = "graphifyy[mcp]";
-const graphifyVersion = () => sh(Bun.which("graphify")!, ["--version"]).out.split("\n")[0];
-if (Bun.which("graphify") && Bun.which("graphify-mcp")) line("ok", "graphify", graphifyVersion());
-else if (dry) line("would", "graphify", `uv tool install "${GRAPHIFY}"`);
-else {
-  const r = sh(bin.uv, ["tool", "install", GRAPHIFY]);
-  if (!r.ok) line("FAIL", "graphify", `uv tool install "${GRAPHIFY}": ${r.err.split("\n").at(-1)}`);
-  else if (!Bun.which("graphify")) die("graphify installed but is not on PATH: run `uv tool update-shell`, open a new shell, rerun");
-  else line("set", "graphify", `installed ${graphifyVersion()}`);
-}
-
-// ---- 10. first index and graph: brain-doctor, then --repair if it fails --------------------------
-
-// The repair records commits made outside Claude (the template's first commit), regenerates the hubs,
-// indexes the vault and builds the graph. All derived; safe to run again.
+// The repair records commits made outside Claude (the template's first commit), regenerates the hubs
+// and indexes the vault. All derived; safe to run again.
 let report: any = null;
 const doctor = (...a: string[]) => {
   const r = sh(process.execPath, ["--bun", join(HOOKS, "brain-doctor.mjs"), ...a], VAULT);
@@ -454,44 +437,32 @@ else {
   const r = sh(KNOWLEDGE, ["index"]);
   line(!r.ok ? "FAIL" : / 0 added, 0 updated, 0 removed/.test(r.out) ? "ok" : "set", "vault index", r.ok ? r.out : r.err.split("\n").at(-1));
 }
-if (dry) line("would", "first index", "brain-doctor --repair: commit notes, hubs, vault index, repo graphs");
+if (dry) line("would", "first index", "brain-doctor --repair: commit notes, hubs, vault index");
 else if (failed) line("skip", "first index", "a step above failed");
-else if ((report = doctor())?.ok) line("ok", "first index", "index and graph are current");
+else if ((report = doctor())?.ok) line("ok", "first index", "the index is current");
 else if (report && (report = doctor("--repair"))) {
   const bad = report.repairs.filter((s: any) => !s.ok);
   line(bad.length ? "FAIL" : "set", "first index", bad.length ? bad.map((s: any) => `${s.step}: ${s.error}`).join("; ") : report.repairs.map((s: any) => s.step).join(", "));
 }
 
-// ---- 11. graphify MCP, local scope: only sessions in the vault see it ----------------------------
+// ---- 10. graphify MCP: retired ------------------------------------------------------------------
 
+// The code map replaced graphify (Stage 8, S8.5). The server an earlier install registered serves
+// the vault's merged graph, and comes out; a graphify server of the owner's own stays.
 {
-  const which = Bun.which("graphify-mcp");
-  const mcp = which && resolve(which);
   const graph = join(VAULT, "graphify-out", "merged-graph.json");
   const projects = readJson(join(homedir(), ".claude.json"))?.projects ?? {};
   const current = (projects[VAULT] ?? projects[fwd(VAULT)])?.mcpServers?.graphify;
-  let ok = false;
-  if (current && mcp && same(current.command, mcp) && resolve(current.args?.[0] ?? "") === graph) {
-    line("ok", "graphify MCP", `local scope, ${fwd(graph)}`);
-    ok = true;
-  } else if (dry) line("would", "graphify MCP", `claude mcp add --scope local graphify -- graphify-mcp ${fwd(graph)}`);
-  else if (!mcp) line("FAIL", "graphify MCP", "graphify-mcp is not on PATH");
-  else {
-    if (current) sh(bin.claude, ["mcp", "remove", "--scope", "local", "graphify"], VAULT);
-    const r = sh(bin.claude, ["mcp", "add", "--scope", "local", "graphify", "--", mcp, graph], VAULT);
-    line(r.ok ? "set" : "FAIL", "graphify MCP", r.ok ? `local scope, ${fwd(graph)}` : r.err.split("\n").at(-1));
-    ok = r.ok;
-  }
-  // A registered server that cannot start is invisible to brain-doctor: ask it to initialize.
-  if (ok && existsSync(graph)) {
-    const init = { jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "install.ts", version: PKG.version } } };
-    const r = spawnSync(mcp!, [graph], { input: `${JSON.stringify(init)}\n`, encoding: "utf8", timeout: 60_000, windowsHide: true });
-    if (/"serverInfo"/.test(r.stdout || "")) line("ok", "graphify MCP", "answers initialize");
-    else line("FAIL", "graphify MCP", `does not start (${(r.stderr || r.error?.message || "no answer").trim().split("\n").at(-1)}). Fix: uv tool install --reinstall "${GRAPHIFY}"`);
+  const ours = current && resolve(current.args?.[0] ?? "") === graph;
+  if (current && !ours) line("ok", "graphify MCP", "a graphify server not set by install: left as it is");
+  else if (ours && dry) line("would", "graphify MCP", "claude mcp remove --scope local graphify");
+  else if (ours) {
+    const r = sh(bin.claude, ["mcp", "remove", "--scope", "local", "graphify"], VAULT);
+    line(r.ok ? "set" : "FAIL", "graphify MCP", r.ok ? "removed" : r.err.split("\n").at(-1));
   }
 }
 
-// ---- 12. verdict ---------------------------------------------------------------------------------
+// ---- 11. verdict ---------------------------------------------------------------------------------
 
 if (report) {
   console.log(`\nbrain-doctor  ${report.ok ? "PASS" : "FAIL"}`);

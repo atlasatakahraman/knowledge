@@ -741,8 +741,8 @@ pub fn hook(dry: bool, instructions: Option<(&str, Form)>) -> Option<String> {
         String::new(),
         format!("The vault is notes only - the checkouts moved to {} on 2026-09-06.", state::native(&cfg.dev.join("<remote-name>"))),
         format!("Do NOT sweep {dev} blind: that is where node_modules and target/ live. Repo docs are indexed"),
-        format!("per repo ({kbin} find \"<q>\" --repo [<name>]) and reachable through"),
-        "the merged graph of repo graphs, so a blind sweep is the wrong tool there too.".into(),
+        format!("per repo ({kbin} find \"<q>\" --repo [<name>]) and their code is in the code map"),
+        format!("({kbin} find <symbol> --code, graph <symbol> --code), so a blind sweep is the wrong tool there too."),
     ]);
     Some(ctx.join("\n"))
 }

@@ -1,5 +1,5 @@
 ---
-description: Refresh the brain - re-index, merge repo graphs, verify links
+description: Refresh the brain - re-index the vault and repo docs, verify links
 ---
 
 Bring the brain's indexes back in step with what is on disk. The vault and checkout roots come from this machine's config:
@@ -16,17 +16,15 @@ Then run in order:
 knowledge index && knowledge index --check
 ```
 
-2. **Rebuild any repo graph you have touched, then re-merge.** The checkouts live at
-   `$DEV/<remote-name>/` ([[0012-repos-leave-the-vault-index-stays]]) and each
-   carries its own `graphify-out/`, built on demand. The vault is not in graphify: its links are
-   `knowledge graph`'s.
+2. **The code map needs no step.** Each checkout's map (`$DEV/<remote-name>/`,
+   [[0012-repos-leave-the-vault-index-stays]]) is brought level with its tracked files by every
+   `knowledge find <symbol> --code` and `graph <symbol> --code` before it answers. To level them
+   all now, or to rebuild one from nothing:
 
 ```bash
-cd "$DEV/<Repo>" && graphify update .
-bun --bun "$SK/hooks/brain-graph.mjs"
+knowledge code index --all
+knowledge code index <Repo> --rebuild
 ```
-
-**`merged-graph.json` is what the graphify MCP serves.** It is the repo graphs only.
 
 3. **Re-index a repo's docs** (`docs/**`, `CLAUDE.md`, `README.md`) for `knowledge find --repo`;
    the post-edit hook keeps them current, so this is for a checkout changed outside a session:
@@ -55,7 +53,3 @@ these"** section — not in the script. Add a link there to silence it, with the
 
 5. Report only what changed: notes reindexed and any newly broken links. (`knowledge index` drops
    rows for files that are gone, so there is no prune step.)
-
-**Do not run `/graphify . --update`** unless the user explicitly asks — that is the semantic pass
-over docs and images, it dispatches subagents, and it costs real tokens. `graphify update .` is
-the routine one.

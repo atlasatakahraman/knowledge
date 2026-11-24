@@ -17,7 +17,7 @@ Router for writing to the second brain. Its path is `vault` in the machine's con
 
 1. Read `00-Meta/Conventions.md` — frontmatter schema, naming, where things live.
 2. Read `00-Meta/Hard-Rules.md` if the change touches code, deps, components, or licensing.
-3. Check the target doesn't already exist: `knowledge find "<q>"`, or `graphify query`.
+3. Check the target doesn't already exist: `knowledge find "<q>"`.
 
 **Never duplicate a repo's own docs into the vault.** A repo's `docs/` *is* its documentation;
 vault pages link inward.
@@ -45,5 +45,5 @@ If the kind is ambiguous, ask — do not guess between `docs` and `repo`.
 - Frontmatter on every note. `type` and `created` required; `updated` on every edit.
 - Wikilinks `[[name]]` for cross-references. A markdown path link is invisible to the graph.
 - Link the new note from its folder MOC, or it is unreachable at retrieval tier 1.
-- After a batch of changes, `bun --bun "$(knowledge config skeleton)/hooks/brain-graph.mjs"` in the vault — free, AST only; not a bare `graphify update .`, which drops cross-folder links.
+- After a batch of changes, `knowledge index --check`: the post-edit hook reindexes each note, and this confirms the index `knowledge find` and `knowledge graph` read is level.
 - Commit the way `00-Meta/Hard-Rules.md` says to branch and commit.

@@ -438,8 +438,8 @@ try {
     "",
     `The vault is notes only - the checkouts moved to ${join(DEV_ROOT, "<remote-name>")} on 2026-09-06.`,
     `Do NOT sweep ${DEV_ROOT} blind: that is where node_modules and target/ live. Repo docs are indexed`,
-    `per repo (${kbin} find "<q>" --repo [<name>]) and reachable through`,
-    "the merged graph of repo graphs, so a blind sweep is the wrong tool there too.",
+    `per repo (${kbin} find "<q>" --repo [<name>]) and their code is in the code map`,
+    `(${kbin} find <symbol> --code, graph <symbol> --code), so a blind sweep is the wrong tool there too.`,
   ].join("\n");
 
   process.stdout.write(

@@ -20,7 +20,7 @@ there in two hops, the vault has a gap.
    `retrieval` check runs them every day.
 4. Choose a licence for the notes, if they will ever be shared, and add it as `LICENSE.md`.
 
-Installing the engine itself (hooks, config, graphify) is the knowledge-skeleton's
+Installing the engine itself (hooks, config, the binary) is the knowledge-skeleton's
 `INSTALL.md`.
 
 ## Layout
@@ -36,7 +36,6 @@ Installing the engine itself (hooks, config, graphify) is the knowledge-skeleton
 | [`60-Decisions/`](60-Decisions/) | ADRs: `Repos/<Remote-Name>/` per repo, `Identity/` for the vault, hooks and agent | you; `brain-compile` |
 | [`80-Assets/`](80-Assets/) | Attachments: pasted images, diagrams, brand masters | you |
 | [`90-Inbox/`](90-Inbox/) | Unsorted capture, kept empty | you |
-| `graphify-out/` | The repo graphs, merged for the graphify MCP (gitignored) | `brain-graph`, `knowledge doctor --repair` |
 | `00-MOC-Sessions`, `00-MOC-Plans`, `00-MOC-Ops` | Generated hubs. Never edit by hand | `knowledge hubs` |
 
 Every hook, its event and its cost: [Hook-Lifecycle](00-Meta/Hook-Lifecycle.md).
@@ -75,16 +74,13 @@ Every hook, its event and its cost: [Hook-Lifecycle](00-Meta/Hook-Lifecycle.md).
 | `/brain-log` | Write or append today's session note | the session's tokens |
 | `/brain-usage` | This month's token/cost digest into `50-Ops/Usage/` | free |
 | `/brain-commits` | Run the commit recorder over the whole month | free |
-| `/brain-sync` | Re-index, merge the repo graphs, prune phantom rows, verify links | free |
+| `/brain-sync` | Re-index the vault and the repo docs, verify links | free |
 | `knowledge doctor --pretty` | The health check | free |
 | `knowledge doctor --repair --record --pretty` | The daily sweep: rebuild derived artifacts, check, record a line in `50-Ops/Health/` | free |
 | `knowledge find <words>` | Search the vault: ranked notes, each with its best passage | free |
 | `knowledge graph <note> [<note>]` | A note's links in and out, or the path between two notes | free |
-| `bun --bun ~/.claude/hooks/brain-graph.mjs` | Merge the repo graphs into the served graph | free |
-| `graphify query "<q>" --budget 1500` | Ask the repo graphs how code connects | free |
-
-`/graphify . --update` is the semantic pass and **costs tokens**. It is a deliberate act, not
-maintenance.
+| `knowledge find <symbol> --code` | Where a symbol in the checkouts' code is defined, with its signature | free |
+| `knowledge graph <symbol> [<symbol>] --code` | What uses a symbol and what it uses, or the path between two | free |
 
 ## Troubleshooting
 
@@ -107,4 +103,4 @@ maintenance.
 | `knowledge doctor` FAIL in `reach` | A note more than 2 hops from the root MOC (a record, 3) | Link it from its folder's MOC |
 | `knowledge doctor` FAIL in `commits` | A commit from the last 3 days has no note | `knowledge post-bash --backfill <date>` |
 | `knowledge doctor` FAIL in `skeleton-version` | `~/.claude/hooks`, the skill or a command does not point into one knowledge-skeleton checkout, or `.skeleton.json` pins another version | Run `knowledge setup --plan`, then `--apply` its id (or step 4 of the skeleton's `INSTALL.md`); for the pin, the two `!! SKELETON` rows above |
-| The graph shrank | A rename or an ignore rule dropped files | [Conventions](00-Meta/Conventions.md) § Renaming; `brain-graph.mjs --force` |
+| `find --code` misses a repo after a rename | The code map is kept per checkout folder | [Conventions](00-Meta/Conventions.md) § Renaming a repository |

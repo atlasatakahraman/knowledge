@@ -1,15 +1,16 @@
 //! `knowledge setup`: the engine on this machine, planned before anything is written (Stage 6; it
 //! replaces install.ts after the Arch pass). The targets: the vault (new from template/, or
 //! adopted), config.json, the links into ~/.claude, the Claude plugin that carries the hooks (and
-//! its `knowledge_bin` option in ~/.claude/settings.json), the CLAUDE.md imports, the githooks path of every clone, the compile state, the graphify MCP entry,
-//! and with --signing this boot's signing key.
+//! its `knowledge_bin` option in ~/.claude/settings.json), the CLAUDE.md imports, the githooks path of every clone, the compile state,
+//! and with --signing this boot's signing key. The graphify MCP entry that setup wrote before
+//! Stage 8 is planned for removal (S8.5: the code map replaced it); one the owner added stays.
 //!
 //! `--plan` writes nothing. Its last line is the plan id: a hash of every line and of what each
 //! target holds now, so `--apply <id>` recomputes the plan and refuses when anything moved in
 //! between. Nothing is deleted: a real file where a link belongs moves to ~/.claude/.pre-skeleton/,
 //! and settings.json is copied beside itself before a change. `--remove` never touches the vault.
 //! `--harness codex` (S7.4) adds Codex beside Claude Code: its plugin, its AGENTS.md block, the
-//! `knowledge mcp` retrieval server and the graphify server, from the config.json the Claude setup wrote. It never writes hook trust.
+//! `knowledge mcp` retrieval server, from the config.json the Claude setup wrote. It never writes hook trust.
 //! `--harness opencode` (S7.5): its plugin file, compiled into this binary, and its AGENTS.md block.
 //! `--harness generic --instructions <file>` (S7.6): the inline block in any file a harness reads.
 //! Nothing restores it at session start (a generic harness has no hooks): plan again to check it.
@@ -37,9 +38,6 @@ const USAGE: &str = "usage:
   knowledge setup --harness generic --instructions <file> [--remove] --plan | --apply <id>";
 
 const GIT: Duration = Duration::from_secs(20);
-/// graphify-mcp imports `mcp`, which only the [mcp] extra brings: without it the server dies on
-/// import and Claude Code lists it as failed (install.ts, Stage 4).
-const GRAPHIFY: &str = "graphifyy[mcp]";
 
 /// One write. A step holds the writes its line promises, in order.
 enum Act {
@@ -78,11 +76,8 @@ enum Act {
         key: PathBuf,
         email: String,
     },
-    Mcp {
-        vault: PathBuf,
-        remove: bool,
-        add: Option<(PathBuf, PathBuf)>,
-    },
+    /// `claude mcp remove --scope local graphify`, run in this vault.
+    McpRemove(PathBuf),
     /// Through the `claude` CLI: add the marketplace from this url, install the plugin, or
     /// uninstall both.
     Plugin {
@@ -90,7 +85,7 @@ enum Act {
         install: bool,
         remove: bool,
     },
-    /// One `codex` CLI call: the marketplace, the plugin, or the graphify server.
+    /// One `codex` CLI call: the marketplace, the plugin, or an MCP server.
     Codex(Vec<String>),
     /// config.toml read again when it runs (the `codex` calls before it write the same file),
     /// kept beside itself, then written without our `[hooks.state]` tables. Clearing trust is the
@@ -551,7 +546,7 @@ fn imports(text: &str) -> Vec<String> {
 // ---- the setup plan ------------------------------------------------------------------------------
 
 /// What each missing tool costs, and how to install it.
-const PREREQS: [(&str, &str, &str, &str); 3] = [
+const PREREQS: [(&str, &str, &str, &str); 2] = [
     (
         "claude",
         "the harness",
@@ -564,12 +559,6 @@ const PREREQS: [(&str, &str, &str, &str); 3] = [
         "records commit nothing unscanned",
         "your package manager (pacman -S gitleaks)",
         "winget install Gitleaks.Gitleaks",
-    ),
-    (
-        "uv",
-        "graphify installs with it",
-        "curl -LsSf https://astral.sh/uv/install.sh | sh",
-        "powershell -c \"irm https://astral.sh/uv/install.ps1 | iex\"",
     ),
 ];
 
@@ -1080,63 +1069,10 @@ fn plan_setup(args: &Args) -> Plan {
         }
     }
 
-    // graphify's MCP server, local scope: only sessions in the vault see it.
-    let graph = vault.join("graphify-out").join("merged-graph.json");
-    let current = mcp_entry(&vault);
-    let mcp = which("graphify-mcp");
-    let registered = |c: &J| {
-        let cmd = c.get("command").and_then(J::str);
-        let arg = arr(c.get("args")).first().and_then(J::str);
-        mcp.as_ref()
-            .is_some_and(|m| cmd.is_some_and(|c| same(Path::new(c), m)))
-            && arg.is_some_and(|a| a.replace('\\', "/").eq_ignore_ascii_case(&fwd(&graph)))
-    };
-    match (&current, &mcp) {
-        (Some(c), _) if registered(c) => p.say(
-            "ok",
-            "graphify MCP",
-            format!("local scope, {}", fwd(&graph)),
-        ),
-        (_, None) => {
-            p.say("WARN", "graphify MCP", "graphify-mcp is not on PATH");
-            p.next.push(format!("uv tool install \"{GRAPHIFY}\", open a new shell, then knowledge setup --plan again"));
-        }
-        (_, Some(_)) if which("claude").is_none() => p.say(
-            "WARN",
-            "graphify MCP",
-            "claude is not on PATH, so the server cannot be registered",
-        ),
-        (_, Some(m)) => {
-            let detail = format!(
-                "{}: graphify, local scope for {}, serving {}",
-                fwd(&home.join(".claude.json")),
-                fwd(&vault),
-                fwd(&graph)
-            );
-            let seen = current.as_ref().map_or_else(|| "absent".into(), J::text);
-            let act = Act::Mcp {
-                vault: vault.clone(),
-                remove: current.is_some(),
-                add: Some((m.clone(), graph.clone())),
-            };
-            p.act(
-                if current.is_some() {
-                    "change"
-                } else {
-                    "create"
-                },
-                "graphify MCP",
-                detail,
-                seen,
-                vec![act],
-            );
-        }
-    }
+    graphify_retire(&mut p, &vault);
 
-    p.next.push(
-        "knowledge doctor --repair --pretty: the first index, hubs, commit notes and repo graphs"
-            .into(),
-    );
+    p.next
+        .push("knowledge doctor --repair --pretty: the first index, hubs and commit notes".into());
     p.next.push("knowledge rules list --json, then knowledge rules enable <pack> for each pack you want: the rules interview".into());
     if template {
         p.next.push(format!(
@@ -1155,6 +1091,44 @@ fn count(d: &Path, n: &mut usize) {
         } else {
             *n += 1;
         }
+    }
+}
+
+/// The graphify server setup registered before Stage 8 (S8.5: the code map replaced it): ours when
+/// it serves the vault's merged graph, and then planned for removal; a graphify server the owner
+/// added stays.
+fn graphify_retire(p: &mut Plan, v: &Path) {
+    let graph = fwd(&v.join("graphify-out").join("merged-graph.json"));
+    let Some(c) = mcp_entry(v) else { return };
+    let ours = arr(c.get("args"))
+        .first()
+        .and_then(J::str)
+        .is_some_and(|a| a.replace('\\', "/").eq_ignore_ascii_case(&graph));
+    if !ours {
+        p.say(
+            "ok",
+            "graphify MCP",
+            "a graphify server not set by setup: left as it is",
+        );
+    } else if which("claude").is_none() {
+        p.say(
+            "WARN",
+            "graphify MCP",
+            "claude is not on PATH, so the server cannot be removed",
+        );
+    } else {
+        let detail = format!(
+            "{}: graphify, local scope for {}",
+            fwd(&state::home().join(".claude.json")),
+            fwd(v)
+        );
+        p.act(
+            "remove",
+            "graphify MCP",
+            detail,
+            c.text(),
+            vec![Act::McpRemove(v.to_path_buf())],
+        );
     }
 }
 
@@ -1431,38 +1405,7 @@ fn plan_remove(args: &Args) -> Plan {
     }
 
     if let Some(v) = &vault {
-        let graph = fwd(&v.join("graphify-out").join("merged-graph.json"));
-        if let Some(c) = mcp_entry(v).filter(|c| {
-            arr(c.get("args"))
-                .first()
-                .and_then(J::str)
-                .is_some_and(|a| a.replace('\\', "/").eq_ignore_ascii_case(&graph))
-        }) {
-            if which("claude").is_none() {
-                p.say(
-                    "WARN",
-                    "graphify MCP",
-                    "claude is not on PATH, so the server cannot be removed",
-                );
-            } else {
-                let detail = format!(
-                    "{}: graphify, local scope for {}",
-                    fwd(&state::home().join(".claude.json")),
-                    fwd(v)
-                );
-                p.act(
-                    "remove",
-                    "graphify MCP",
-                    detail,
-                    c.text(),
-                    vec![Act::Mcp {
-                        vault: v.clone(),
-                        remove: true,
-                        add: None,
-                    }],
-                );
-            }
-        }
+        graphify_retire(&mut p, v);
     }
     p.say(
         "info",
@@ -1709,39 +1652,19 @@ fn exec(a: &Act) -> Result<(), String> {
             )
             .map_err(io(file))
         }
-        Act::Mcp { vault, remove, add } => {
+        Act::McpRemove(vault) => {
             let claude = which("claude").ok_or("claude is not on PATH")?;
-            let t = Duration::from_secs(60);
-            if *remove {
-                checked(
-                    state::run(
-                        &claude,
-                        &["mcp", "remove", "--scope", "local", "graphify"],
-                        Some(vault),
-                        None,
-                        &[],
-                        t,
-                    ),
-                    "claude mcp remove",
-                )?;
-            }
-            if let Some((mcp, graph)) = add {
-                let (mcp, graph) = (mcp.to_string_lossy(), graph.to_string_lossy());
-                checked(
-                    state::run(
-                        &claude,
-                        &[
-                            "mcp", "add", "--scope", "local", "graphify", "--", &mcp, &graph,
-                        ],
-                        Some(vault),
-                        None,
-                        &[],
-                        t,
-                    ),
-                    "claude mcp add",
-                )?;
-            }
-            Ok(())
+            checked(
+                state::run(
+                    &claude,
+                    &["mcp", "remove", "--scope", "local", "graphify"],
+                    Some(vault),
+                    None,
+                    &[],
+                    Duration::from_secs(60),
+                ),
+                "claude mcp remove",
+            )
         }
     }
 }
@@ -1905,7 +1828,7 @@ fn names_path(body: &str, path: &Path) -> bool {
 }
 
 /// `setup --harness codex`: the plugin from this checkout's local marketplace, the AGENTS.md block,
-/// and two MCP servers, retrieval's and graphify's. Trust is never written: the owner reviews the hooks once in the Codex CLI
+/// and the retrieval MCP server; the graphify server setup once wrote is removed. Trust is never written: the owner reviews the hooks once in the Codex CLI
 /// (C1), and this plan only says how many are reviewed.
 fn plan_codex(args: &Args, at: Option<&Place>) -> Plan {
     let mut p = Plan::default();
@@ -2049,53 +1972,32 @@ fn plan_codex(args: &Args, at: Option<&Place>) -> Plan {
         }
     }
 
-    // graphify's server. Codex keeps it in the user config, so every Codex session sees it.
-    let graph = vault.join("graphify-out").join("merged-graph.json");
-    match (which("graphify-mcp"), &st.mcp) {
-        (None, _) => {
-            p.say("WARN", "graphify MCP", "graphify-mcp is not on PATH");
-            p.next.push(format!("uv tool install \"{GRAPHIFY}\", open a new shell, then knowledge setup --harness codex --plan again"));
-        }
-        (Some(_), Some(body)) if names_path(body, &graph) => p.say(
+    codex_graphify_retire(&mut p, &st, &config);
+    p
+}
+
+/// The graphify server setup wrote into config.toml before Stage 8 (S8.5): ours when it serves a
+/// merged graph, and then planned for removal; a graphify server of the owner's own stays.
+fn codex_graphify_retire(p: &mut Plan, st: &CodexState, config: &Path) {
+    match &st.mcp {
+        Some(body) if body.contains("merged-graph.json") => p.act(
+            "remove",
+            "graphify MCP",
+            "codex mcp remove graphify",
+            seen_file(config),
+            vec![Act::Codex(vec![
+                "mcp".into(),
+                "remove".into(),
+                "graphify".into(),
+            ])],
+        ),
+        Some(_) => p.say(
             "ok",
             "graphify MCP",
-            format!("~/.codex/config.toml, {}", fwd(&graph)),
+            "a graphify server not set by setup: left as it is",
         ),
-        (Some(m), current) => {
-            let mut acts = Vec::new();
-            if current.is_some() {
-                acts.push(Act::Codex(vec![
-                    "mcp".into(),
-                    "remove".into(),
-                    "graphify".into(),
-                ]));
-            }
-            let (m, g) = (
-                m.to_string_lossy().into_owned(),
-                graph.to_string_lossy().into_owned(),
-            );
-            acts.push(Act::Codex(vec![
-                "mcp".into(),
-                "add".into(),
-                "graphify".into(),
-                "--".into(),
-                m,
-                g,
-            ]));
-            p.act(
-                if current.is_some() {
-                    "update"
-                } else {
-                    "create"
-                },
-                "graphify MCP",
-                format!("codex mcp add graphify, serving {}", fwd(&graph)),
-                seen_file(&config),
-                acts,
-            );
-        }
+        None => {}
     }
-    p
 }
 
 /// `setup --harness codex --remove`: the block, our two MCP servers, the plugin and its
@@ -2108,26 +2010,7 @@ fn plan_codex_remove() -> Plan {
 
     block_remove(&mut p, "codex");
 
-    // Ours when it serves a merged graph; a graphify server of the owner's own stays.
-    match &st.mcp {
-        Some(body) if body.contains("merged-graph.json") => p.act(
-            "remove",
-            "graphify MCP",
-            "codex mcp remove graphify",
-            seen_file(&config),
-            vec![Act::Codex(vec![
-                "mcp".into(),
-                "remove".into(),
-                "graphify".into(),
-            ])],
-        ),
-        Some(_) => p.say(
-            "ok",
-            "graphify MCP",
-            "a graphify server not set by setup: left as it is",
-        ),
-        None => p.say("ok", "graphify MCP", "not registered"),
-    }
+    codex_graphify_retire(&mut p, &st, &config);
 
     // Ours when it runs a knowledge binary's `mcp` verb.
     match &st.retrieval {

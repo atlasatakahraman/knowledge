@@ -20,7 +20,7 @@ import {
   VAULT, DEV_ROOT, HOOKS, HOOK_EVENTS, FOLDERS, CONFIG,
   failures, logicalDate, notePath,
   repoList, recentCommits, recordedCommits, unrecorded,
-  rebuildGraph, skeletonPin, PIN_FILE, isRecordPath,
+  skeletonPin, PIN_FILE, isRecordPath,
   NOTE_EXEMPT as EXEMPT, walkVault as walk, linksOf, frontmatterOk, forwardLinks, brokenLinksIn,
   knowledgeBin, knowledge,
 } from "./brain-lib.mjs";
@@ -201,17 +201,9 @@ function checkReach({ notes }) {
   return { id: "reach", level: "fail", ok: !orphans.length, detail: { orphans: orphans.length, samples: orphans.slice(0, 8) } };
 }
 
-/** Stale ignore paths broke Obsidian (33 GB indexable) and shrank the graph, both silently. */
+/** Stale ignore paths broke Obsidian (33 GB indexable), silently. */
 function checkIgnores() {
   const stale = [];
-  try {
-    for (const raw of readFileSync(join(VAULT, ".graphifyignore"), "utf8").split("\n")) {
-      const line = raw.trim();
-      if (!line || line.startsWith("#")) continue;
-      const fixed = line.replace(/^!/, "").split("*")[0].replace(/\/+$/, "");
-      if (fixed && !existsSync(join(VAULT, fixed))) stale.push(`.graphifyignore: ${line}`);
-    }
-  } catch {}
   try {
     for (const p of JSON.parse(readFileSync(join(VAULT, ".obsidian", "app.json"), "utf8")).userIgnoreFilters || [])
       if (!existsSync(join(VAULT, String(p).replace(/\/+$/, "")))) stale.push(`userIgnoreFilters: ${p}`);
@@ -344,7 +336,7 @@ function checkHygiene() {
   try {
     // Machine-written paths are dirty by design until the next vault commit (D9: the Routine never
     // commits), so counting them would warn every single day. What matters is human work at risk.
-    const MACHINE = new RegExp(`^.. (\\.obsidian/|${FOLDERS.ops}/|${FOLDERS.sessions}/|graphify-out/)`);
+    const MACHINE = new RegExp(`^.. (\\.obsidian/|${FOLDERS.ops}/|${FOLDERS.sessions}/)`);
     out.uncommitted = execFileSync("git", ["status", "--porcelain"], { cwd: VAULT, encoding: "utf8" }).split("\n").filter((l) => l && !MACHINE.test(l)).length;
   } catch {}
   // D11: durable memory belongs in the vault. Non-empty per-cwd shards and stray files in checkouts are drift.
@@ -426,7 +418,6 @@ function runRepairs() {
     // must see, so the reindex runs after them.
     ["hubs", () => execFileSync(process.execPath, ["--bun", join(HOOKS, "brain-hubs.mjs")], { timeout: 60_000, stdio: "ignore", windowsHide: true })],
     ["reindex", () => knowledge(["index"])],
-    ["graph", () => rebuildGraph()], // the repo graphs, merged into the served graph
   ];
   return steps.map(([step, fn]) => {
     const t = Date.now();

@@ -1,7 +1,7 @@
 // brain-lib.mjs - shared helpers for the brain memory hooks.
 // Runtime is bun (`bun --bun`), per 00-Meta/Hard-Rules.
 // Spec: [[2026-08-22-brain-memory-compiler]] (vault plan).
-import { readFileSync, existsSync, mkdirSync, writeFileSync, readdirSync, appendFileSync, statSync, copyFileSync, realpathSync, openSync, closeSync, rmSync } from "node:fs";
+import { readFileSync, existsSync, mkdirSync, writeFileSync, readdirSync, appendFileSync, statSync, realpathSync, openSync, closeSync, rmSync } from "node:fs";
 import { join, dirname, basename, relative } from "node:path";
 import { homedir, tmpdir } from "node:os";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
@@ -766,26 +766,4 @@ export function ledgerSet(src, patch) {
   all[i] = { ...all[i], ...patch };
   writeFileSync(LEDGER, all.map((e) => `${JSON.stringify(e)}\n`).join(""));
   return true;
-}
-
-// ---- graph: the repo graphs, merged for the graphify MCP --------------------------------------------
-
-export const MERGED_GRAPH = join(VAULT, "graphify-out", "merged-graph.json");
-
-/**
- * The served graph is the repo graphs only, merged into merged-graph.json, what .mcp.json serves.
- * The vault left graphify in vault audit Stage 3: its links are the binary's (`knowledge graph`),
- * read from the index, so no 54 s rebuild and no wikilink bridge. Repo graphs are built on demand;
- * a repo with no graphify-out yet is absent from the merge.
- */
-export function rebuildGraph() {
-  const repoGraphs = readdirSync(DEV_ROOT, { withFileTypes: true })
-    .filter((e) => e.isDirectory())
-    .map((e) => join(DEV_ROOT, e.name, "graphify-out", "graph.json"))
-    .filter((p) => existsSync(p));
-  mkdirSync(dirname(MERGED_GRAPH), { recursive: true });
-  if (repoGraphs.length > 1)
-    execFileSync("graphify", ["merge-graphs", ...repoGraphs, "--out", MERGED_GRAPH], { cwd: VAULT, timeout: 600_000, stdio: "ignore", windowsHide: true });
-  else if (repoGraphs.length) copyFileSync(repoGraphs[0], MERGED_GRAPH);
-  else writeFileSync(MERGED_GRAPH, JSON.stringify({ directed: false, multigraph: false, graph: {}, nodes: [], links: [] }));
 }

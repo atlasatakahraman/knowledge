@@ -29,6 +29,6 @@ status: active
 ## edit — reorganising
 
 - Moving notes is safe: Obsidian resolves wikilinks by **name**, not path.
-- What *does* break: MOC link lists, and `.graphifyignore` / `.gitignore` path rules.
-- After any move, re-run the link check and `bun --bun "$(knowledge config skeleton)/hooks/brain-graph.mjs"`.
-- **Check `.gitignore` before assuming the graph is broken** — it feeds `.graphifyignore`.
+- What *does* break: MOC link lists, and the path rules in `.gitignore` and `.obsidian/app.json`
+  (`knowledge doctor`'s `ignores` check names a stale one).
+- After any move, re-run the link check and `knowledge index`.

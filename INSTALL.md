@@ -45,7 +45,7 @@ before a change. A second `--plan` on a set-up machine says `Nothing to change.`
   vault for them. The first commit of a template vault is setup's, and only when git has an
   identity.
 - A FAIL line is the answer to report: quote it, do not work around it.
-- A WARN that names a missing tool (`claude`, `uv`, `gitleaks`) carries the command that installs
+- A WARN that names a missing tool (`claude`, `gitleaks`) carries the command that installs
   it. Installing one is the person's call: ask first.
 
 ## What it does, by hand
@@ -55,8 +55,7 @@ checkout, `<vault>` the vault, `<dev>` the checkouts folder.
 
 ### 1. Prerequisites
 
-`git`, `uv` (for graphify), `claude` (Claude Code), `gitleaks`, `cargo` (the Rust toolchain, for
-the knowledge binary) and `bun` (the skills' and commands' tools), all on `PATH`. The hooks commit
+`git`, `claude` (Claude Code), `gitleaks`, `cargo` (the Rust toolchain, for the knowledge binary) and `bun` (the skills' and commands' tools), all on `PATH`. The hooks commit
 and push their records on their own and scan them with gitleaks first. Without it they commit
 nothing.
 
@@ -64,7 +63,6 @@ nothing.
 |---|---|---|
 | bun | `curl -fsSL https://bun.sh/install \| bash` | `powershell -c "irm bun.sh/install.ps1 \| iex"` |
 | git | your package manager (`pacman -S git`, `apt install git`) | `winget install Git.Git` |
-| uv | `curl -LsSf https://astral.sh/uv/install.sh \| sh` | `powershell -c "irm https://astral.sh/uv/install.ps1 \| iex"` |
 | claude | `curl -fsSL https://claude.ai/install.sh \| bash` | `irm https://claude.ai/install.ps1 \| iex` |
 | gitleaks | your package manager (`pacman -S gitleaks`, `brew install gitleaks`) | `winget install Gitleaks.Gitleaks` |
 | cargo | `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \| sh` | `winget install Rustlang.Rustup` |
@@ -243,17 +241,7 @@ writeFileSync(file, JSON.stringify(state, null, 1));'
 
 This one marks today's log too; delete its line if today's session should still be compiled.
 
-### 8. graphify (MIT)
-
-```bash
-uv tool install "graphifyy[mcp]"
-```
-
-The `[mcp]` extra is required: without it `graphify-mcp` dies on import and Claude Code lists the
-server as failed, while every doctor check still passes. `setup` does not install it: its plan WARNs
-and names this command, and registers the server (step 10) once `graphify-mcp` is on `PATH`.
-
-### 9. First index and graph
+### 8. First index
 
 ```bash
 knowledge index
@@ -261,19 +249,12 @@ knowledge doctor --repair --pretty
 ```
 
 The first builds the vault index (about a second for 2,000 notes). The repair records commits made
-outside Claude, regenerates the hub MOCs, brings the index level again and merges the repo graphs
-into `graphify-out/merged-graph.json`. All of it is derived; run it whenever a check fails.
+outside Claude, regenerates the hub MOCs and brings the index level again. All of it is derived; run
+it whenever a check fails. The code map needs no step: each checkout's map is built by the first
+`knowledge find <symbol> --code` or `graph <symbol> --code` that names it, and brought level by every
+one after.
 
-### 10. graphify MCP, local scope
-
-From inside the vault, so only sessions launched there see it:
-
-```bash
-cd <vault> && claude mcp add --scope local graphify -- "$(command -v graphify-mcp)" <vault>/graphify-out/merged-graph.json
-claude mcp list    # graphify: ... ✔ Connected
-```
-
-### 11. Check
+### 9. Check
 
 ```bash
 knowledge doctor --pretty
@@ -305,14 +286,12 @@ not the binary that is planning.
 codex plugin marketplace add <skeleton>
 codex plugin add knowledge@knowledge-skeleton
 codex mcp add knowledge -- "$(command -v knowledge)" mcp
-codex mcp add graphify -- "$(command -v graphify-mcp)" <vault>/graphify-out/merged-graph.json
 ```
 
 ```powershell
 codex plugin marketplace add C:\dev\knowledge-skeleton
 codex plugin add knowledge@knowledge-skeleton
 codex mcp add knowledge -- (Get-Command knowledge).Source mcp
-codex mcp add graphify -- (Get-Command graphify-mcp).Source <vault>\graphify-out\merged-graph.json
 ```
 
 The block goes into `~/.codex/AGENTS.md` (`%USERPROFILE%\.codex\AGENTS.md`). That global file does
@@ -454,12 +433,11 @@ The skeleton fast-forwards itself at each session start when its tree is clean; 
 plugin changed, that session names `claude plugin update knowledge@knowledge-skeleton`. After a
 pull that changed `src/`, rebuild the binary (§ 4b), then `knowledge setup --plan` and `--apply`:
 that moves the Codex and opencode plugins to the new pin, and Codex asks for its hook review again.
-When the version moves past the vault's `.skeleton.json`, adapt the vault and bump the pin. The
-tools never update themselves:
+When the version moves past the vault's `.skeleton.json`, adapt the vault and bump the pin.
 
-```bash
-uv tool upgrade graphifyy
-```
+The code map replaced graphify in 0.12.0. On a machine set up before it, the next plan removes the
+graphify server `setup` registered, in Claude Code and in Codex, and leaves a graphify server of
+your own as it is. graphify itself is yours to uninstall: `uv tool uninstall graphifyy`.
 
 ## Removing
 
@@ -470,11 +448,11 @@ knowledge setup --remove --apply <id>
 
 It takes out the links from step 4, the Claude plugin, its marketplace and its option in
 `settings.json` (every other key and hook stays), the block `setup` wrote in `CLAUDE.md`, the
-githooks path (a checkout's own comes back), and the graphify MCP entry. For each other harness
-found it takes out what § Other harnesses added: the Codex plugin, its marketplace, the
-`knowledge` and graphify servers setup registered, and the trust tables `codex plugin remove` leaves in `config.toml` (kept beside
-it first); opencode's `knowledge.ts`; the desktop app's `mcpServers.knowledge`; and each `AGENTS.md`
-block. A `generic` block goes with `--harness generic --instructions <file> --remove`. It never
+githooks path (a checkout's own comes back), and a graphify MCP entry an earlier `setup` registered.
+For each other harness found it takes out what § Other harnesses added: the Codex plugin, its
+marketplace, the `knowledge` server (and an earlier graphify one) setup registered, and the trust
+tables `codex plugin remove` leaves in `config.toml` (kept beside it first); opencode's
+`knowledge.ts`; the desktop app's `mcpServers.knowledge`; and each `AGENTS.md` block. A `generic` block goes with `--harness generic --instructions <file> --remove`. It never
 touches the vault, and keeps `config.json`, the compile state and any signing key: delete those by
 hand if you want them gone. The vault stays a folder of Markdown notes. Obsidian's graph colours
 stay too: they are Obsidian's view state.
@@ -483,10 +461,9 @@ stay too: they are Obsidian's view state.
 
 | Symptom | Cause |
 |---|---|
-| `graphify: ✘ Failed to connect` in `claude mcp list` | graphify without the `[mcp]` extra: `uv tool install --reinstall "graphifyy[mcp]"` |
 | `link FAIL ... Developer Mode` on Windows | A file symlink needs Developer Mode or an elevated shell |
 | `setup: the plan changed since --plan` | A target changed after the plan was printed (or the flags differ): plan again and read it |
-| `ignores` FAIL on a fresh clone | `.graphifyignore` names a folder git did not bring: an empty folder needs a `.gitkeep` |
+| `ignores` FAIL on a fresh clone | `.obsidian/app.json`'s `userIgnoreFilters` names a folder git did not bring: an empty folder needs a `.gitkeep` |
 | `links` FAIL on a fresh clone, pointing at a date | A record links a daily log that was never committed: commit it, or let the flush write it |
 | `!! SKELETON x is behind the vault's pin y` at session start | The other machine moved the vault to a newer skeleton: `git -C <skeleton> pull --ff-only` |
 | `!! SKELETON x is ahead of the vault's pin y` | The skeleton moved on: read its changes since `y` (`git -C <skeleton> log vy..`), adapt the vault, set `.skeleton.json` to `x`, commit |

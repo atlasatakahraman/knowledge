@@ -15,7 +15,7 @@ claude/                       the Claude Code plugin: the hooks, in exec form
 codex/                        the Codex plugin: the hooks, pinned to the binary's version
 opencode/       knowledge.ts  the opencode plugin: a shim that spawns the binary
 hooks/          brain-*.mjs   the tools the skills and commands run with `bun --bun` (ledger, verify,
-                              graph merge, config); the hook entry points are the binary's
+                              config); the hook entry points are the binary's
 skills/brain/                 /brain new|edit <kind> - writes notes in the vault's conventions
 commands/       brain-*.md    /brain-commits /brain-log /brain-sync /brain-usage
 template/                     the empty vault: folders, MOCs, conventions, system docs, Identity and
@@ -51,8 +51,8 @@ plugin; no verb branches on a harness. "Verified" means a live session on a real
 
 | Harness | Tiers used | What it gets | Enforcement points | Status |
 |---|---|---|---|---|
-| Claude Code | T0–T4 | Identity and Hard-Rules imported whole into `~/.claude/CLAUDE.md`; the plugin's hooks on nine events; `/brain`; graphify over MCP | The guard on `PreToolUse` (shell, edit and MCP calls) with deny and ask; the session-start restore; the pre-commit backstop | Verified |
-| Codex CLI | T0–T4 | The block written whole into `~/.codex/AGENTS.md`; the plugin's hooks on eight events, pinned to the binary's version; `/brain` through `~/.agents/skills`; `knowledge` and graphify over MCP | The guard on `PreToolUse` (`Bash`, `apply_patch`, MCP calls), deny only: an ask rule is a deny, since Codex cannot ask; hooks run only once you review them; restore and backstop | Verified |
+| Claude Code | T0–T4 | Identity and Hard-Rules imported whole into `~/.claude/CLAUDE.md`; the plugin's hooks on nine events; `/brain`; the code map (`knowledge find --code`, `graph --code`) | The guard on `PreToolUse` (shell, edit and MCP calls) with deny and ask; the session-start restore; the pre-commit backstop | Verified |
+| Codex CLI | T0–T4 | The block written whole into `~/.codex/AGENTS.md`; the plugin's hooks on eight events, pinned to the binary's version; `/brain` through `~/.agents/skills`; `knowledge` over MCP, the code map included | The guard on `PreToolUse` (`Bash`, `apply_patch`, MCP calls), deny only: an ask rule is a deny, since Codex cannot ask; hooks run only once you review them; restore and backstop | Verified |
 | opencode | T0–T3 | The block in `~/.config/opencode/AGENTS.md`; the shim plugin on eight events, seven of which run the binary; `/brain` | The guard in `execute.before` (`shell`, `edit`, `write`, `patch`), deny only; restore and backstop | Verified; its compaction and session-delete events only run in the interactive app and were not reached |
 | Claude desktop app, Chat | T4 | `knowledge mcp`: `find`, `graph`, `read`, and `note`, which asks before it writes | None: no shell and no hooks, so no tool call of ours to guard | Verified |
 | ChatGPT app's Codex | T0–T4 | The Codex plugin's hooks, once trusted in the CLI | As Codex; hooks not yet trusted are skipped silently | Built, not verified |
@@ -65,12 +65,12 @@ Every adapter's code path also runs in CI on fixture installs (`checks/stage-7.s
 Fill `00-Meta/Identity.md` and `00-Meta/Hard-Rules.md` (`grep -rn "FILL:" ~/knowledge/00-Meta`
 lists what is left) and replace the questions in `00-Meta/retrieval-cases.json` with ones the vault
 must always answer: the doctor's `retrieval` check runs them. Then `knowledge doctor --repair
---pretty` builds the first index, hubs and graph, and `knowledge rules list` with `rules enable
+--pretty` builds the first index and hubs, and `knowledge rules list` with `rules enable
 <pack>` turns on the rule packs you want. The template's own `README.md` has the rest.
 
 ## Requirements
 
-`git`, Claude Code (`claude`), `gitleaks`, `uv` for graphify, the Rust toolchain (`rustup`;
+`git`, Claude Code (`claude`), `gitleaks`, the Rust toolchain (`rustup`;
 `rust-toolchain.toml` pins 1.100.0 and rustup fetches it on the first build), and `bun` for the
 skills' and commands' tools.
 
@@ -195,8 +195,6 @@ Every version bump in `package.json` is tagged `v<version>` on the commit that m
 
 Installed from their own upstreams, never vendored here:
 
-- [graphify](https://github.com/safishamsi/graphify) (`graphifyy[mcp]` on PyPI) - MIT. Builds each
-  repository's code graph and serves their merge over MCP. The vault's own links are the binary's.
 - [gitleaks](https://github.com/gitleaks/gitleaks) - MIT. Scans every commit (`githooks/pre-commit`)
   and the records before they are pushed. Without it, nothing is committed.
 

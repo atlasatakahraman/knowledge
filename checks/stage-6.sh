@@ -17,13 +17,8 @@ TMP=$(mktemp -d)
 FX=$(native "$TMP")
 export HOME="$TMP/home" USERPROFILE="$TMP/home"
 unset KNOWLEDGE_CONFIG KNOWLEDGE_HOME XDG_CONFIG_HOME CLAUDE_CONFIG_DIR
-# The hook block names this build. Without graphify-mcp on PATH the plan registers no MCP server,
-# so the check never runs the real `claude` against the fixture HOME.
+# The hook block names this build.
 export KNOWLEDGE_BIN="$BIN"
-PATH=$(printf '%s' "$PATH" | tr ':' '\n' | while IFS= read -r d; do
-  [ -e "$d/graphify-mcp" ] || [ -e "$d/graphify-mcp.exe" ] || printf '%s\n' "$d"
-done | paste -sd: -)
-export PATH
 
 # The skeleton as this working tree has it (a clone would take the last commit), and an adopted
 # vault from its template with one finished daily log for the compile state to seed.

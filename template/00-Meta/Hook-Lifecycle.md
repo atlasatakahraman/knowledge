@@ -80,10 +80,9 @@ leaves a file with no block alone.
 | `knowledge note decision\|log <text>` | One line in the decision ledger, or in the day's session note: the write-back where no hook captures |
 | `knowledge config [<key>]` | The config the hooks see; the skills and commands read their paths here |
 
-The skills and commands still run three bun tools from `~/.claude/hooks`: `brain-ledger.mjs` (the
-decision ledger; the `/brain` skill drives it), `brain-verify.mjs` (every `[[wikilink]]` and every
-`checkout:`/`docs:` pointer resolves) and `brain-graph.mjs` (merge the repo graphs into the served
-graph).
+The skills and commands still run two bun tools from `~/.claude/hooks`: `brain-ledger.mjs` (the
+decision ledger; the `/brain` skill drives it) and `brain-verify.mjs` (every `[[wikilink]]` and
+every `checkout:`/`docs:` pointer resolves).
 
 ## Change log
 

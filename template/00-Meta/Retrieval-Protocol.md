@@ -1,9 +1,9 @@
 ---
 type: rules
 project: knowledge
-tags: [retrieval, context, graphify]
+tags: [retrieval, context]
 created: 2026-11-02
-updated: 2026-11-22
+updated: 2026-11-24
 status: active
 ---
 
@@ -57,16 +57,15 @@ knowledge graph Conventions                 # links to, linked from
 knowledge graph Conventions Hard-Rules      # the path, up to four links
 ```
 
-graphify builds each repository's code graph; their merge is served as an MCP server, registered
-**per machine at local scope**, never in a shared `.mcp.json` (the paths differ per machine):
+The code map answers the same questions for the checkouts' code: where a symbol is defined, what
+uses it, and how two connect. One SQLite file per checkout in the knowledge home, built from each
+grammar's own tags query and brought level with git's tracked files before every answer.
 
 ```bash
-claude mcp add graphify -s local -- graphify-mcp <vault>/graphify-out/merged-graph.json
+knowledge find <symbol> --code [--repo <name>]   # the definitions, with signatures
+knowledge graph <symbol> --code                  # used by, and uses
+knowledge graph <symbol> <other> --code          # the path between two
 ```
-
-Use absolute paths with forward slashes. Verify by handshake, not by the binary existing:
-`graphify-mcp` without its `mcp` Python package exits at once and the client reports only
-`CONNECTION_CLOSED` (`uv tool install graphifyy --with mcp` fixes it).
 
 ### 4. `Read`
 
@@ -83,11 +82,10 @@ the daily sweep runs.
 | Command | Covers | Cost |
 |---|---|---|
 | `knowledge index` | the vault index: only changed notes are read | **free**, ~1 s for a rebuild |
-| `bun --bun ~/.claude/hooks/brain-graph.mjs` | the repo graphs, merged for the graphify MCP | **free** |
-| `/graphify . --update` | the semantic pass over docs and images | **tokens**: a deliberate act, never routine |
+| `knowledge code index --all` | every checkout's code map: only changed files are parsed | **free** |
 
-**graphify reads `.gitignore` as well as `.graphifyignore`**: a rule that hides files from git
-hides them from a repo's graph too, silently.
+**The code map reads git's tracked files only**: a file git ignores or has not been told about is
+not in it.
 
 ## Related
 

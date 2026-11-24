@@ -335,7 +335,7 @@ check "no skill or command names ~/.claude/hooks or skeleton-config.mjs" \
 # --- S7.7: setup across harnesses ----------------------------------------------------------------
 # A fresh fixture HOME holding Claude Code, a Codex folder with no codex on PATH, opencode (an empty
 # stand-in on PATH: its setup only writes files), and the Claude desktop app as the Store installs
-# it, its data moved behind a marker. No codex and no graphify-mcp on PATH, and the Claude plugin
+# it, its data moved behind a marker. No codex on PATH, and the Claude plugin
 # recorded as installed at this version, so no real CLI ever runs against the fixture.
 S7="$TMP/s77"
 FX7=$(native "$S7")
@@ -346,7 +346,7 @@ mkdir -p "$S7/bin" "$SK7" "$HOME/.claude/plugins" "$HOME/.codex" "$HOME/.config/
 : > "$S7/bin/opencode"
 : > "$S7/bin/opencode.cmd"
 printf '# My opencode rules\n' > "$HOME/.config/opencode/AGENTS.md"
-clean() { for x in codex graphify-mcp; do for e in "" .exe .cmd; do [ -e "$1/$x$e" ] && return 1; done; done; return 0; }
+clean() { for x in codex; do for e in "" .exe .cmd; do [ -e "$1/$x$e" ] && return 1; done; done; return 0; }
 PATH="$(dirname "$BIN"):$S7/bin:$(printf '%s' "$PATH" | tr ':' '\n' | while IFS= read -r d; do clean "$d" && printf '%s\n' "$d"; done | paste -sd: -)"
 export PATH
 for d in hooks commands skills githooks template claude; do cp -R "$ROOT/$d" "$SK7/$d"; done
