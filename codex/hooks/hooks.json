@@ -2,35 +2,35 @@
   "description": "Each hook runs `knowledge hook <verb> --harness codex --pin <version>`. The pin is the binary version these hooks were reviewed at: another binary stands down and says so at session start. commandWindows runs under PowerShell, command under the POSIX shell; both find knowledge on PATH.",
   "hooks": {
     "SessionStart": [
-      { "hooks": [{ "type": "command", "command": "knowledge hook session --harness codex --pin 0.11.2", "commandWindows": "knowledge hook session --harness codex --pin 0.11.2", "timeout": 10 }] }
+      { "hooks": [{ "type": "command", "command": "knowledge hook session --harness codex --pin 0.12.0", "commandWindows": "knowledge hook session --harness codex --pin 0.12.0", "timeout": 10 }] }
     ],
     "UserPromptSubmit": [
-      { "hooks": [{ "type": "command", "command": "knowledge hook prompt --harness codex --pin 0.11.2", "commandWindows": "knowledge hook prompt --harness codex --pin 0.11.2", "timeout": 10 }] }
+      { "hooks": [{ "type": "command", "command": "knowledge hook prompt --harness codex --pin 0.12.0", "commandWindows": "knowledge hook prompt --harness codex --pin 0.12.0", "timeout": 10 }] }
     ],
     "PreToolUse": [
       { "matcher": "^(Bash|apply_patch|mcp__.*)$", "hooks": [
-        { "type": "command", "command": "knowledge hook pre-tool --harness codex --pin 0.11.2", "commandWindows": "knowledge hook pre-tool --harness codex --pin 0.11.2", "timeout": 5 }
+        { "type": "command", "command": "knowledge hook pre-tool --harness codex --pin 0.12.0", "commandWindows": "knowledge hook pre-tool --harness codex --pin 0.12.0", "timeout": 5 }
       ] }
     ],
     "PostToolUse": [
       { "matcher": "^apply_patch$", "hooks": [
-        { "type": "command", "command": "knowledge hook post-edit --harness codex --pin 0.11.2", "commandWindows": "knowledge hook post-edit --harness codex --pin 0.11.2", "timeout": 10 }
+        { "type": "command", "command": "knowledge hook post-edit --harness codex --pin 0.12.0", "commandWindows": "knowledge hook post-edit --harness codex --pin 0.12.0", "timeout": 10 }
       ] },
       { "matcher": "^Bash$", "hooks": [
-        { "type": "command", "command": "knowledge hook post-bash --harness codex --pin 0.11.2", "commandWindows": "knowledge hook post-bash --harness codex --pin 0.11.2", "timeout": 15 }
+        { "type": "command", "command": "knowledge hook post-bash --harness codex --pin 0.12.0", "commandWindows": "knowledge hook post-bash --harness codex --pin 0.12.0", "timeout": 15 }
       ] }
     ],
     "PreCompact": [
-      { "hooks": [{ "type": "command", "command": "knowledge hook capture --harness codex --pin 0.11.2", "commandWindows": "knowledge hook capture --harness codex --pin 0.11.2", "timeout": 10 }] }
+      { "hooks": [{ "type": "command", "command": "knowledge hook capture --harness codex --pin 0.12.0", "commandWindows": "knowledge hook capture --harness codex --pin 0.12.0", "timeout": 10 }] }
     ],
     "Stop": [
-      { "hooks": [{ "type": "command", "command": "knowledge hook capture --harness codex --pin 0.11.2", "commandWindows": "knowledge hook capture --harness codex --pin 0.11.2", "timeout": 10 }] }
+      { "hooks": [{ "type": "command", "command": "knowledge hook capture --harness codex --pin 0.12.0", "commandWindows": "knowledge hook capture --harness codex --pin 0.12.0", "timeout": 10 }] }
     ],
     "SubagentStop": [
-      { "hooks": [{ "type": "command", "command": "knowledge hook capture --harness codex --pin 0.11.2", "commandWindows": "knowledge hook capture --harness codex --pin 0.11.2", "timeout": 10 }] }
+      { "hooks": [{ "type": "command", "command": "knowledge hook capture --harness codex --pin 0.12.0", "commandWindows": "knowledge hook capture --harness codex --pin 0.12.0", "timeout": 10 }] }
     ],
     "SessionEnd": [
-      { "hooks": [{ "type": "command", "command": "knowledge hook capture --harness codex --pin 0.11.2", "commandWindows": "knowledge hook capture --harness codex --pin 0.11.2", "timeout": 3 }] }
+      { "hooks": [{ "type": "command", "command": "knowledge hook capture --harness codex --pin 0.12.0", "commandWindows": "knowledge hook capture --harness codex --pin 0.12.0", "timeout": 3 }] }
     ]
   }
 }

@@ -90,6 +90,7 @@ every `checkout:`/`docs:` pointer resolves).
 - 2026-11-22: context-mode removed (vault audit Stage 4): `brain-reindex` and `brain-prune` are gone, repo docs are `knowledge index --repo`, and `brain-flush` reads `knowledge events`.
 - 2026-11-23 (skeleton 0.10.0): every hook is the `knowledge` binary; the doctor, compile, flush, records, usage, hubs and the commit recorder are its verbs; the session start runs the daily health sweep, so no scheduled task is needed; `knowledge setup` replaces `install.ts`.
 - 2026-11-23 (skeleton 0.11.2): Claude Code's hooks come from the skeleton's plugin, not `settings.json`; Codex runs them through its own plugin, pinned to the binary's version, and opencode through a shim; `knowledge mcp` serves the desktop Chat; `note` and `config` are new verbs; the doctor gains `codex-trust`.
+- 2026-11-24 (skeleton 0.12.0): the code map replaces graphify: `knowledge` hands `find --code`, `graph --code` and `code index|duplicate` to a second binary, `knowledge-code`, so no hook loads the tree-sitter grammars; Claude Code's `post-bash` matches the PowerShell tool as well as Bash.
 
 ## Related
 

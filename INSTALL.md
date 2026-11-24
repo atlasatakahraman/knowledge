@@ -145,7 +145,7 @@ junction needs neither. Move an existing `~/.claude/hooks` folder aside first ra
 
 ```bash
 cargo install --path <skeleton> --locked
-knowledge --version    # knowledge 0.11.2 / SQLite 3.x, FTS5 on
+knowledge --version    # knowledge 0.12.0 / SQLite 3.x, FTS5 on
 ```
 
 It lands in `~/.cargo/bin` (`%USERPROFILE%\.cargo\bin` on Windows), with `knowledge-code`, the code

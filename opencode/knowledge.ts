@@ -17,7 +17,7 @@
 //   event session.deleted             -> capture   (session end)
 import { spawn } from "node:child_process";
 
-const PIN = "0.11.2";
+const PIN = "0.12.0";
 const EDITS = new Set(["edit", "write", "patch"]);
 
 type Reply = { context?: string; decision?: string; reason?: string };
