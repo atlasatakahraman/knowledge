@@ -6,5 +6,6 @@ issue for it.
 
 Supported: the latest tagged version.
 
-What the skeleton does about its own security (signed commits, verified pulls, the pre-commit
-secret scan): INSTALL.md § Signing and pull trust.
+What the engine does about its own security (what it touches, the credential fences, signed
+commits and verified pulls, the guard and what it cannot stop, the pre-commit secret scan):
+[docs/security.md](docs/security.md).

@@ -18,13 +18,13 @@ Record a decision as an ADR, and keep the ledger (`50-Ops/decisions.jsonl`) in s
 
 ## new --ledger — promote captured answers (tier 2)
 
-1. `bun --bun "$(knowledge config skeleton)/hooks/brain-ledger.mjs" list` — the verbatim questions and chosen answers
+1. `knowledge ledger list` — the verbatim questions and chosen answers
    captured from `AskUserQuestion`, with the options that were `offered` and any `note`.
 2. Go through them **with the user**, one at a time. For each:
    - a real decision → write the ADR (steps 1–5 above), then
-     `brain-ledger.mjs promote <src> "<vault-relative path>"`. The options not chosen are the
+     `knowledge ledger promote <src> "<vault-relative path>"`. The options not chosen are the
      starting point for **Rejected**; ask for the reasons rather than inventing them.
    - several entries that are one decision → one ADR, promote each `src` to the same path
    - not a decision (a preference already recorded, a one-off) →
-     `brain-ledger.mjs promote <src> not-a-decision`
+     `knowledge ledger promote <src> not-a-decision`
 3. The captured answer is the user's literal choice — quote it; do not reword what they chose.

@@ -14,14 +14,14 @@ adapters/       <id>.json     one data file per harness: detection, instructions
 claude/                       the Claude Code plugin: the hooks, in exec form
 codex/                        the Codex plugin: the hooks, pinned to the binary's version
 opencode/       knowledge.ts  the opencode plugin: a shim that spawns the binary
-hooks/          brain-*.mjs   the tools the skills and commands run with `bun --bun` (ledger, verify,
-                              config); the hook entry points are the binary's
+hooks/          brain-*.mjs   the hooks from before the binary, kept until every machine runs it;
+                              nothing on the binary's path runs them
 skills/brain/                 /brain new|edit <kind> - writes notes in the vault's conventions
 commands/       brain-*.md    /brain-commits /brain-log /brain-sync /brain-usage
 template/                     the empty vault: folders, MOCs, conventions, system docs, Identity and
-                              Hard-Rules stubs (`FILL:` marks each placeholder)
-INSTALL.md                    every step `setup` takes, by hand, for a person or an agent
-settings.hooks.json           the hook block from before the plugin, read only by install.ts
+                              Hard-Rules with the generic rule packs (`FILL:` marks each placeholder)
+AGENTS.md                     the install, step by step, for an agent; then how to work on this repo
+docs/           <task>.md     install, update, remove, verbs, security, troubleshooting
 ```
 
 ## Install
@@ -39,7 +39,10 @@ knowledge setup --apply <id>      # the id is the plan's last line
 each target's current content. It covers Claude Code and then every other harness it finds installed
 (Codex, opencode, the Claude desktop app), each under its own `found` line. `--apply <id>` recomputes
 the plan and refuses if anything moved in between, then writes exactly that. `knowledge setup
---remove --plan` is the reverse, for the same harnesses, and never touches the vault. Flags, Windows, and every step by hand: [INSTALL.md](INSTALL.md).
+--remove --plan` is the reverse, for the same harnesses, and never touches the vault. Flags, Windows, and every step by hand: [docs/install.md](docs/install.md). An agent
+installing for you follows [AGENTS.md](AGENTS.md). Then [update](docs/update.md),
+[remove](docs/remove.md), [every verb](docs/verbs.md), [security](docs/security.md) and
+[troubleshooting](docs/troubleshooting.md).
 
 ## Harnesses
 
@@ -70,9 +73,8 @@ must always answer: the doctor's `retrieval` check runs them. Then `knowledge do
 
 ## Requirements
 
-`git`, Claude Code (`claude`), `gitleaks`, the Rust toolchain (`rustup`;
-`rust-toolchain.toml` pins 1.100.0 and rustup fetches it on the first build), and `bun` for the
-skills' and commands' tools.
+`git`, Claude Code (`claude`), `gitleaks`, and the Rust toolchain (`rustup`;
+`rust-toolchain.toml` pins 1.100.0 and rustup fetches it on the first build).
 
 ## The knowledge binary
 
@@ -94,37 +96,7 @@ grammar per language: `tree-sitter-typescript` (`.ts`, `.tsx`), `tree-sitter-jav
 `.mjs`, `.cjs`, `.jsx`), `tree-sitter-rust` and `tree-sitter-python`. Other languages are not
 mapped; `find --repo` still searches a checkout's docs as text.
 
-| Verb | What it does |
-|---|---|
-| `knowledge index [--rebuild] [<note>…]` | brings the index level with the vault: only changed notes are read |
-| `knowledge index --check [--json]` | notes on disk against rows: ghosts, missing, stale |
-| `knowledge index --repo <checkout>` | a checkout's `docs/`, `CLAUDE.md` and `README.md` into the repo-docs index |
-| `knowledge find <words> [--limit n] [--json]` | ranked notes, each with its best passage |
-| `knowledge find <words> --captures \| --repo [<name>]` | what `keep` and `fetch` stored, or the checkouts' docs |
-| `knowledge keep <label> [--q <words>]…` | stores stdin and prints only the sections the queries match, 2,000 chars at most |
-| `knowledge fetch <url> [--q <words>]…` | one page as Markdown, stored and answered the way `keep` answers |
-| `knowledge events <transcript.jsonl> [--json]` | a session's decisions, constraints, plans and refusals, for `brain-flush` |
-| `knowledge inject <prompt>` | what the prompt hook would add to a prompt |
-| `knowledge graph <note> [<note>] \| <note> --text` | a note's links in and out, the shortest path between two, or the note's text |
-| `knowledge find <symbol> --code [--repo <name>]` | where a symbol is defined, one line each: `repo path:line kind signature` |
-| `knowledge graph <symbol> [<symbol>] --code [--repo <name>]` | what uses a symbol and what it uses, or the chain of uses between two (at most 4 hops) |
-| `knowledge code index [<repo>\|--all] [--rebuild]` | brings a checkout's code map level by hand: only changed files are parsed |
-| `knowledge code duplicate [--staged] [<repo>]` | a new or changed definition whose body matches another's, or whose name a sibling app under `apps/` defines; warns, exits 0 |
-| `knowledge note decision\|log <text>` | a line in the decision ledger, or in today's session note: the write-back for a harness with no hooks |
-| `knowledge config [<key>]` | the paths and settings the hooks see, for the skills and commands |
-| `knowledge mcp` | an MCP server on stdio with four tools: `find`, `graph`, `read` (read-only) and `note`; `find` and `graph` take `code: true` for the code map |
-| `knowledge hook session\|prompt\|pre-tool\|post-edit\|post-bash\|capture --harness <id> [--pin <v>]` | the hooks themselves: the harness's JSON on stdin, always exit 0; with `--pin`, a binary of another version stands down |
-| `knowledge setup --plan \| --apply <id> \| --remove --plan` | this machine's setup across every harness found, planned before anything is written; `--harness <id>` for one |
-| `knowledge doctor [--pretty] [--repair] [--record]` | retrieval health, zero tokens: the index, 33 questions, links, priming, sync; `--repair` rebuilds what is derived |
-| `knowledge flush <session-id>` | a session's new turns into the daily log, once (`claude -p`, haiku) |
-| `knowledge compile [--force]` | a finished daily log into notes, once (`claude -p`, sonnet) |
-| `knowledge records \| hubs \| usage \| post-bash` | the records push, the MOC hubs, the monthly usage digest, the commit notes |
-| `knowledge rules list [--json] \| kernel` | the packs, rules and guards in the lock; the rules that are code, not text |
-| `knowledge rules check [--staged] [--restore]` | Hard-Rules against the lock; the staged copy and the guards' backstops; a changed rule back from `HEAD` |
-| `knowledge rules lock [--seed <file>] \| enable\|disable <pack>` | re-stamps the lock after the owner edits Hard-Rules; turns a pack's guards on or off |
-| `knowledge doctor --only portable [--json]` | names and paths that break on the other OS |
-| `knowledge doctor budget [<transcript>] [--json]` | what a session's start cost, by source, and listings unused in 30 days |
-| `knowledge doctor profile <note>` | the per-project settings that leave unlisted connectors off |
+Every verb, with real output: [docs/verbs.md](docs/verbs.md).
 
 Three files in `$KNOWLEDGE_HOME`, else the config's folder, all per machine and never in git:
 `vault-index.db` (rebuilt from the notes in about a second), `repos-index.db` (repo docs, kept apart
@@ -163,7 +135,7 @@ then runs `knowledge rules lock` in their own terminal.
 
 **What it cannot stop.** An agent that runs code as the user can change any file the user can. The
 guard puts the plain forms to the owner: an Edit, `sed -i`, a redirect, `Set-Content`. It cannot
-judge a wrapper (`bun -e`, a substitution, an escape). That case is caught afterwards, by the next
+judge a wrapper (an interpreter's `-e`, a substitution, an escape). That case is caught afterwards, by the next
 start's restore and the doctor.
 
 Every target in CI builds the binary and runs `checks/stage-3.sh` to `checks/stage-7.sh` on the
@@ -175,7 +147,7 @@ once that run passes; until then it is built, not verified.
 The hooks read their paths from one untracked file, written once per machine:
 
 - Every OS: `~/.config/knowledge/config.json` (or `$XDG_CONFIG_HOME/knowledge/config.json`);
-  on Windows that is `%USERPROFILE%\.config\knowledge\`, never `%APPDATA%` (see INSTALL.md)
+  on Windows that is `%USERPROFILE%\.config\knowledge\`, never `%APPDATA%` ([docs/install.md](docs/install.md))
 - Any OS: `$KNOWLEDGE_HOME/config.json` when `KNOWLEDGE_HOME` is set, and `$KNOWLEDGE_CONFIG`
   over both
 
@@ -185,8 +157,9 @@ The hooks read their paths from one untracked file, written once per machine:
 ```
 
 `vault` and `devRoot` are required. `"pullTrust": "signed"` makes each session start pull only a
-tip signed by a key in `allowed_signers` beside the config (INSTALL.md § Signing and pull trust). `rolloverHour` (default 5) is when a daily note starts, local
-time. `setup` writes it. Check what the hooks see with `bun --bun hooks/skeleton-config.mjs`.
+tip signed by a key in `allowed_signers` beside the config ([docs/security.md](docs/security.md)). `rolloverHour` (default 5) is when a daily note starts, local
+time. `folders` renames the vault's folders. `setup` writes it. Check what the hooks see with
+`knowledge config`.
 
 ## Sync
 

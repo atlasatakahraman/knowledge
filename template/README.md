@@ -21,7 +21,7 @@ there in two hops, the vault has a gap.
 4. Choose a licence for the notes, if they will ever be shared, and add it as `LICENSE.md`.
 
 Installing the engine itself (hooks, config, the binary) is the knowledge-skeleton's
-`INSTALL.md`.
+`docs/install.md`.
 
 ## Layout
 
@@ -92,7 +92,7 @@ Every hook, its event and its cost: [Hook-Lifecycle](00-Meta/Hook-Lifecycle.md).
 | `!! VAULT PULL skipped: …` | The vault has uncommitted changes, or cannot fast-forward | Commit or stash, then `git pull --ff-only` |
 | `!! SKELETON PULL skipped: …` (or `failed`) | The skeleton checkout has uncommitted changes, or cannot fast-forward | Commit or stash there, then `git pull --ff-only` |
 | `!! RECORDS committed but not pushed` | You have unpushed commits of your own; a push would send them too | Push when they are ready; the records go with them |
-| `!! RECORDS not committed: gitleaks is not on PATH …` | Records are never committed unscanned | Install gitleaks (`INSTALL.md` § Prerequisites), then restart Claude Code so the hooks see the new `PATH` |
+| `!! RECORDS not committed: gitleaks is not on PATH …` | Records are never committed unscanned | Install gitleaks (the skeleton's `docs/install.md` § Prerequisites), then restart Claude Code so the hooks see the new `PATH` |
 | `!! BRAIN RECORDS FAILING since …` | The records commit or push failed: offline, a gitleaks finding, a rebase conflict | Follow the reason; `knowledge records` retries |
 | `!! SKELETON x is behind the vault's pin y` | Another machine moved the vault to a newer skeleton; this one has not pulled it | `git -C <skeleton> pull --ff-only` |
 | `!! SKELETON x is ahead of the vault's pin y` | The skeleton moved on; the vault is still written for the older one | Read the skeleton's changes since `y` (`git -C <skeleton> log vy..`), adapt the vault, then set `.skeleton.json` to `x` and commit it |
@@ -102,5 +102,5 @@ Every hook, its event and its cost: [Hook-Lifecycle](00-Meta/Hook-Lifecycle.md).
 | `knowledge doctor` FAIL in `links` | A `[[link]]` resolves to nothing | Fix it, or list it in `00-Meta/Forward-Links.md` |
 | `knowledge doctor` FAIL in `reach` | A note more than 2 hops from the root MOC (a record, 3) | Link it from its folder's MOC |
 | `knowledge doctor` FAIL in `commits` | A commit from the last 3 days has no note | `knowledge post-bash --backfill <date>` |
-| `knowledge doctor` FAIL in `skeleton-version` | `~/.claude/hooks`, the skill or a command does not point into one knowledge-skeleton checkout, or `.skeleton.json` pins another version | Run `knowledge setup --plan`, then `--apply` its id (or step 4 of the skeleton's `INSTALL.md`); for the pin, the two `!! SKELETON` rows above |
+| `knowledge doctor` FAIL in `skeleton-version` | `~/.claude/hooks`, the skill or a command does not point into one knowledge-skeleton checkout, or `.skeleton.json` pins another version | Run `knowledge setup --plan`, then `--apply` its id (or step 4 of the skeleton's `docs/install.md`); for the pin, the two `!! SKELETON` rows above |
 | `find --code` misses a repo after a rename | The code map is kept per checkout folder | [Conventions](00-Meta/Conventions.md) § Renaming a repository |

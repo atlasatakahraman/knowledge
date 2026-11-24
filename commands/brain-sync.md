@@ -5,7 +5,7 @@ description: Refresh the brain - re-index the vault and repo docs, verify links
 Bring the brain's indexes back in step with what is on disk. The vault and checkout roots come from this machine's config:
 
 ```bash
-VAULT=$(knowledge config vault); DEV=$(knowledge config devRoot); SK=$(knowledge config skeleton)
+VAULT=$(knowledge config vault); DEV=$(knowledge config devRoot)
 ```
 
 Then run in order:
@@ -38,18 +38,18 @@ knowledge index --repo "$DEV/<Repo>"
    Exits non-zero if anything is broken:
 
 ```bash
-bun --bun "$SK/hooks/brain-verify.mjs"
+knowledge doctor --only links,pointers --pretty
 ```
 
 **Do not re-derive this check as a shell one-liner.** It was got wrong twice in one run that way —
 once from case-sensitivity (Obsidian resolves `[[My-App]]` to `my-app.md`), once
 from shell escaping mangling a regex so it skipped three files and printed a confident wrong
-count. The script handles case-insensitivity, frontmatter `aliases:`, code-fence stripping (bash
-`[[ ... ]]` conditionals are indistinguishable from wikilinks), and treats `80-Assets/` copies as
-link targets but not as vault notes.
+count. The doctor resolves names case-insensitively, skips code fences (bash `[[ ... ]]`
+conditionals are indistinguishable from wikilinks), and treats the assets folder's copies as link
+targets but not as vault notes. It does not resolve frontmatter `aliases:`: link by the note's name.
 
 The deliberate-dangling allowlist lives in the vault — any MOC's **"Known gaps — don't chase
-these"** section — not in the script. Add a link there to silence it, with the reason.
+these"** section — not in the binary. Add a link there to silence it, with the reason.
 
 5. Report only what changed: notes reindexed and any newly broken links. (`knowledge index` drops
    rows for files that are gone, so there is no prune step.)

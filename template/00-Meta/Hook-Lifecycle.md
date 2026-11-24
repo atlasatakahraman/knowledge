@@ -54,7 +54,7 @@ flush's own `claude -p` cannot re-fire capture.
 Each harness is an adapter (`adapters/<id>.json`, built into the binary) that maps its own event
 names onto the same verbs, plus a translator that reads its payload and words the reply. The rows
 above hold for each; what differs is below. Setup and the by-hand steps: the skeleton's
-`INSTALL.md` § Other harnesses.
+`docs/install.md` § Other harnesses.
 
 | Harness | Registered by | Differs from Claude Code |
 |---|---|---|
@@ -82,10 +82,11 @@ leaves a file with no block alone.
 | `knowledge mcp` | An MCP server on stdio: `find`, `graph`, `read` (read-only) and `note`. The desktop Chat and Codex start it themselves |
 | `knowledge note decision\|log <text>` | One line in the decision ledger, or in the day's session note: the write-back where no hook captures |
 | `knowledge config [<key>]` | The config the hooks see; the skills and commands read their paths here |
+| `knowledge update --plan` | On request only: the latest release and this platform's steps; downloads nothing |
 
-The skills and commands still run two bun tools from `~/.claude/hooks`: `brain-ledger.mjs` (the
-decision ledger; the `/brain` skill drives it) and `brain-verify.mjs` (every `[[wikilink]]` and
-every `checkout:`/`docs:` pointer resolves).
+The skills and commands run only the binary: `knowledge ledger list|promote` (the decision ledger;
+the `/brain` skill drives it) and `knowledge doctor --only links,pointers` (every `[[wikilink]]`
+and every `checkout:`/`docs:` pointer resolves).
 
 ## Change log
 

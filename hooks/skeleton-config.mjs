@@ -68,8 +68,8 @@ async function load() {
     return { vault: VAULT, devRoot: DEV_ROOT, source: legacy };
   }
   if (OLD_WINDOWS_PATH && existsSync(OLD_WINDOWS_PATH))
-    throw new Error(`knowledge config moved: move ${OLD_WINDOWS_PATH} to ${CONFIG_PATH} - see INSTALL.md`);
-  throw new Error(`no knowledge config: write ${CONFIG_PATH} ({"vault": "...", "devRoot": "..."}) - see INSTALL.md`);
+    throw new Error(`knowledge config moved: move ${OLD_WINDOWS_PATH} to ${CONFIG_PATH} - see docs/install.md`);
+  throw new Error(`no knowledge config: write ${CONFIG_PATH} ({"vault": "...", "devRoot": "..."}) - see docs/install.md`);
 }
 
 const raw = await load();

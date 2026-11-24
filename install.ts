@@ -1,12 +1,12 @@
 // install.ts - set knowledge-skeleton up on this machine. Runtime: bun (`bun install.ts`).
-// Plan: [[2026-11-01-knowledge-skeleton]] Stage 4. INSTALL.md has every step by hand, in this order.
+// Plan: [[2026-11-01-knowledge-skeleton]] Stage 4. docs/install.md has every step by hand, in this order.
 //
 //   bun install.ts                       vault ~/knowledge, checkouts ~/dev (or what config.json says)
 //   ... --vault <path> --dev <path>      somewhere else
 //   ... --machine "<text>"               what the SessionStart banner opens with
 //   ... --from-template | --adopt        force one: a new vault from template/, or an existing vault.
 //                                        Default: adopt a non-empty path, else the template
-//   ... --signing                        also: this boot's commit-signing key and both clones signing (INSTALL.md § Signing)
+//   ... --signing                        also: this boot's commit-signing key and both clones signing (docs/security.md § Signing)
 //   ... --dry-run                        say what each step would do, change nothing
 //
 // Safe to run twice: every step checks before it writes, and a second run reports `ok` for each.
@@ -195,7 +195,7 @@ for (const repo of [VAULT, ROOT, ...checkouts].filter((d) => existsSync(join(d, 
 
 // --signing: this boot's ed25519 signing key beside config.json (no passphrase: hooks commit with
 // nobody present), both clones signing with it, and its line in allowed_signers. The other boot's
-// key goes into allowed_signers by hand, after its fingerprint is compared (INSTALL.md § Signing).
+// key goes into allowed_signers by hand, after its fingerprint is compared (docs/security.md § Signing).
 if (argv.includes("--signing")) {
   const keygen = Bun.which("ssh-keygen");
   if (!keygen) die("--signing needs ssh-keygen (OpenSSH) on PATH");

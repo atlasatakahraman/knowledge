@@ -1151,7 +1151,7 @@ fn mcp_entry(vault: &Path) -> Option<J> {
 
 /// --signing: this boot's ed25519 key beside config.json (no passphrase: hooks commit with nobody
 /// present), the clones signing with it, and its line in allowed_signers. The other boot's key is
-/// added by hand, after its fingerprint is compared (INSTALL.md § Signing).
+/// added by hand, after its fingerprint is compared (docs/security.md § Signing and pull trust).
 fn signing(p: &mut Plan, trust: &Path, os: &str, repos: &[PathBuf], vault: &Path) {
     if which("ssh-keygen").is_none() {
         p.say(

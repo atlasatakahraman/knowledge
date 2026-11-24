@@ -1,9 +1,9 @@
-# Installing knowledge-skeleton
+# Install
 
-Build the binary, then let it plan the rest; every step the plan takes is also written out below,
+Build the binary, then let it plan the rest. Every step the plan takes is also written out below,
 so a person or an agent can do it by hand and get the same machine. One plan covers Claude Code,
 then every other harness it finds installed (Codex, opencode, the Claude desktop app), each under
-its own `found` line; § Other harnesses has each one's steps.
+its own `found` line. An agent installing for someone follows [AGENTS.md](../AGENTS.md) instead.
 
 ```bash
 git clone https://github.com/atlasatakahraman/knowledge-skeleton ~/dev/knowledge-skeleton
@@ -19,13 +19,50 @@ knowledge setup --plan
 knowledge setup --apply <id>
 ```
 
+A plan on a new machine, for Claude Code alone (`--harness claude`), with the home folder shown as
+`~`:
+
+```
+knowledge 0.12.0 setup plan: nothing is written
+
+  ok      prerequisites    git · claude · gitleaks
+  ok      skeleton         ~/dev/knowledge-skeleton (0.12.0)
+  create  vault            ~/knowledge: new, from template/ (31 files), .skeleton.json pins 0.12.0, git init, a first commit when git knows your user.email
+  change  core.fileMode    ~/knowledge/.git/config: false (Obsidian's mode-only rewrites would block the pull)
+  change  hooksPath        ~/knowledge/.git/config: -> ~/dev/knowledge-skeleton/githooks (secret scan, rules backstops)
+  change  hooksPath        ~/dev/knowledge-skeleton/.git/config: -> ~/dev/knowledge-skeleton/githooks (secret scan, rules backstops)
+  create  config           ~/.config/knowledge/config.json: vault ~/knowledge, devRoot ~/dev, os windows
+  create  link             ~/.claude/hooks -> ~/dev/knowledge-skeleton/hooks
+  create  link             ~/.claude/skills/brain -> ~/dev/knowledge-skeleton/skills/brain
+  create  link             ~/.agents/skills/brain -> ~/dev/knowledge-skeleton/skills/brain
+  create  link             ~/.claude/commands/brain-commits.md -> ~/dev/knowledge-skeleton/commands/brain-commits.md
+  create  link             ~/.claude/commands/brain-log.md -> ~/dev/knowledge-skeleton/commands/brain-log.md
+  create  link             ~/.claude/commands/brain-sync.md -> ~/dev/knowledge-skeleton/commands/brain-sync.md
+  create  link             ~/.claude/commands/brain-usage.md -> ~/dev/knowledge-skeleton/commands/brain-usage.md
+  ok      knowledge        ~/.cargo/bin/knowledge.exe (0.12.0)
+  ok      plugin           knowledge@knowledge-skeleton 0.12.0
+  create  settings.json    ~/.claude/settings.json: our 0 hooks out (the plugin carries them), knowledge_bin = ~/.cargo/bin/knowledge.exe
+  create  CLAUDE.md        ~/.claude/CLAUDE.md: imports ~/knowledge/00-Meta/Identity.md, ~/knowledge/00-Meta/Hard-Rules.md
+  ok      compile state    a new vault has no finished log
+
+After apply:
+  knowledge doctor --repair --pretty: the first index, hubs and commit notes
+  knowledge rules list --json, then knowledge rules enable <pack> for each pack you want: the rules interview
+  fill the FILL: placeholders in ~/knowledge/00-Meta, then start Claude Code in ~/knowledge
+
+14 change(s). Apply exactly these: knowledge setup --apply 1a5be68145b5b7a2 --harness claude
+plan 1a5be68145b5b7a2
+```
+
+The apply ends with `Done.`, and a second `--plan` on the same machine says `Nothing to change.`
+
 | Flag | Default | |
 |---|---|---|
 | `--vault <path>` | `config.json`'s, else `~/knowledge` | The vault. No spaces: `CLAUDE.md` imports cannot hold one |
 | `--dev <path>` | `config.json`'s, else `~/dev` | Where checkouts live, one folder per GitHub remote |
 | `--machine "<text>"` | empty | Free text the SessionStart banner opens with: hardware, dual-boot, dotfiles |
 | `--from-template` / `--adopt` | adopt a non-empty path, else template | A new vault from `template/`, or an existing one (it must have `00-Meta/00-MOC-Root.md`) |
-| `--signing` | off | Also this boot's commit-signing key and both clones signing (§ Signing and pull trust) |
+| `--signing` | off | Also this boot's commit-signing key and both clones signing ([security.md](security.md)) |
 | `--skeleton <checkout>` | the one `~/.claude/hooks` links, else the one the binary was built in | The skeleton the links point into |
 | `--harness <id>` | every harness found | One harness alone: `claude`, `codex`, `opencode`, `claude-desktop` or `generic` |
 | `--instructions <file>` | none | With `--harness generic`: the file the vault block is written into |
@@ -36,17 +73,11 @@ names. Its last line is the plan id: a hash of the plan and of each target's con
 file that changed after the plan was read is never overwritten unseen. A plan with a FAIL has no id
 to apply: fix what it says and plan again. Nothing is deleted: a real file where a link belongs moves
 to `~/.claude/.pre-skeleton/`, and `settings.json` is copied to `settings.json.pre-skeleton-<hash>`
-before a change. A second `--plan` on a set-up machine says `Nothing to change.`
+before a change.
 
-## For an agent
-
-- Run `--plan` and show the output to the person; apply its id only on their yes.
-- Never edit a hook in `~/.claude/settings.json` that is not this engine's, and never commit the
-  vault for them. The first commit of a template vault is setup's, and only when git has an
-  identity.
-- A FAIL line is the answer to report: quote it, do not work around it.
-- A WARN that names a missing tool (`claude`, `gitleaks`) carries the command that installs
-  it. Installing one is the person's call: ask first.
+Then: [update.md](update.md) to update, [remove.md](remove.md) to take it out,
+[security.md](security.md) for signing, pull trust and the credential fences,
+[verbs.md](verbs.md) for every command, [troubleshooting.md](troubleshooting.md) when a line FAILs.
 
 ## What it does, by hand
 
@@ -55,13 +86,12 @@ checkout, `<vault>` the vault, `<dev>` the checkouts folder.
 
 ### 1. Prerequisites
 
-`git`, `claude` (Claude Code), `gitleaks`, `cargo` (the Rust toolchain, for the knowledge binary) and `bun` (the skills' and commands' tools), all on `PATH`. The hooks commit
-and push their records on their own and scan them with gitleaks first. Without it they commit
-nothing.
+`git`, `claude` (Claude Code), `gitleaks` and `cargo` (the Rust toolchain, for the knowledge
+binary), all on `PATH`. The hooks commit and push their records on their own and scan them with
+gitleaks first. Without it they commit nothing.
 
 | Tool | Linux | Windows |
 |---|---|---|
-| bun | `curl -fsSL https://bun.sh/install \| bash` | `powershell -c "irm bun.sh/install.ps1 \| iex"` |
 | git | your package manager (`pacman -S git`, `apt install git`) | `winget install Git.Git` |
 | claude | `curl -fsSL https://claude.ai/install.sh \| bash` | `irm https://claude.ai/install.ps1 \| iex` |
 | gitleaks | your package manager (`pacman -S gitleaks`, `brew install gitleaks`) | `winget install Gitleaks.Gitleaks` |
@@ -78,7 +108,7 @@ A new one from the template, or an existing clone (then skip to `core.fileMode`)
 
 ```bash
 cp -r <skeleton>/template <vault>
-echo "{\"version\":\"$(jq -r .version <skeleton>/package.json)\"}" > <vault>/.skeleton.json
+echo '{"version":"0.12.0"}' > <vault>/.skeleton.json     # the version `knowledge --version` prints
 git -C <vault> init -b main && git -C <vault> add -A && git -C <vault> commit -m "chore: new vault from knowledge-skeleton"
 git -C <vault> config core.fileMode false
 ```
@@ -102,20 +132,51 @@ refuses the commit when gitleaks is missing. It adds about 1.3 s per commit on W
 ### 3. config.json
 
 `~/.config/knowledge/config.json` on every OS (`$XDG_CONFIG_HOME/knowledge/` when set);
-`$KNOWLEDGE_CONFIG` overrides it. On Windows that is `%USERPROFILE%\.config\knowledge\`, not
-`%APPDATA%`: a packaged (MSIX) app such as Claude desktop has its `%APPDATA%` writes redirected to
-`%LOCALAPPDATA%\Packages\<app>\LocalCache\Roaming`, so a config written from inside it never reaches
-a plain terminal. A Windows machine set up before 2026-11-04 moves `%APPDATA%\knowledge\config.json`
-there; the hooks name both paths until it does.
+`$KNOWLEDGE_CONFIG` overrides it, and `$KNOWLEDGE_HOME` moves the whole folder. On Windows that is
+`%USERPROFILE%\.config\knowledge\`, not `%APPDATA%`: a packaged (MSIX) app such as Claude desktop
+has its `%APPDATA%` writes redirected to `%LOCALAPPDATA%\Packages\<app>\LocalCache\Roaming`, so a
+config written from inside it never reaches a plain terminal.
 
 ```json
 { "vault": "/home/me/knowledge", "devRoot": "/home/me/dev", "os": "arch",
   "machine": "Free text the SessionStart banner opens with.", "rolloverHour": 5 }
 ```
 
-`os` is what logs and commit notes are stamped with. `rolloverHour` is when a daily note starts,
-local time. `"pullTrust": "signed"` turns on pull trust; set it last (§ Signing and pull trust). Create `devRoot` if it does not exist. Check what the hooks see:
-`bun --bun <skeleton>/hooks/skeleton-config.mjs`.
+`vault` and `devRoot` are required; create `devRoot` if it does not exist. `os` is what logs and
+commit notes are stamped with. `rolloverHour` (default 5) is when a daily note starts, local time.
+`"pullTrust": "signed"` turns on pull trust; set it last ([security.md](security.md)).
+
+A vault laid out differently names its folders in `folders`; a key left out keeps the default:
+
+```json
+{ "folders": { "meta": "Meta", "sessions": "Journal" } }
+```
+
+The keys are `meta` (`00-Meta`), `repos` (`10-Repos`), `knowledge` (`20-Knowledge`), `sessions`
+(`30-Sessions`), `plans` (`40-Plans`), `ops` (`50-Ops`), `decisions` (`60-Decisions`), `assets`
+(`80-Assets`) and `inbox` (`90-Inbox`). A name is one folder at the vault's root: no `/`, `\`, `:`,
+`.` or `..`, and no two keys naming one folder. A bad `folders` stops every verb with a line naming
+it.
+
+Check what the hooks see (Windows, the home folder shown as `~`):
+
+```
+$ knowledge config
+{
+  "devRoot": "~\\dev",
+  "home": "~\\.config\\knowledge",
+  "machine": "",
+  "os": "windows",
+  "pullTrust": "",
+  "rolloverHour": 5,
+  "skeleton": "~\\dev\\knowledge-skeleton",
+  "source": "~\\.config\\knowledge\\config.json",
+  "trustDir": "~\\.config\\knowledge",
+  "vault": "~\\knowledge"
+}
+```
+
+`knowledge config <key>` prints one value, and a folder key prints the name in effect.
 
 ### 4. Links into `~/.claude`
 
@@ -141,11 +202,13 @@ junction needs neither. Move an existing `~/.claude/hooks` folder aside first ra
 `~/.agents/skills` is the skills folder Codex, opencode, Gemini CLI, Cursor, Amp and Zed read, so
 `/brain` reaches them through the same link; opencode reads both folders and loads the skill once.
 
-### 4b. The knowledge binary
+### 5. The knowledge binary
 
-```bash
-cargo install --path <skeleton> --locked
-knowledge --version    # knowledge 0.12.0 / SQLite 3.x, FTS5 on
+```
+$ cargo install --path <skeleton> --locked
+$ knowledge --version
+knowledge 0.12.0
+SQLite 3.54.1, FTS5 on
 ```
 
 It lands in `~/.cargo/bin` (`%USERPROFILE%\.cargo\bin` on Windows), with `knowledge-code`, the code
@@ -153,11 +216,14 @@ map, beside it: `knowledge` hands `find --code`, `graph --code` and `code` to it
 command when it is missing. A clean release build takes two to three minutes; the C compiler SQLite
 needs also builds `ring` for `fetch`'s TLS (no CMake, no NASM) and the tree-sitter grammars. Rerun
 it after pulling a skeleton whose `src/` changed: the hooks run the installed copy, never the build
-folder, and `setup` WARNs when the binary it would register is a build folder's. Its three files (`vault-index.db`, `repos-index.db`, `captures.db`) and the
-code maps (`code/<checkout>.db`) live beside `config.json` unless `KNOWLEDGE_HOME` says otherwise. `fetch` trusts the OS certificate store, so a
-machine whose store is out of date fails a TLS handshake rather than falling back to a bundled list.
+folder, and `setup` WARNs when the binary it would register is a build folder's.
 
-### 5. The Claude Code plugin
+Its files live in `~/.config/knowledge` beside `config.json`, unless `KNOWLEDGE_HOME` says
+otherwise: `vault-index.db`, `repos-index.db`, `captures.db`, the code maps (`code/<checkout>.db`)
+and the hooks' state (`state/`). `fetch` trusts the OS certificate store, so a machine whose store
+is out of date fails a TLS handshake rather than falling back to a bundled list.
+
+### 6. The Claude Code plugin
 
 The hooks ship as a plugin, `claude/`, served by this repo's own marketplace
 (`.claude-plugin/marketplace.json`). Every hook is exec form: the command is
@@ -179,21 +245,13 @@ Then the plugin's one option, in `~/.claude/settings.json`, beside every other k
 On Windows the path keeps forward slashes: `"C:/Users/me/.cargo/bin/knowledge.exe"`. Claude Code
 reads hooks at session start, so open a new session after.
 
-- **Updates are never automatic.** The marketplace is added with no `autoUpdate`: once that flag is
-  set, Claude Code copies it into `~/.claude/plugins/known_marketplaces.json`, where it stays even
-  after it is removed from `settings.json`. The plugin's version is the binary's, and Claude Code
-  replaces a cached plugin only when that version changes. It compares against its own clone of
-  the marketplace, which nothing refreshes on its own, so `claude plugin update` alone reports the
-  old version as the latest. When a pull changes `claude/`, the session start names
-  `claude plugin marketplace update knowledge-skeleton`, then
-  `claude plugin update knowledge@knowledge-skeleton`, then `/reload-plugins`.
-- **From 0.10.0's hook block.** `setup` takes every hook of ours out of `settings.json` (a
-  `knowledge … hook` command, or a `brain-*.mjs` under `~/.claude/hooks`) after the plugin installs,
-  and keeps every other hook. If the install fails, the apply stops and the old hooks keep running.
-  `settings.hooks.json` is that old block; only `install.ts` still reads it, for a boot not yet
-  moved to the binary.
+The marketplace is added with no `autoUpdate`: updates are never automatic ([update.md](update.md)).
+`setup` also takes every hook of ours out of `settings.json` that an install before the plugin wrote
+(a `knowledge … hook` command, or a `brain-*.mjs` under `~/.claude/hooks`), after the plugin
+installs, and keeps every other hook. If the install fails, the apply stops and the old hooks keep
+running.
 
-### 6. Identity and Hard-Rules in `~/.claude/CLAUDE.md`
+### 7. Identity and Hard-Rules in `~/.claude/CLAUDE.md`
 
 Both load whole into every session. Add, one import per line:
 
@@ -206,12 +264,13 @@ Never move either behind a link or into a hook: a hook's context is cut to a 2,0
 10,000 chars. The doctor's `priming` check guards it. `setup` writes the two lines between
 `<!-- knowledge-skeleton:begin -->` and `<!-- knowledge-skeleton:end -->`, so `--remove` can take
 out exactly that; text outside the markers is never touched. The same generator writes the other
-harnesses' blocks (§ Other harnesses), and each session start restores a block that went stale.
+harnesses' blocks (below), and each session start restores a block that went stale.
 
-### 6b. The rules lock and the guard
+### 8. The rules lock and the guard
 
-The first lock is written once, by the owner, in their own terminal. A seed supplies what the text
-cannot (each rule's kind, enforcement points and the guards):
+A template vault ships `00-Meta/rules.lock` for its generic packs. For rules you write yourself,
+the lock is re-stamped by you, in your own terminal; a seed supplies what the text cannot (each
+rule's kind, enforcement points and the guards):
 
 ```bash
 cd <vault> && knowledge rules lock --seed <seed.json>   # later edits: knowledge rules lock
@@ -219,56 +278,59 @@ knowledge rules check                                   # rules: N units match 0
 ```
 
 Commit `00-Meta/rules.lock` with Hard-Rules: the session-start restore takes a changed rule back
-from `HEAD` only when `HEAD` matches the lock. The plugin's PreToolUse hook (step 5) is the guard.
+from `HEAD` only when `HEAD` matches the lock. The plugin's PreToolUse hook (step 6) is the guard.
 Without a lock it allows everything, with one stderr line. `setup` points `core.hooksPath` at
 `githooks/` in the vault, this clone and each checkout a `10-Repos` page names. A checkout's own
 `core.hooksPath` is kept as `knowledge.ownHooksPath` and runs first. The hook needs `gitleaks` and
-`knowledge` on `PATH`, and refuses the commit without either.
+`knowledge` on `PATH`, and refuses the commit without either. What the guard can and cannot stop:
+[security.md](security.md).
 
-### 7. Compile state
+### 9. Compile state
 
 `knowledge compile` turns each finished daily log into notes once, remembered by hash in
 `<vault>/50-Ops/brain-compile-state.json` (untracked, per machine). An adopted vault has no state on
 a new machine, so the first session would recompile every log it ever had. `setup` marks every log
-but today's done: each log's absolute path, as the OS writes it, maps to the SHA-256 of its text.
-By hand, the same with `bun`:
+but today's done: the plan's `compile state` line reads `<file>: N finished log(s) marked
+compiled`. This step has no by-hand form: run the plan, even for this line alone. A new vault has
+no finished log, so the line reads `ok`.
 
-```bash
-cd <skeleton>/hooks && bun --bun -e '
-import { createHash } from "node:crypto"; import { readFileSync, writeFileSync, existsSync } from "node:fs";
-import { join } from "node:path"; import { CONFIG, FOLDERS } from "./skeleton-config.mjs";
-const file = join(CONFIG.vault, FOLDERS.ops, "brain-compile-state.json");
-const state = existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : {};
-for (const log of new Bun.Glob("*/*/*.md").scanSync({ cwd: join(CONFIG.vault, FOLDERS.sessions), absolute: true }))
-  state[log] ??= createHash("sha256").update(readFileSync(log, "utf8")).digest("hex");
-writeFileSync(file, JSON.stringify(state, null, 1));'
+### 10. First index, and the check
+
+```
+$ knowledge doctor --repair --pretty
+knowledge doctor  PASS  2026-11-24T10:49:50.767Z
+  PASS  vault-index
+  PASS  retrieval
+  PASS  sessions
+  PASS  auth
+  PASS  frontmatter
+  PASS  links
+  PASS  pointers
+  PASS  reach
+  PASS  ignores
+  PASS  commits
+  PASS  priming
+  PASS  priming-size
+  PASS  rules
+  PASS  budget
+  PASS  skeleton-version
+  WARN  hygiene
+  WARN  pull-trust
+  PASS  codex-trust
+  PASS  portable
 ```
 
-This one marks today's log too; delete its line if today's session should still be compiled.
+The repair builds the vault index (about a second for 2,000 notes), records commits made outside a
+session, regenerates the hub MOCs and brings the index level again. All of it is derived; run it
+whenever a check fails. A WARN leaves the doctor at PASS: `hygiene` WARNs while the vault has
+uncommitted work, and `pull-trust` until it is set up ([security.md](security.md)). The code map needs no step: each checkout's map is
+built by the first `knowledge find <symbol> --code` or `graph <symbol> --code` that names it, and
+brought level by every one after.
 
-### 8. First index
-
-```bash
-knowledge index
-knowledge doctor --repair --pretty
-```
-
-The first builds the vault index (about a second for 2,000 notes). The repair records commits made
-outside Claude, regenerates the hub MOCs and brings the index level again. All of it is derived; run
-it whenever a check fails. The code map needs no step: each checkout's map is built by the first
-`knowledge find <symbol> --code` or `graph <symbol> --code` that names it, and brought level by every
-one after.
-
-### 9. Check
-
-```bash
-knowledge doctor --pretty
-```
-
-Every check PASS (`hygiene` may WARN). Then, for a new vault, fill the `<!-- FILL: … -->` placeholders
-in `00-Meta/Identity.md` and `00-Meta/Hard-Rules.md` and replace the questions in
-`00-Meta/retrieval-cases.json` with ones the vault must always answer. Last, the rules interview:
-`knowledge rules list` shows the packs, and `knowledge rules enable <pack>` turns one's guards on.
+Then, for a new vault, fill the `<!-- FILL: … -->` placeholders in `00-Meta/Identity.md` and
+`00-Meta/Hard-Rules.md`, and replace the questions in `00-Meta/retrieval-cases.json` with ones the
+vault must always answer. Last, the rules interview: `knowledge rules list` shows the packs, and
+`knowledge rules enable <pack>` turns one's guards on.
 
 Each session start runs the full doctor once per logical day, detached, with `--repair --record`;
 a FAIL opens the next session with a `!! VAULT HEALTH FAIL` line. No scheduled task is needed.
@@ -277,7 +339,7 @@ a FAIL opens the next session with a `!! VAULT HEALTH FAIL` line. No scheduled t
 
 `setup --plan` reaches each of these when its adapter (`adapters/<id>.json`, built into the binary)
 detects it, after the Claude part has written `config.json`; `--harness <id>` plans one alone. Each
-one's instructions block comes from the same generator as step 6. Codex and opencode cannot import
+one's instructions block comes from the same generator as step 7. Codex and opencode cannot import
 a file, so their block holds the retrieval steps, then Identity and Hard-Rules written whole. It has
 no by-hand form: `setup` writes it, and each session start restores it.
 
@@ -383,103 +445,3 @@ so write back with `knowledge note decision "<text>"` or `knowledge note log "<t
 with a shell then has `knowledge find` and `knowledge graph`; one that speaks MCP and has no shell
 takes `knowledge mcp` as the desktop app does. Nothing restores this block at session start: plan
 again to check it.
-
-## Signing and pull trust
-
-Commits from every machine are signed with an SSH key, and each session start pulls only a tip
-signed by a key you listed. The key has no passphrase, because the hooks commit with nobody present;
-it signs commits and nothing else. In this order, because step 4 is the one that can refuse a pull:
-
-1. **Each machine:** `knowledge setup --plan --signing`, then `--apply` its id. It writes `~/.config/knowledge/signing_ed25519`,
-   sets `gpg.format ssh`, `user.signingkey`, `commit.gpgsign` and `tag.gpgsign` in the vault and in
-   the skeleton clone, and adds this machine's key to `~/.config/knowledge/allowed_signers`.
-   `ssh-keygen -lf ~/.config/knowledge/signing_ed25519.pub` prints its fingerprint. Add the public key on GitHub as a **signing** key
-   (`gh ssh-key add <key>.pub --type signing`; needs `gh auth refresh -s admin:ssh_signing_key`).
-2. **Each machine:** add the other machine's public key to `allowed_signers`, one line each:
-   `<email> namespaces="git" ssh-ed25519 AAAA…`. Fetch it from
-   `https://api.github.com/users/<you>/ssh_signing_keys`, and compare its fingerprint
-   (`ssh-keygen -lf <file>`) with the one the other machine printed before trusting it.
-3. **Both machines at the same tip** of the vault and the skeleton, so the first checked pull is a
-   signed commit.
-4. **Each machine:** `"pullTrust": "signed"` in `config.json`. Then, on GitHub, a ruleset that
-   requires signed commits on `main`, once every machine signs.
-
-Only the tip of a pull is checked: a signed tip vouches for the unsigned commits under it. `%G?`
-must be `G`; `U` (a good signature from a key not in `allowed_signers`) is refused, and so is a
-missing `allowed_signers`. `allowed_signers` is passed on each call, never read from the repo's
-config. The doctor's `pull-trust` check WARNs until step 4 and FAILs if a piece goes missing.
-Undo, at any step: `git config --unset commit.gpgsign` in a clone, or remove `pullTrust`.
-
-## Credential fences
-
-Recommended for `~/.claude/settings.json`; `setup` never writes it, since security settings stay
-yours:
-
-```json
-{
-  "permissions": {
-    "deny": [
-      "Read(~/.ssh/**)",
-      "Read(~/.codex/auth.json)",
-      "Read(~/.claude/.credentials.json)",
-      "Read(**/.env*)",
-      "Read(~/.config/knowledge/signing_ed25519)"
-    ]
-  }
-}
-```
-
-Merge it into an existing `permissions.deny`. These rules cover the Read tool; a shell command can
-still read the files, so keep shell commands on approval.
-
-## Updating
-
-The skeleton fast-forwards itself at each session start when its tree is clean; when its `claude/`
-plugin changed, that session names `claude plugin marketplace update knowledge-skeleton`, then
-`claude plugin update knowledge@knowledge-skeleton` (the update alone reads a stale clone). After a
-pull that changed `src/`, rebuild the binary (§ 4b), then `knowledge setup --plan` and `--apply`:
-that moves the Codex and opencode plugins to the new pin, and Codex asks for its hook review again.
-When the version moves past the vault's `.skeleton.json`, adapt the vault and bump the pin.
-
-The code map replaced graphify in 0.12.0. On a machine set up before it, the next plan removes the
-graphify server `setup` registered, in Claude Code and in Codex, and leaves a graphify server of
-your own as it is. graphify itself is yours to uninstall: `uv tool uninstall graphifyy`.
-
-## Removing
-
-```bash
-knowledge setup --remove --plan
-knowledge setup --remove --apply <id>
-```
-
-It takes out the links from step 4, the Claude plugin, its marketplace and its option in
-`settings.json` (every other key and hook stays), the block `setup` wrote in `CLAUDE.md`, the
-githooks path (a checkout's own comes back), and a graphify MCP entry an earlier `setup` registered.
-For each other harness found it takes out what § Other harnesses added: the Codex plugin, its
-marketplace, the `knowledge` server (and an earlier graphify one) setup registered, and the trust
-tables `codex plugin remove` leaves in `config.toml` (kept beside it first); opencode's
-`knowledge.ts`; the desktop app's `mcpServers.knowledge`; and each `AGENTS.md` block. A `generic` block goes with `--harness generic --instructions <file> --remove`. It never
-touches the vault, and keeps `config.json`, the compile state and any signing key: delete those by
-hand if you want them gone. The vault stays a folder of Markdown notes. Obsidian's graph colours
-stay too: they are Obsidian's view state.
-
-## Troubleshooting
-
-| Symptom | Cause |
-|---|---|
-| `link FAIL ... Developer Mode` on Windows | A file symlink needs Developer Mode or an elevated shell |
-| `setup: the plan changed since --plan` | A target changed after the plan was printed (or the flags differ): plan again and read it |
-| `ignores` FAIL on a fresh clone | `.obsidian/app.json`'s `userIgnoreFilters` names a folder git did not bring: an empty folder needs a `.gitkeep` |
-| `links` FAIL on a fresh clone, pointing at a date | A record links a daily log that was never committed: commit it, or let the flush write it |
-| `!! SKELETON x is behind the vault's pin y` at session start | The other machine moved the vault to a newer skeleton: `git -C <skeleton> pull --ff-only` |
-| `!! SKELETON x is ahead of the vault's pin y` | The skeleton moved on: read its changes since `y` (`git -C <skeleton> log vy..`), adapt the vault, set `.skeleton.json` to `x`, commit |
-| `!! VAULT PULL refused: the tip is not signed by a known key` | Pull trust is on and origin's tip is unsigned or signed by a key not in `allowed_signers`: check who pushed it (`git log --show-signature -1 @{u}`) before adding a key |
-| `pre-commit: gitleaks is not on PATH; commit refused` | Install gitleaks (§ 1), or the commit stays unscanned |
-| `pin FAIL` in the plan | The adopted vault pins another version: check out that one, or adapt the vault and bump the pin |
-| Every hook errors with `no knowledge config` | Step 3 is missing, or `$KNOWLEDGE_CONFIG` points somewhere empty |
-| `this binary is x, but the codex plugin's hooks were written for y, so they stand down` | A new binary and an old plugin: `knowledge setup --plan`, `--apply`, then the Codex hook review |
-| `WARN hook trust 0 of 9 hooks trusted in Codex` | The hooks wait for your review: `/hooks` in the Codex CLI |
-| `knowledge find` in Codex: `Access denied (os error 5)` on `config.json` | Codex's Windows sandbox: the model should use `mcp__knowledge__find`; `codex mcp list` must show `knowledge` |
-| `cargo install` on Windows cannot replace `knowledge.exe` (access denied) | A running `knowledge mcp` holds the file: the Claude desktop app's server, or Codex's or opencode's. Quit the app fully (the tray too), install, start it again; a session inside that app stops with it, its background tasks included |
-| opencode runs none of the hooks after setup | The service loaded its plugins before the file existed: `opencode service restart` |
-| The desktop Chat lists no `knowledge` tools | The config is in a folder the app left (a Store install reads `%LOCALAPPDATA%\Claude-Data\<package>`), or the app was not fully restarted |

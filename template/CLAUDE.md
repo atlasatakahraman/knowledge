@@ -40,7 +40,7 @@ system exists to prevent. If tier 4 was needed, the vault has a gap: say so, and
 | `90-Inbox/` | Unsorted capture, kept empty |
 
 What each hook writes, and when: [[Hook-Lifecycle]]. Why it is built this way: [[Why-This-Exists]].
-Setup from nothing: the knowledge-skeleton's `INSTALL.md`.
+Setup from nothing: the knowledge-skeleton's `docs/install.md`.
 
 ## Writing to the vault
 

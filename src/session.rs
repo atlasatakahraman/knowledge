@@ -176,7 +176,7 @@ fn records_sync(cfg: &Config) -> (Option<String>, i64) {
     } else {
         match r.get("skipped").and_then(J::str) {
             Some("other changes are staged") => Some("!! RECORDS not committed: other changes are staged in the vault.".into()),
-            Some("gitleaks not installed") => Some("!! RECORDS not committed: gitleaks is not on PATH, and records are never pushed unscanned. Install it (see INSTALL.md § Prerequisites), restart Claude Code.".into()),
+            Some("gitleaks not installed") => Some("!! RECORDS not committed: gitleaks is not on PATH, and records are never pushed unscanned. Install it (see docs/install.md § Prerequisites), restart Claude Code.".into()),
             _ if truthy("pushed") => {
                 let c = r.get("committed").and_then(J::i64).unwrap_or(0);
                 Some(format!("Records from an earlier session committed and pushed ({c} file{}).", if c == 1 { "" } else { "s" }))

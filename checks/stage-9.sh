@@ -90,12 +90,49 @@ check "no owner-specific pack ships" \
   '! printf "%s" "$packs" | grep -qE "\"id\":\"(purchases|people|repos|tauri|turborepo|bun|shadcn|design)\""'
 check "the generic guards ship, and none bound to one machine or repo" \
   'k rules list | grep -q "^3 guards: rules-files, production, push-destructive-git$"'
+# S9.4 defects: a hooksPath spelled otherwise for our own folder read as the checkout's own, and a
+# machine with no Claude Code session yet failed the doctor's budget check.
+git -C "$T" config core.hooksPath "$(native "$SK")/githooks/."
+check "a hooksPath naming our githooks in another spelling reads ok" \
+  's --plan | grep -E "^  [a-z]+ +hooksPath +$(native "$T")" | grep -q "^  ok "'
+check "no Claude Code session yet: the budget check passes with nothing to measure" \
+  'k doctor --json --only budget | grep -q "\"ok\":true.*\"transcript\":null"'
 
 # --- No folder name in src/ outside config.rs (comment lines left out) ---------------------------
 hits=$(grep -nE '"[^"]*(00-Meta|10-Repos|20-Knowledge|30-Sessions|40-Plans|50-Ops|60-Decisions|80-Assets|90-Inbox)' "$ROOT"/src/*.rs |
   grep -v '/src/config\.rs:' | grep -vE '^[^:]+:[0-9]+:[[:space:]]*//')
 check "src/ names no folder outside config.rs" '[ -z "$hits" ]'
 [ -z "$hits" ] || printf '%s\n' "$hits" | sed 's/^/      /'
+
+# --- S9.4: the docs split by task, and `update --plan` -------------------------------------------
+DOCS="$ROOT/README.md $ROOT/AGENTS.md $ROOT/SECURITY.md $(ls "$ROOT"/docs/*.md)"
+dead=""
+for f in $DOCS; do
+  dir=$(dirname "$f")
+  for t in $(grep -oE '\]\([^)#[:space:]]+(#[^)]*)?\)' "$f" | sed -E 's/^\]\(//; s/\)$//; s/#.*//' | grep -vE '^[a-z]+:'); do
+    [ -e "$dir/$t" ] || dead="$dead ${f#"$ROOT"/} -> $t"
+  done
+done
+check "every link between the docs resolves" '[ -z "$dead" ]'
+[ -z "$dead" ] || printf '      %s\n' $dead
+check "the docs are one per task" \
+  'for d in install update remove verbs security troubleshooting; do [ -f "$ROOT/docs/$d.md" ] || exit 1; done'
+bun=$(grep -rnE '(^|[^[:alnum:]_./-])bunx?( |`|$)' $DOCS "$ROOT/skills" "$ROOT/commands" "$ROOT/template" 2>/dev/null)
+check "no doc, skill, command or template note names a bun command" '[ -z "$bun" ]'
+[ -z "$bun" ] || printf '%s\n' "$bun" | sed 's/^/      /'
+old=$(grep -rln 'INSTALL\.md' $DOCS "$ROOT/src" "$ROOT/template" "$ROOT/skills" "$ROOT/commands" 2>/dev/null)
+check "nothing points at INSTALL.md" '[ -z "$old" ]'
+export KNOWLEDGE_HOME="$TMP/uhome"; mkdir -p "$KNOWLEDGE_HOME"
+up=$(k update --plan 2>&1); ucode=$?
+if [ $ucode -ne 0 ] && printf '%s' "$up" | grep -q "api.github.com"; then
+  echo "SKIP  update --plan: GitHub's API is out of reach ($up)"
+else
+  check "update --plan names this binary, then says no release exists or names the latest" \
+    'printf "%s" "$up" | head -n 1 | grep -q "^knowledge [0-9.]*, " && printf "%s" "$up" | grep -qE "^(No release is published yet at |latest release: v)"'
+fi
+check "update --apply is refused with the reason" \
+  '! k update --apply x > "$TMP/ua.txt" 2>&1 && grep -q "not built" "$TMP/ua.txt"'
+unset KNOWLEDGE_HOME
 
 rm -rf "$TMP"
 echo
