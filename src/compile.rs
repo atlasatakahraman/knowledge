@@ -51,19 +51,6 @@ fn subdirs(p: &Path) -> Vec<String> {
     v
 }
 
-fn is_log_name(f: &str) -> bool {
-    let b = f.as_bytes();
-    f.len() == 13
-        && f.ends_with(".md")
-        && b[..10].iter().enumerate().all(|(i, c)| {
-            if i == 4 || i == 7 {
-                *c == b'-'
-            } else {
-                c.is_ascii_digit()
-            }
-        })
-}
-
 /// Every daily log, chronological (the path sorts as YYYY/MM/YYYY-MM-DD).
 pub fn logs(cfg: &Config) -> Vec<PathBuf> {
     let root = cfg.vault.join(SESSIONS);
@@ -82,7 +69,7 @@ pub fn logs(cfg: &Config) -> Vec<PathBuf> {
             out.extend(
                 files
                     .into_iter()
-                    .filter(|f| is_log_name(f))
+                    .filter(|f| state::is_log_name(f))
                     .map(|f| dir.join(f)),
             );
         }

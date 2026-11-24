@@ -99,6 +99,20 @@ pub fn note_path(cfg: &Config, ms: i64) -> PathBuf {
         .join(format!("{}.md", ymd(&d)))
 }
 
+/// A daily note's file name, `YYYY-MM-DD.md`, as `note_path` writes it.
+pub fn is_log_name(f: &str) -> bool {
+    let b = f.as_bytes();
+    f.len() == 13
+        && f.ends_with(".md")
+        && b[..10].iter().enumerate().all(|(i, c)| {
+            if i == 4 || i == 7 {
+                *c == b'-'
+            } else {
+                c.is_ascii_digit()
+            }
+        })
+}
+
 /// Create the daily note with its frontmatter, unless it exists.
 pub fn ensure_note(cfg: &Config, file: &Path, ms: i64) {
     if file.exists() {

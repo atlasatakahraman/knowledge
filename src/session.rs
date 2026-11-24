@@ -353,19 +353,6 @@ fn pin_check(cfg: &Config) -> Option<String> {
     }
 }
 
-fn is_log_name(f: &str) -> bool {
-    let b = f.as_bytes();
-    f.len() == 13
-        && f.ends_with(".md")
-        && b[..10].iter().enumerate().all(|(i, c)| {
-            if i == 4 || i == 7 {
-                *c == b'-'
-            } else {
-                c.is_ascii_digit()
-            }
-        })
-}
-
 /// Every daily log's date under the sessions folder. A folder that cannot be read ends the walk
 /// with an error, as bun's readdirSync threw.
 fn log_days(dir: &Path, out: &mut Vec<String>) -> std::io::Result<()> {
@@ -374,7 +361,7 @@ fn log_days(dir: &Path, out: &mut Vec<String>) -> std::io::Result<()> {
         let name = e.file_name().to_string_lossy().into_owned();
         if e.file_type()?.is_dir() {
             log_days(&e.path(), out)?;
-        } else if is_log_name(&name) {
+        } else if state::is_log_name(&name) {
             out.push(name[..10].to_string());
         }
     }
