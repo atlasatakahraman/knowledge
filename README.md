@@ -85,6 +85,15 @@ built in, with FTS5), `serde`, `serde_json`, `jiff` (local time for the 05:00 ro
 store (`rustls-platform-verifier`, no bundled root list) and `htmd` (HTML to Markdown).
 `checks/crates.txt` lists every crate in the tree; CI fails on any other.
 
+The code map is a second binary from the same crate, `knowledge-code`, installed beside it by the
+same `cargo install`. Every hook spawns `knowledge`, so the tree-sitter grammars stay out of it:
+`knowledge` hands its code verbs to `knowledge-code` (8.4 MB beside its 6.3 MB, a Windows release
+build). Its crates:
+`tree-sitter` (the parser and query engine, C compiled by the same compiler SQLite needs) and one
+grammar per language: `tree-sitter-typescript` (`.ts`, `.tsx`), `tree-sitter-javascript` (`.js`,
+`.mjs`, `.cjs`, `.jsx`), `tree-sitter-rust` and `tree-sitter-python`. Other languages are not
+mapped; `find --repo` still searches a checkout's docs as text.
+
 | Verb | What it does |
 |---|---|
 | `knowledge index [--rebuild] [<note>…]` | brings the index level with the vault: only changed notes are read |
@@ -97,9 +106,13 @@ store (`rustls-platform-verifier`, no bundled root list) and `htmd` (HTML to Mar
 | `knowledge events <transcript.jsonl> [--json]` | a session's decisions, constraints, plans and refusals, for `brain-flush` |
 | `knowledge inject <prompt>` | what the prompt hook would add to a prompt |
 | `knowledge graph <note> [<note>] \| <note> --text` | a note's links in and out, the shortest path between two, or the note's text |
+| `knowledge find <symbol> --code [--repo <name>]` | where a symbol is defined, one line each: `repo path:line kind signature` |
+| `knowledge graph <symbol> [<symbol>] --code [--repo <name>]` | what uses a symbol and what it uses, or the chain of uses between two (at most 4 hops) |
+| `knowledge code index [<repo>\|--all] [--rebuild]` | brings a checkout's code map level by hand: only changed files are parsed |
+| `knowledge code duplicate [--staged] [<repo>]` | a new or changed definition whose body matches another's, or whose name a sibling app under `apps/` defines; warns, exits 0 |
 | `knowledge note decision\|log <text>` | a line in the decision ledger, or in today's session note: the write-back for a harness with no hooks |
 | `knowledge config [<key>]` | the paths and settings the hooks see, for the skills and commands |
-| `knowledge mcp` | an MCP server on stdio with four tools: `find`, `graph`, `read` (read-only) and `note` |
+| `knowledge mcp` | an MCP server on stdio with four tools: `find`, `graph`, `read` (read-only) and `note`; `find` and `graph` take `code: true` for the code map |
 | `knowledge hook session\|prompt\|pre-tool\|post-edit\|post-bash\|capture --harness <id> [--pin <v>]` | the hooks themselves: the harness's JSON on stdin, always exit 0; with `--pin`, a binary of another version stands down |
 | `knowledge setup --plan \| --apply <id> \| --remove --plan` | this machine's setup across every harness found, planned before anything is written; `--harness <id>` for one |
 | `knowledge doctor [--pretty] [--repair] [--record]` | retrieval health, zero tokens: the index, 33 questions, links, priming, sync; `--repair` rebuilds what is derived |
@@ -116,7 +129,10 @@ store (`rustls-platform-verifier`, no bundled root list) and `htmd` (HTML to Mar
 Three files in `$KNOWLEDGE_HOME`, else the config's folder, all per machine and never in git:
 `vault-index.db` (rebuilt from the notes in about a second), `repos-index.db` (repo docs, kept apart
 so a repo doc never reaches the prompt hook or the vault's link checks) and `captures.db` (what
-`keep` and `fetch` stored; a capture older than 14 days is deleted at the next write).
+`keep` and `fetch` stored; a capture older than 14 days is deleted at the next write). Beside them,
+`code/<checkout>.db` holds one checkout's code map. Each is built by the first code query that names
+the checkout and brought level before every one after: a file whose size and mtime are unchanged
+is not read, and git's tracked files are the only ones mapped.
 
 `fetch` refuses, before it connects: anything but `http` and `https`, credentials in a URL, and any
 host that resolves to a loopback, private (RFC 1918), link-local, unique-local, CGNAT, multicast or

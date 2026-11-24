@@ -148,11 +148,13 @@ cargo install --path <skeleton> --locked
 knowledge --version    # knowledge 0.11.2 / SQLite 3.x, FTS5 on
 ```
 
-It lands in `~/.cargo/bin` (`%USERPROFILE%\.cargo\bin` on Windows). A release build takes about a
-minute; the C compiler SQLite needs also builds `ring` for `fetch`'s TLS (no CMake, no NASM). Rerun
+It lands in `~/.cargo/bin` (`%USERPROFILE%\.cargo\bin` on Windows), with `knowledge-code`, the code
+map, beside it: `knowledge` hands `find --code`, `graph --code` and `code` to it, and names this
+command when it is missing. A clean release build takes two to three minutes; the C compiler SQLite
+needs also builds `ring` for `fetch`'s TLS (no CMake, no NASM) and the tree-sitter grammars. Rerun
 it after pulling a skeleton whose `src/` changed: the hooks run the installed copy, never the build
-folder, and `setup` WARNs when the binary it would register is a build folder's. Its three files (`vault-index.db`, `repos-index.db`, `captures.db`) live beside
-`config.json` unless `KNOWLEDGE_HOME` says otherwise. `fetch` trusts the OS certificate store, so a
+folder, and `setup` WARNs when the binary it would register is a build folder's. Its three files (`vault-index.db`, `repos-index.db`, `captures.db`) and the
+code maps (`code/<checkout>.db`) live beside `config.json` unless `KNOWLEDGE_HOME` says otherwise. `fetch` trusts the OS certificate store, so a
 machine whose store is out of date fails a TLS handshake rather than falling back to a bundled list.
 
 ### 5. The Claude Code plugin
