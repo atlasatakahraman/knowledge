@@ -13,3 +13,6 @@ package-lock.json
 
 # Cargo build output.
 /target/
+
+# Stage probes and parity runs: real vault data, never published.
+/evidence/

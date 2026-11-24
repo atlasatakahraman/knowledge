@@ -1,0 +1,112 @@
+# Packages the two binaries for every target build.yml builds (spec D21, vault audit Stage 9). A v*
+# tag builds each target, writes one SHA256SUMS over the archives, attests each archive's build
+# provenance and opens a draft release; the owner signs SHA256SUMS with their SSH key on their own
+# machine and publishes the draft (docs/verify.md). workflow_dispatch is the dry run: the archives
+# and SHA256SUMS stay workflow artifacts, with no attestation and no release.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - { os: windows-latest, target: x86_64-pc-windows-msvc }
+          - { os: windows-11-arm, target: aarch64-pc-windows-msvc }
+          - { os: macos-15-intel, target: x86_64-apple-darwin }
+          - { os: macos-latest, target: aarch64-apple-darwin }
+          - { os: ubuntu-latest, target: x86_64-unknown-linux-gnu }
+          - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu }
+          - { os: ubuntu-latest, target: x86_64-unknown-linux-musl, musl: true }
+          - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-musl, musl: true }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: rustup show active-toolchain || rustup toolchain install
+        shell: bash
+      - run: rustup target add ${{ matrix.target }}
+      - if: matrix.musl
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+      - run: cargo build --release --locked --target ${{ matrix.target }}
+      # One folder per archive: both binaries, the licence, and a README that says where the docs
+      # and the verify steps are. A tag must name Cargo.toml's version, so a release can't carry a
+      # binary that reports another one.
+      - name: stage
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+        run: |
+          # [^"]*, not .*$: a Windows runner checks Cargo.toml out with CRLF.
+          ver=$(sed -n 's/^version = "\([^"]*\)".*/\1/p' Cargo.toml | head -n 1)
+          if [[ "$GITHUB_REF" == refs/tags/* && "$GITHUB_REF_NAME" != "v$ver" ]]; then
+            echo "tag $GITHUB_REF_NAME does not name Cargo.toml's version $ver" >&2; exit 1
+          fi
+          ext=""; [[ "$TARGET" == *windows* ]] && ext=".exe"
+          name="knowledge-$ver-$TARGET"
+          mkdir "$name"
+          cp "target/$TARGET/release/knowledge$ext" "target/$TARGET/release/knowledge-code$ext" LICENSE "$name/"
+          printf 'knowledge %s for %s\n\nPut both binaries on your PATH, side by side.\nInstall: %s/blob/v%s/docs/install.md\nVerify this archive: %s/blob/v%s/docs/verify.md\n' \
+            "$ver" "$TARGET" "$REPO_URL" "$ver" "$REPO_URL" "$ver" > "$name/README.txt"
+          echo "NAME=$name" >> "$GITHUB_ENV"
+      - if: runner.os == 'Windows'
+        shell: pwsh
+        run: Compress-Archive -Path $env:NAME -DestinationPath "$env:NAME.zip"
+      - if: runner.os != 'Windows'
+        shell: bash
+        run: tar -czf "$NAME.tar.gz" "$NAME"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ matrix.target }}
+          path: ${{ env.NAME }}.*
+          if-no-files-found: error
+          retention-days: 7
+
+  sums:
+    needs: package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: dist
+          merge-multiple: true
+      - run: cd dist && sha256sum -- * > SHA256SUMS && cat SHA256SUMS
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: SHA256SUMS
+          path: dist/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 7
+
+  # The only job that can write, and it runs on a tag alone.
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: sums
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: dist
+          merge-multiple: true
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            dist/*.zip
+            dist/*.tar.gz
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --draft --verify-tag --title "$GITHUB_REF_NAME"
