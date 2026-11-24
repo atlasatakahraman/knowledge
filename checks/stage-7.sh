@@ -51,7 +51,7 @@ check "rules check: a stale block fails, exit 1, naming the file" 'out=$(k rules
 check "doctor priming FAILs on the stale block" 'priming | grep -q "\"ok\":false" && priming | grep -q "staleBlocks\":\[\"[^]]*codex"'
 out=$(k hook session --harness claude < /dev/null 2>&1)
 check "hook session restores it, saying so" 'printf "%s" "$out" | grep -q "restored the knowledge block in .*codex[\/]*AGENTS.md"'
-check "the block holds Hard-Rules whole" 'diff <(sed "1,/^---$/d" "$VAULT/00-Meta/Hard-Rules.md" | sed "1,/^---$/d" | tr -d "\r" | sed "/^$/d") <(awk -v b="$BEGIN" -v e="$END" "index(\$0,b){on=1} index(\$0,e){on=0} on" "$CODEX" | sed "/^$/d") >/dev/null 2>&1 || grep -qF "$(sed -n "/^## /{p;q}" "$VAULT/00-Meta/Hard-Rules.md")" "$CODEX"'
+check "the block holds Hard-Rules whole" 'diff <(sed "1,/^---$/d" "$VAULT/00-Meta/Hard-Rules.md" | sed "1,/^---$/d" | tr -d "\r" | sed "/^$/d") <(awk -v b="$BEGIN" -v e="$END" "index(\$0,b){on=1} index(\$0,e){on=0} on" "$CODEX" | sed "/^$/d") >/dev/null 2>&1 || grep -qF "$(sed -n "/^## /{p;q;}" "$VAULT/00-Meta/Hard-Rules.md")" "$CODEX"'
 check "user text outside the markers is byte-identical" '[ "$(outside "$CODEX")" = "$before_codex" ]'
 check "a file with no block is not touched" '[ "$(sha "$OPEN")" = "$open_sha" ]'
 check "Claude's old section moves onto the new markers, imports kept" 'grep -qF "$BEGIN" "$CLAUDE" && ! grep -q "imports, written by knowledge setup" "$CLAUDE" && grep -q "^@.*/00-Meta/Hard-Rules.md$" "$CLAUDE" && grep -q "^After, mine.$" "$CLAUDE"'

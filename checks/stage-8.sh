@@ -108,12 +108,17 @@ check "graph --code <b> <a>: the same chain, in call order" '[ "$(k graph beta e
 check "graph --code: no chain is said so" 'k graph label alpha --code --repo fixture | grep -q "^no chain of uses between label and alpha"'
 check "graph --code: held to the budget" 'k graph beta --code --repo fixture --budget 200 | grep -q "past the 200-char budget"'
 check "a --repo that is a path is refused" '! k find beta --code --repo ../fixture 2>/dev/null'
-mcp() { printf '%s\n' "$1" | k mcp; }
-call() { printf '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"%s","arguments":%s}}' "$1" "$2"; }
-check "mcp: find with code answers from the code map" 'mcp "$(call find "{\"q\":\"epsilon\",\"code\":true,\"repo\":\"fixture\"}")" | grep -q "fixture src/other.rs:7 function"'
-check "mcp: graph with code lists the uses" 'mcp "$(call graph "{\"note\":\"delta\",\"code\":true,\"repo\":\"fixture\"}")" | grep -q "src/other.rs:7 epsilon function"'
-check "mcp: a path for repo is an error, not a read" 'mcp "$(call find "{\"q\":\"beta\",\"code\":true,\"repo\":\"../fixture\"}")" | grep -q "\"isError\":true"'
-check "mcp: repo without code is refused" 'mcp "$(call graph "{\"note\":\"x\",\"repo\":\"fixture\"}")" | grep -q "repo: only with code"'
+# The replies are taken outside `check`: macOS's bash 3.2 mangles `\"` inside a "$(…)" under
+# eval, and the server then answers a parse error (CI, 0bcbb0d).
+mcp() { printf '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"%s","arguments":%s}}\n' "$1" "$2" | k mcp; }
+r_find=$(mcp find '{"q":"epsilon","code":true,"repo":"fixture"}')
+r_graph=$(mcp graph '{"note":"delta","code":true,"repo":"fixture"}')
+r_path=$(mcp find '{"q":"beta","code":true,"repo":"../fixture"}')
+r_norepo=$(mcp graph '{"note":"x","repo":"fixture"}')
+check "mcp: find with code answers from the code map" 'echo "$r_find" | grep -q "fixture src/other.rs:7 function"'
+check "mcp: graph with code lists the uses" 'echo "$r_graph" | grep -q "src/other.rs:7 epsilon function"'
+check "mcp: a path for repo is an error, not a read" 'echo "$r_path" | grep -q "\"isError\":true"'
+check "mcp: repo without code is refused" 'echo "$r_norepo" | grep -q "repo: only with code"'
 
 # --- S8.3: the duplicate audit ------------------------------------------------------------------
 # Committed: a body long enough to have a shape, a component in one app, and that app's Next.js
@@ -209,6 +214,22 @@ check "graph --code: a front-end invoke of the name is an [invoke] use" 'echo "$
 check "graph --code: generate_handler registers it, its only other user" 'echo "$out" | grep -qx "    src/app.rs:1 run function \[register\]" && echo "$out" | grep -qx "  used by (2):"'
 check "graph --code: an unregistered command is not reached by invoke" 'k graph stray --code --repo fixture | grep -qx "  used by (0):"'
 check "graph --code <a> <b>: the chain crosses from TS to Rust" '! k graph pingNow ping --code --repo fixture | grep -q "^no chain"'
+
+# --- S8.6: the tracked files come from .git/index, not a git spawn --------------------------------
+# A split index is left to git itself, so its map is the reference; versions 3 and 4 of the index
+# (an intent-to-add entry sets v3's extended flags) must give the same files, symbols and refs.
+map() { k code index fixture --rebuild | sed -n 's/^fixture: \([0-9]*\) files: .*; \([0-9]*\) symbols, \([0-9]*\) refs.*/\1 \2 \3/p'; }
+printf 'pub fn later() -> u32 {\n    beta(4)\n}\n' > "$FIX/src/later.rs"
+g add -N src/later.rs
+g update-index --split-index
+ref=$(map)
+# Every tracked file with a grammar but big.js, which is over the cap.
+check "a split index, listed by git, maps the intent-to-add file too ($ref)" '[ "${ref%% *}" = "$(g ls-files | grep -v big.js | grep -cE "\.(rs|pyi?|[cm]?js|jsx|[cm]?ts|tsx)$")" ]'
+g update-index --no-split-index
+for v in 3 4 2; do
+  g update-index --index-version "$v"
+  check "an index v$v, read without git, gives the same map" '[ "$(map)" = "$ref" ]'
+done
 
 rm -rf "$TMP"
 echo "$fails failed"
