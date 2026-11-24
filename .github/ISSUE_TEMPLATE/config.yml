@@ -1,5 +1,6 @@
-# Questions and ideas belong in Discussions, security bugs in a private report; Issues hold only
-# what is broken, so every issue is something to fix.
+# Questions and ideas belong in Discussions; Issues hold only what is broken, so every issue is
+# something to fix. No security link here: with private vulnerability reporting on, GitHub adds
+# "Report a security vulnerability" to the chooser itself, and a second link only duplicated it.
 blank_issues_enabled: false
 contact_links:
   - name: Question
@@ -8,6 +9,3 @@ contact_links:
   - name: Idea or feature request
     url: https://github.com/atlasatakahraman/knowledge-skeleton/discussions/categories/ideas
     about: Something the engine should do that it does not.
-  - name: Security vulnerability
-    url: https://github.com/atlasatakahraman/knowledge-skeleton/security/advisories/new
-    about: Report it privately, never in a public issue.
