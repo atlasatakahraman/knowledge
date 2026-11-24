@@ -195,6 +195,21 @@ check "graph --code: a TS type alias is a symbol with its [type] uses" 'k graph 
 check "graph --code: a Rust method call never reaches a free function" 'k graph join --code --repo fixture | grep -qx "  used by (0):"'
 check "graph --code: a private Rust struct is not another file's" 'k graph State --code --repo fixture | grep -qx "  used by (0):"'
 
+# --- S8.4b: a Tauri command's front-end call and its registration --------------------------------
+# The front end names a command by string, and `generate_handler!` registers it by path inside a
+# macro, so before S8.4b a command had "used by (0)". A command in an inline `mod` is a function,
+# and an `invoke` of a name no handler registers links nothing.
+printf 'pub mod commands {\n    pub fn ping() -> u32 {\n        1\n    }\n    pub fn stray() -> u32 {\n        2\n    }\n}\n' > "$FIX/src/cmds.rs"
+printf 'pub fn run() {\n    tauri::generate_handler![crate::cmds::commands::ping];\n}\n' > "$FIX/src/app.rs"
+printf 'export function pingNow() {\n  return invoke("ping");\n}\nexport function strayNow() {\n  return invoke("stray");\n}\n' > "$FIX/web/ipc.ts"
+g add -A && g commit -q -m s8.4b-tauri
+out=$(k graph ping --code --repo fixture)
+check "graph --code: a command in an inline mod is a function" 'echo "$out" | grep -q "^ping — fixture src/cmds.rs:2 function"'
+check "graph --code: a front-end invoke of the name is an [invoke] use" 'echo "$out" | grep -qx "    web/ipc.ts:1 pingNow function \[invoke\]"'
+check "graph --code: generate_handler registers it, its only other user" 'echo "$out" | grep -qx "    src/app.rs:1 run function \[register\]" && echo "$out" | grep -qx "  used by (2):"'
+check "graph --code: an unregistered command is not reached by invoke" 'k graph stray --code --repo fixture | grep -qx "  used by (0):"'
+check "graph --code <a> <b>: the chain crosses from TS to Rust" '! k graph pingNow ping --code --repo fixture | grep -q "^no chain"'
+
 rm -rf "$TMP"
 echo "$fails failed"
 [ "$fails" -eq 0 ]

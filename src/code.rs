@@ -21,7 +21,9 @@ use tree_sitter::{
 // 4: a ref crosses files only to a definition the other file can name; a Rust `x.f()` reaches
 //    methods only; a function handed on as a value is a use (S8.4). A cache of another version
 //    is rebuilt.
-const SCHEMA_VERSION: i32 = 4;
+// 5: a Tauri command's front-end `invoke("name")` and its `generate_handler![…]` registration
+//    are refs (S8.4b).
+const SCHEMA_VERSION: i32 = 5;
 
 // `uses` holds each symbol's raw reference names; `refs` is them resolved, rebuilt in one
 // statement after any change (index.rs keeps notes' `refs` and `links` the same way).
@@ -40,7 +42,7 @@ CREATE TABLE uses    (src INTEGER NOT NULL, name TEXT NOT NULL, kind TEXT NOT NU
 CREATE TABLE refs    (src INTEGER NOT NULL, dst INTEGER NOT NULL, kind TEXT NOT NULL,
                       PRIMARY KEY (src, dst, kind)) WITHOUT ROWID;
 CREATE INDEX refs_dst ON refs (dst);
-PRAGMA user_version = 4;";
+PRAGMA user_version = 5;";
 
 /// Generated or minified code: not worth a parse, and the likeliest to be slow.
 const MAX_BYTES: u64 = 1 << 20;
@@ -87,6 +89,24 @@ const JSX_VALUES: &str = "
 (jsx_expression (identifier) @name) @reference.value";
 const PYTHON_VALUES: &str = "
 (argument_list (identifier) @name) @reference.value";
+
+/// A Tauri command crosses the IPC by name, as a string: `invoke("deps_install")`, or
+/// `__TAURI_INVOKE("deps_install")` in tauri-specta's generated bindings. Neither tool linked the
+/// front end to a command (S8.4b: TheAtlas's `deps_check_updates` "used by (0)"). The use is the
+/// string; `sync` resolves it to a registered Rust function, the one ref that crosses languages.
+const TAURI_INVOKES: &str = r#"
+(call_expression
+  function: [(identifier) @f (member_expression property: (property_identifier) @f)]
+  arguments: (arguments . (string (string_fragment) @name))
+  (#any-of? @f "invoke" "__TAURI_INVOKE")) @reference.invoke"#;
+/// `tauri::generate_handler![a::b::cmd, …]` and tauri-specta's `collect_commands![…]` register the
+/// commands. A macro's body is a token tree, not paths, so no other query sees them; `extract` keeps
+/// each path's last segment only.
+const TAURI_REGISTERS: &str = r#"
+(macro_invocation
+  macro: [(identifier) @m (scoped_identifier name: (identifier) @m)]
+  (token_tree (identifier) @name)
+  (#any-of? @m "generate_handler" "collect_commands")) @reference.register"#;
 
 /// TypeScript's annotations, `extends` and generics; JavaScript has no type nodes. Its tags.scm
 /// defines interfaces but not a `type` alias or an `enum`, so `parseCommand(…, commands: Commands)`
@@ -164,21 +184,21 @@ impl Lang {
     fn tags(self) -> String {
         match self {
             Lang::JavaScript => format!(
-                "{}\n{JSX_RENDERS}\n{JS_VALUES}\n{JSX_VALUES}",
+                "{}\n{JSX_RENDERS}\n{JS_VALUES}\n{JSX_VALUES}\n{TAURI_INVOKES}",
                 tree_sitter_javascript::TAGS_QUERY
             ),
             Lang::TypeScript => format!(
-                "{}\n{}\n{TS_TYPES}\n{JS_VALUES}",
+                "{}\n{}\n{TS_TYPES}\n{JS_VALUES}\n{TAURI_INVOKES}",
                 tree_sitter_javascript::TAGS_QUERY,
                 tree_sitter_typescript::TAGS_QUERY
             ),
             Lang::Tsx => format!(
-                "{}\n{}\n{JSX_RENDERS}\n{TS_TYPES}\n{JS_VALUES}\n{JSX_VALUES}",
+                "{}\n{}\n{JSX_RENDERS}\n{TS_TYPES}\n{JS_VALUES}\n{JSX_VALUES}\n{TAURI_INVOKES}",
                 tree_sitter_javascript::TAGS_QUERY,
                 tree_sitter_typescript::TAGS_QUERY
             ),
             Lang::Rust => format!(
-                "{}\n{RUST_CALLS}\n{RUST_TYPES}",
+                "{}\n{RUST_CALLS}\n{RUST_TYPES}\n{TAURI_REGISTERS}",
                 tree_sitter_rust::TAGS_QUERY
             ),
             Lang::Python => format!(
@@ -285,6 +305,17 @@ fn extract(lang: Lang, q: &Query, tree: &Tree, src: &[u8]) -> (Vec<Def>, Vec<Use
             continue;
         }
         if let Some(kind) = tag.strip_prefix("definition.") {
+            // tree-sitter-rust's tags.scm calls any `fn` in a `declaration_list` a method, and an
+            // inline `mod m { … }` body is one too; its `function` match of the same node follows
+            // (S8.4b: TheAtlas's `commands::display_server` was a method, so no handler reached it).
+            if kind == "method"
+                && node
+                    .parent()
+                    .and_then(|p| p.parent())
+                    .is_some_and(|g| g.kind() == "mod_item")
+            {
+                continue;
+            }
             // JavaScript's and TypeScript's queries can both mark one method.
             if seen.insert((node.start_byte(), text.to_string())) {
                 defs.push(Def {
@@ -299,6 +330,10 @@ fn extract(lang: Lang, q: &Query, tree: &Tree, src: &[u8]) -> (Vec<Def>, Vec<Use
                 });
             }
         } else if let Some(kind) = tag.strip_prefix("reference.") {
+            // `theatlas_deps::commands::deps_install`: the crate and module are no command.
+            if kind == "register" && name.next_sibling().is_some_and(|s| s.kind() == "::") {
+                continue;
+            }
             uses.push(Use {
                 at: name.start_byte(),
                 name: text.to_string(),
@@ -631,6 +666,9 @@ pub fn sync(conn: &mut Connection, root: &Path) -> Result<Stats, Fault> {
         // import each other, Rust and Python reach no other (S8.2: Rust's `conn.prepare` linked to
         // a method in a `.mjs`). Another file's definition is a candidate only when that file can
         // name it, and a Rust `x.f()` only reaches a method (`reach`, `extract`; S8.4).
+        // A Tauri `invoke("name")` is the one crossing: the front end names a Rust command by
+        // string, so it resolves to a Rust function that a `generate_handler![…]` registers, and
+        // only those, as Tauri dispatches no other (S8.4b).
         tx.execute_batch(
             "DELETE FROM refs;
              INSERT OR IGNORE INTO refs (src, dst, kind)
@@ -640,15 +678,23 @@ pub fn sync(conn: &mut Connection, root: &Path) -> Result<Stats, Fault> {
                JOIN symbols s ON s.name = u.name AND s.kind != 'file'
                  AND (u.member = 0 OR s.kind = 'method')
                  AND (u.kind != 'value' OR s.kind IN ('function', 'class'))
+                 AND (u.kind != 'register' OR s.kind = 'function')
                JOIN files sf ON sf.id = s.file
-               WHERE s.id != u.src
+               WHERE s.id != u.src AND u.kind != 'invoke'
                  AND (CASE WHEN uf.lang IN ('rust', 'python') THEN uf.lang ELSE 'js' END)
                    = (CASE WHEN sf.lang IN ('rust', 'python') THEN sf.lang ELSE 'js' END)
                  AND (s.file = us.file OR (s.reach = 1 AND NOT EXISTS (
                    SELECT 1 FROM symbols l WHERE l.name = u.name AND l.file = us.file
                      AND l.kind != 'file' AND l.id != u.src
                      AND (u.member = 0 OR l.kind = 'method')
-                     AND (u.kind != 'value' OR l.kind IN ('function', 'class')))));",
+                     AND (u.kind != 'value' OR l.kind IN ('function', 'class'))
+                     AND (u.kind != 'register' OR l.kind = 'function'))));
+             INSERT OR IGNORE INTO refs (src, dst, kind)
+               SELECT u.src, s.id, u.kind FROM uses u
+               JOIN symbols s ON s.name = u.name AND s.kind = 'function'
+               JOIN files sf ON sf.id = s.file AND sf.lang = 'rust'
+               WHERE u.kind = 'invoke' AND EXISTS (
+                 SELECT 1 FROM refs r WHERE r.dst = s.id AND r.kind = 'register');",
         )?;
     }
     s.symbols = tx.query_row(
