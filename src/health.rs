@@ -322,18 +322,18 @@ fn check_codex_trust() -> Check {
                 ),
             ]),
         ),
-        Some(Some((trusted, hooks))) => warn(
-            "codex-trust",
-            hooks > 0 && trusted == hooks,
-            obj([
-                ("trusted", n(trusted)),
-                ("hooks", n(hooks)),
-                (
+        Some(Some((trusted, hooks))) => {
+            let ok = hooks > 0 && trusted == hooks;
+            let mut detail = obj([("trusted", n(trusted)), ("hooks", n(hooks))]);
+            // The fix is printed only while there is something to fix.
+            if !ok {
+                detail.set(
                     "fix",
                     J::s("review the plugin's hooks in the Codex CLI (/hooks)"),
-                ),
-            ]),
-        ),
+                );
+            }
+            warn("codex-trust", ok, detail)
+        }
     }
 }
 
