@@ -1,0 +1,22 @@
+name: Documentation fix
+description: A page in docs/ or a README that is wrong, unclear or out of date.
+labels: [documentation]
+body:
+  - type: input
+    id: page
+    attributes:
+      label: Page
+      placeholder: docs/install.md, or README.tr.md
+    validations:
+      required: true
+  - type: textarea
+    id: wrong
+    attributes:
+      label: What is wrong
+      description: Quote the line, and say what the engine actually does.
+    validations:
+      required: true
+  - type: textarea
+    id: fix
+    attributes:
+      label: Suggested wording

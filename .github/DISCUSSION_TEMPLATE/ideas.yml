@@ -1,0 +1,24 @@
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The bar is "Blazingly Fast, Most Efficient, Most Secure": say what your idea costs in speed,
+        tokens or attack surface, not only what it adds.
+        Write in English or any language the README is in.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What you run into today, with the engine as it is.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered

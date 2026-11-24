@@ -1,0 +1,60 @@
+name: Bug report
+description: Something the engine does wrong, or a command that fails.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A security bug goes in a [private report](https://github.com/atlasatakahraman/knowledge-skeleton/security/advisories/new), not here.
+        Write in English or any language the README is in.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The output of `knowledge --version`.
+      placeholder: knowledge 0.12.0
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows
+        - Linux
+        - macOS
+    validations:
+      required: true
+  - type: dropdown
+    id: harness
+    attributes:
+      label: Harness
+      description: Every harness the bug shows up in.
+      multiple: true
+      options:
+        - Claude Code
+        - Claude desktop app
+        - Codex
+        - opencode
+        - None (the CLI alone)
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what you expected
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps
+      description: The commands you ran, in order, from a state someone else can reach.
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: knowledge doctor --pretty
+      description: Its output. Replace your home folder and user name with `~` before posting.
+      render: text

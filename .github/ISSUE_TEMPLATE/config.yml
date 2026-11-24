@@ -1,0 +1,13 @@
+# Questions and ideas belong in Discussions, security bugs in a private report; Issues hold only
+# what is broken, so every issue is something to fix.
+blank_issues_enabled: false
+contact_links:
+  - name: Question
+    url: https://github.com/atlasatakahraman/knowledge-skeleton/discussions/categories/q-a
+    about: How to install, set up or use the engine.
+  - name: Idea or feature request
+    url: https://github.com/atlasatakahraman/knowledge-skeleton/discussions/categories/ideas
+    about: Something the engine should do that it does not.
+  - name: Security vulnerability
+    url: https://github.com/atlasatakahraman/knowledge-skeleton/security/advisories/new
+    about: Report it privately, never in a public issue.
