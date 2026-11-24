@@ -16,8 +16,9 @@ use tree_sitter::{
     Language, Node, ParseOptions, ParseState, Parser, Query, QueryCursor, StreamingIterator, Tree,
 };
 
-// 2: refs prefer a definition in the using file and stay in one language (S8.2). A cache of another version is rebuilt.
-const SCHEMA_VERSION: i32 = 2;
+// 2: refs prefer a definition in the using file and stay in one language (S8.2).
+// 3: uses of a type are refs too (S8.4). A cache of another version is rebuilt.
+const SCHEMA_VERSION: i32 = 3;
 
 // `uses` holds each symbol's raw reference names; `refs` is them resolved, rebuilt in one
 // statement after any change (index.rs keeps notes' `refs` and `links` the same way).
@@ -34,7 +35,7 @@ CREATE TABLE uses    (src INTEGER NOT NULL, name TEXT NOT NULL, kind TEXT NOT NU
 CREATE TABLE refs    (src INTEGER NOT NULL, dst INTEGER NOT NULL, kind TEXT NOT NULL,
                       PRIMARY KEY (src, dst, kind)) WITHOUT ROWID;
 CREATE INDEX refs_dst ON refs (dst);
-PRAGMA user_version = 2;";
+PRAGMA user_version = 3;";
 
 /// Generated or minified code: not worth a parse, and the likeliest to be slow.
 const MAX_BYTES: u64 = 1 << 20;
@@ -57,6 +58,22 @@ const RUST_CALLS: &str = "
   function: (scoped_identifier name: (identifier) @name))) @reference.call
 (call_expression function: (generic_function
   function: (field_expression field: (field_identifier) @name))) @reference.call";
+
+/// No grammar's tags.scm marks a type used in a field, a signature, an `impl` or a cast, so a struct
+/// or an enum had no users at all (S8.4: Vantage's `TableState` "used by (0)" against 26 lines of
+/// `git grep`; graphify's AST pass listed 8). A type's own name sits inside its own definition and
+/// resolves to itself, which `sync` drops. Rust's `TableState::Open` is a path, not a type node:
+/// a capitalised path head is a type, a lower-case one a module.
+const RUST_TYPES: &str = r#"
+(type_identifier) @name @reference.type
+(scoped_identifier path: (identifier) @name (#match? @name "^[A-Z]")) @reference.type"#;
+/// TypeScript's annotations, `extends` and generics; JavaScript has no type nodes.
+const TS_TYPES: &str = "
+(type_identifier) @name @reference.type";
+/// Python's annotations: `x: Foo`, and the head of `list[Foo]` (whose `Foo` is a `type` again).
+const PYTHON_TYPES: &str = "
+(type (identifier) @name) @reference.type
+(generic_type (identifier) @name) @reference.type";
 
 /// tree-sitter-javascript 0.25.0's tags.scm does not mark JSX: `<Section />` is how a React
 /// component is used (S8.1: Queue's `ProtectionSection` had no caller). Capitalised names only, as
@@ -123,17 +140,20 @@ impl Lang {
         match self {
             Lang::JavaScript => format!("{}\n{JSX_RENDERS}", tree_sitter_javascript::TAGS_QUERY),
             Lang::TypeScript => format!(
-                "{}\n{}",
+                "{}\n{}\n{TS_TYPES}",
                 tree_sitter_javascript::TAGS_QUERY,
                 tree_sitter_typescript::TAGS_QUERY
             ),
             Lang::Tsx => format!(
-                "{}\n{}\n{JSX_RENDERS}",
+                "{}\n{}\n{JSX_RENDERS}\n{TS_TYPES}",
                 tree_sitter_javascript::TAGS_QUERY,
                 tree_sitter_typescript::TAGS_QUERY
             ),
-            Lang::Rust => format!("{}\n{RUST_CALLS}", tree_sitter_rust::TAGS_QUERY),
-            Lang::Python => tree_sitter_python::TAGS_QUERY.to_string(),
+            Lang::Rust => format!(
+                "{}\n{RUST_CALLS}\n{RUST_TYPES}",
+                tree_sitter_rust::TAGS_QUERY
+            ),
+            Lang::Python => format!("{}\n{PYTHON_TYPES}", tree_sitter_python::TAGS_QUERY),
         }
     }
 }

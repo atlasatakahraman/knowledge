@@ -168,6 +168,19 @@ else
 fi
 check "duplicate: what HEAD already has is not listed again" '[ -z "$(cd "$FIX" && k code duplicate)" ]'
 
+# --- S8.4: uses of a type are refs ----------------------------------------------------------------
+# A Rust struct, a TS interface and a Python class, each used only as a parameter's type: no call
+# reaches them, so before S8.4 each had "used by (0)".
+printf 'pub struct Gauge {\n    pub v: u32,\n}\n' > "$FIX/src/gauge.rs"
+printf 'pub fn read(g: &Gauge) -> u32 {\n    g.v\n}\n' > "$FIX/src/read.rs"
+printf 'export interface Shape {\n  w: number;\n}\n' > "$FIX/web/shape.ts"
+printf 'export function area(s: Shape): number {\n  return s.w;\n}\n' > "$FIX/web/area.ts"
+printf 'class Point:\n    pass\n\ndef norm(p: Point):\n    return 0\n' > "$FIX/tools/point.py"
+g add -A && g commit -q -m s8.4
+check "graph --code: a Rust parameter type is a [type] use" 'k graph Gauge --code --repo fixture | grep -qx "    src/read.rs:1 read function \[type\]"'
+check "graph --code: a TS annotation is a [type] use" 'k graph Shape --code --repo fixture | grep -qx "    web/area.ts:1 area function \[type\]"'
+check "graph --code: a Python annotation is a [type] use" 'k graph Point --code --repo fixture | grep -qx "    tools/point.py:4 norm function \[type\]"'
+
 rm -rf "$TMP"
 echo "$fails failed"
 [ "$fails" -eq 0 ]
