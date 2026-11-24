@@ -297,8 +297,21 @@ pub fn run(raw: &[String]) -> Result<u8, Fault> {
                 .chars()
                 .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
                 .collect();
-            newest(&projects.join(slug))
-                .ok_or_else(|| Fault::Usage(format!("no transcript in {}", projects.display())))?
+            // No Claude Code session in the vault yet (a fresh machine, or one that runs only
+            // Codex or opencode): nothing to measure, which is not a failure. The doctor's
+            // `budget` check failed every fresh install before this (2026-11-24).
+            let Some(f) = newest(&projects.join(slug)) else {
+                emit(&if args.has("json") {
+                    "{\"ok\":true,\"transcript\":null,\"tokens\":null,\"idle\":[]}\n".to_string()
+                } else {
+                    format!(
+                        "no Claude Code session in {} yet: nothing to measure\n",
+                        cfg.vault.display()
+                    )
+                });
+                return Ok(0);
+            };
+            f
         }
     };
     let text = fs::read_to_string(&file).map_err(|e| Fault::Io(file.display().to_string(), e))?;
