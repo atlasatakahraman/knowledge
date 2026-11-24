@@ -45,6 +45,7 @@ struct Raw {
     machine: Option<String>,
     rollover_hour: Option<serde_json::Number>,
     pull_trust: Option<String>,
+    folders: Option<std::collections::BTreeMap<String, String>>,
 }
 
 fn env_path(key: &str) -> Option<PathBuf> {
@@ -94,6 +95,9 @@ pub fn load() -> Result<Config, Fault> {
             "knowledge config {src}: \"pullTrust\" must be \"signed\" or absent"
         )));
     }
+    // `layout()` falls back to the defaults on a bad `folders`; here it is an error, so the doctor
+    // and setup say why instead of a renamed folder silently reading as missing.
+    folders_of(raw.folders).map_err(|e| Fault::Config(format!("knowledge config {src}: {e}")))?;
     let os = raw.os.filter(|s| !s.is_empty()).unwrap_or_else(|| {
         match std::env::consts::OS {
             "windows" => "windows",
@@ -156,7 +160,8 @@ impl Config {
     }
 
     /// The shown form: absolute and native.
-    pub fn abs_of(&self, rel: &str) -> PathBuf {
+    pub fn abs_of(&self, rel: impl std::fmt::Display) -> PathBuf {
+        let rel = rel.to_string();
         let sep = std::path::MAIN_SEPARATOR_STR;
         let root = self.vault.to_string_lossy().replace(['/', '\\'], sep);
         PathBuf::from(format!(
@@ -167,7 +172,8 @@ impl Config {
     }
 }
 
-/// The vault's folders, as `skeleton-config.mjs`'s FOLDERS names them.
+/// The vault's folders by `config.json` key, with the owner's layout as each default
+/// (`skeleton-config.mjs`'s FOLDERS). The only place a folder name is written (D12).
 const FOLDERS: [(&str, &str); 9] = [
     ("meta", "00-Meta"),
     ("repos", "10-Repos"),
@@ -179,6 +185,90 @@ const FOLDERS: [(&str, &str); 9] = [
     ("assets", "80-Assets"),
     ("inbox", "90-Inbox"),
 ];
+
+/// A vault folder, by its place in FOLDERS. It prints and joins like the `&str` constant it
+/// replaced (`vault.join(OPS)`, `format!("{OPS}/x")`) and reads the name in effect, so a folder
+/// renamed in `config.json` reaches every caller without each one carrying the config.
+#[derive(Clone, Copy)]
+pub struct Folder(usize);
+
+pub const META: Folder = Folder(0);
+pub const REPOS: Folder = Folder(1);
+pub const KNOWLEDGE: Folder = Folder(2);
+pub const SESSIONS: Folder = Folder(3);
+pub const PLANS: Folder = Folder(4);
+pub const OPS: Folder = Folder(5);
+pub const DECISIONS: Folder = Folder(6);
+
+impl Folder {
+    pub fn name(self) -> &'static str {
+        layout()[self.0]
+    }
+}
+
+impl std::fmt::Display for Folder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
+impl AsRef<Path> for Folder {
+    fn as_ref(&self) -> &Path {
+        Path::new(self.name())
+    }
+}
+
+/// The folder names in effect, in FOLDERS' order: the config's `folders` over the defaults. Read
+/// once per process on first use, without `load`, so a path built before the config is loaded
+/// agrees with one built after; an unreadable config or a bad `folders` gives the defaults here,
+/// and `load` reports the reason.
+pub fn layout() -> &'static [&'static str; 9] {
+    static LAYOUT: std::sync::OnceLock<[&'static str; 9]> = std::sync::OnceLock::new();
+    LAYOUT.get_or_init(|| {
+        fs::read_to_string(config_path())
+            .ok()
+            .and_then(|t| serde_json::from_str::<Raw>(&t).ok())
+            .and_then(|r| folders_of(r.folders).ok())
+            .unwrap_or(FOLDERS.map(|(_, d)| d))
+    })
+}
+
+/// `folders` checked: a known key, a relative folder written with `/` (one note's links resolve
+/// on both OSes), and no two keys naming one folder, which would file, say, the session notes
+/// with the records. The names are leaked once per process: nine short strings.
+fn folders_of(
+    m: Option<std::collections::BTreeMap<String, String>>,
+) -> Result<[&'static str; 9], String> {
+    let mut out = FOLDERS.map(|(_, d)| d);
+    for (k, v) in m.unwrap_or_default() {
+        let Some(i) = FOLDERS.iter().position(|(key, _)| *key == k) else {
+            let keys: Vec<&str> = FOLDERS.iter().map(|(k, _)| *k).collect();
+            return Err(format!(
+                "\"folders\" has no key \"{k}\" ({})",
+                keys.join(", ")
+            ));
+        };
+        let relative = !v.contains(['\\', ':'])
+            && v.split('/').all(|s| !s.is_empty() && s != "." && s != "..");
+        if !relative {
+            return Err(format!(
+                "\"folders.{k}\" must be a relative folder written with /, like \"{}\"",
+                FOLDERS[i].1
+            ));
+        }
+        out[i] = Box::leak(v.into_boxed_str());
+    }
+    for (i, a) in out.iter().enumerate() {
+        if let Some(j) = out[i + 1..].iter().position(|b| a.eq_ignore_ascii_case(b)) {
+            return Err(format!(
+                "\"folders\": {} and {} both name \"{a}\"",
+                FOLDERS[i].0,
+                FOLDERS[i + 1 + j].0
+            ));
+        }
+    }
+    Ok(out)
+}
 
 /// `knowledge config [<key>]`: the resolved config as JSON, or one value, for a skill or command
 /// that needs a path (`skeleton-config.mjs`'s keys, plus `home` and `skeleton`). It is what lets a
@@ -202,7 +292,7 @@ pub fn run(raw: &[String]) -> Result<u8, Fault> {
     });
     match raw {
         [] => crate::emit(&format!("{}\n", serde_json::to_string_pretty(&values)?)),
-        [key] => match (values.get(key), FOLDERS.iter().find(|(k, _)| k == key)) {
+        [key] => match (values.get(key), FOLDERS.iter().position(|(k, _)| k == key)) {
             (Some(serde_json::Value::String(s)), _) if key == "skeleton" && s.is_empty() => {
                 return Err(Fault::Config(
                     "no skeleton checkout found: run `knowledge setup --plan`".into(),
@@ -210,7 +300,7 @@ pub fn run(raw: &[String]) -> Result<u8, Fault> {
             }
             (Some(serde_json::Value::String(s)), _) => crate::emit(&format!("{s}\n")),
             (Some(v), _) => crate::emit(&format!("{v}\n")),
-            (None, Some((_, dir))) => crate::emit(&format!("{dir}\n")),
+            (None, Some(i)) => crate::emit(&format!("{}\n", layout()[i])),
             (None, None) => {
                 let keys: Vec<&str> = values
                     .as_object()

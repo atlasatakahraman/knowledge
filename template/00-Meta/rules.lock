@@ -1,0 +1,687 @@
+{
+  "packs": [
+    {
+      "id": "head",
+      "section": "",
+      "enabled": true
+    },
+    {
+      "id": "tooling",
+      "section": "Tooling",
+      "enabled": true
+    },
+    {
+      "id": "code",
+      "section": "Code",
+      "enabled": true
+    },
+    {
+      "id": "git",
+      "section": "Git",
+      "enabled": true
+    },
+    {
+      "id": "honesty",
+      "section": "Questions and reports",
+      "enabled": true
+    },
+    {
+      "id": "verify",
+      "section": "Verification",
+      "enabled": true
+    },
+    {
+      "id": "safety",
+      "section": "Safety",
+      "enabled": true
+    },
+    {
+      "id": "knowledge",
+      "section": "Knowledge",
+      "enabled": true
+    },
+    {
+      "id": "deps",
+      "section": "Dependencies and licensing",
+      "enabled": true
+    },
+    {
+      "id": "preferences",
+      "section": "Working preferences",
+      "enabled": true
+    },
+    {
+      "id": "related",
+      "section": "Related",
+      "enabled": true
+    }
+  ],
+  "rules": [
+    {
+      "id": "head",
+      "pack": "head",
+      "kind": "preamble",
+      "enforce": [
+        "P",
+        "R"
+      ],
+      "hash": "497d9bb58cec4caf"
+    },
+    {
+      "id": "tooling.preamble",
+      "pack": "tooling",
+      "kind": "preamble",
+      "enforce": [
+        "P",
+        "R"
+      ],
+      "hash": "4660178a4dd27550"
+    },
+    {
+      "id": "if-knowledge-has-an-equivalent-use-it",
+      "pack": "tooling",
+      "kind": "agent",
+      "enforce": [
+        "P",
+        "R"
+      ],
+      "hash": "624ff9dfe9f1bd04"
+    },
+    {
+      "id": "no-default-tool-without-a-reason-that-can-be-nam",
+      "pack": "tooling",
+      "kind": "agent",
+      "enforce": [
+        "P",
+        "R"
+      ],
+      "hash": "e2bfeb32ed476962"
+    },
+    {
+      "id": "all-file-writes-use-native-write-edit",
+      "pack": "tooling",
+      "kind": "agent",
+      "enforce": [
+        "P",
+        "R"
+      ],
+      "hash": "f0b95b4e86821551"
+    },
+    {
+      "id": "the-repos-code-goes-through-the-code-map",
+      "pack": "tooling",
+      "kind": "agent",
+      "enforce": [
+        "P",
+        "R"
+      ],
+      "hash": "66face0bea162091"
+    },
+    {
+      "id": "retrieval-health-zero-tokens",
+      "pack": "tooling",
+      "kind": "agent",
+      "enforce": [
+        "P",
+        "R"
+      ],
+      "hash": "2d7850a61051893f"
+    },
+    {
+      "id": "code.preamble",
+      "pack": "code",
+      "kind": "preamble",
+      "enforce": [
+        "P",
+        "R"
+      ],
+      "hash": "d1fa52679cbe7f50"
+    },
+    {
+      "id": "the-least-code-that-solves-the-problem",
+      "pack": "code",
+      "kind": "agent",
+      "enforce": [
+        "P",
+        "R",
+        "C"
+      ],
+      "hash": "2ef1460cb9615117"
+    },
+    {
+      "id": "read-the-problem-fully-before-choosing-the-small",
+      "pack": "code",
+      "kind": "agent",
+      "enforce": [
+        "P",
+        "R"
+      ],
+      "hash": "38112420c6d4bf31"
+    },
+    {
+      "id": "fix-the-cause-at-the-place-every-caller-passes-t",
+      "pack": "code",
+      "kind": "agent",
+      "enforce": [
+        "P",
+        "R"
+      ],
+      "hash": "6df3f65af7a4f15a"
+    },
+    {
+      "id": "never-simplify-away",
+      "pack": "code",
+      "kind": "agent",
+      "enforce": [
+        "P",
+        "R"
+      ],
+      "hash": "e073319e3722b07b"
+    },
+    {
+      "id": "no-refactor-of-code-the-task-didn-t-name",
+      "pack": "code",
+      "kind": "agent",
+      "enforce": [
+        "P",
+        "R"
+      ],
+      "hash": "6f011be741f6060f"
+    },
+    {
+      "id": "features-land-in-dependency-order-not-speculativ",
+      "pack": "code",
+      "kind": "agent",
+      "enforce": [
+        "P",
+        "R"
+      ],
+      "hash": "bc4529be1e01dca7"
+    },
+    {
+      "id": "code-a-person-reads-in-one-pass-with-a-comment-t",
+      "pack": "code",
+      "kind": "agent",
+      "enforce": [
+        "P",
+        "R"
+      ],
+      "hash": "dededad6b9d63f06"
+    },
+    {
+      "id": "self-review-of-a-commit-covers-logic-duplication",
+      "pack": "code",
+      "kind": "agent",
+      "enforce": [
+        "P",
+        "R"
+      ],
+      "hash": "38ec6e3c060a6fda"
+    },
+    {
+      "id": "git.preamble",
+      "pack": "git",
+      "kind": "preamble",
+      "enforce": [
+        "P",
+        "R"
+      ],
+      "hash": "7f60a24948c0fc27"
+    },
+    {
+      "id": "nothing-is-committed-until-i-give-an-explicit-go",
+      "pack": "git",
+      "kind": "agent",
+      "enforce": [
+        "P",
+        "R",
+        "G"
+      ],
+      "hash": "9e8c8451ef437b1f"
+    },
+    {
+      "id": "commit-by-area-each-commit-building-on-its-own-t",
+      "pack": "git",
+      "kind": "agent",
+      "enforce": [
+        "P",
+        "R"
+      ],
+      "hash": "e1f86cc5b6009976"
+    },
+    {
+      "id": "gate-before-every-commit-types-lint-build-secret",
+      "pack": "git",
+      "kind": "agent",
+      "enforce": [
+        "P",
+        "R",
+        "C"
+      ],
+      "hash": "0bdf1f1007161846"
+    },
+    {
+      "id": "session-records-are-committed-through-knowledge",
+      "pack": "git",
+      "kind": "agent",
+      "enforce": [
+        "P",
+        "R"
+      ],
+      "hash": "5a4100b0edb522ce"
+    },
+    {
+      "id": "questions-and-reports.preamble",
+      "pack": "honesty",
+      "kind": "preamble",
+      "enforce": [
+        "P",
+        "R"
+      ],
+      "hash": "6973cd3c4cd66d3c"
+    },
+    {
+      "id": "questions-go-through-the-harness-s-question-tool",
+      "pack": "honesty",
+      "kind": "agent",
+      "enforce": [
+        "P",
+        "R"
+      ],
+      "hash": "9aad4c3a328bc4e1"
+    },
+    {
+      "id": "never-skip-the-interview-the-brainstorm-or-the-q",
+      "pack": "honesty",
+      "kind": "agent",
+      "enforce": [
+        "P",
+        "R"
+      ],
+      "hash": "94ccf7404111d8a6"
+    },
+    {
+      "id": "ask-open-questions-immediately-once-with-a-concr",
+      "pack": "honesty",
+      "kind": "agent",
+      "enforce": [
+        "P",
+        "R"
+      ],
+      "hash": "c017daa80fb45962"
+    },
+    {
+      "id": "nothing-stays-open-without-my-say-so-every-time",
+      "pack": "honesty",
+      "kind": "agent",
+      "enforce": [
+        "P",
+        "R"
+      ],
+      "hash": "1fc753361b2b4c60"
+    },
+    {
+      "id": "ask-before-a-fix-that-would-reverse-an-earlier-d",
+      "pack": "honesty",
+      "kind": "agent",
+      "enforce": [
+        "P",
+        "R"
+      ],
+      "hash": "039942c39d3acaea"
+    },
+    {
+      "id": "verification.preamble",
+      "pack": "verify",
+      "kind": "preamble",
+      "enforce": [
+        "P",
+        "R"
+      ],
+      "hash": "95aa36ae64fc6db2"
+    },
+    {
+      "id": "verification-tasks-are-comprehensive-by-default",
+      "pack": "verify",
+      "kind": "agent",
+      "enforce": [
+        "P",
+        "R"
+      ],
+      "hash": "61cd0795fbe8e882"
+    },
+    {
+      "id": "clean-startup-matters",
+      "pack": "verify",
+      "kind": "agent",
+      "enforce": [
+        "P",
+        "R"
+      ],
+      "hash": "2418d5de858a3d94"
+    },
+    {
+      "id": "before-marking-ui-work-done-click-through-every",
+      "pack": "verify",
+      "kind": "agent",
+      "enforce": [
+        "P",
+        "R"
+      ],
+      "hash": "b98cd86538c42ad6"
+    },
+    {
+      "id": "verify-across-every-context-before-marking-compl",
+      "pack": "verify",
+      "kind": "agent",
+      "enforce": [
+        "P",
+        "R"
+      ],
+      "hash": "6789ef00aefb8e53"
+    },
+    {
+      "id": "idle-machine-for-latency-timing",
+      "pack": "verify",
+      "kind": "agent",
+      "enforce": [
+        "P",
+        "R"
+      ],
+      "hash": "23f0fdb7217bf723"
+    },
+    {
+      "id": "comparing-configs-across-platforms-check-file-co",
+      "pack": "verify",
+      "kind": "agent",
+      "enforce": [
+        "P",
+        "R"
+      ],
+      "hash": "e23995f54b2a2c0c"
+    },
+    {
+      "id": "safety.preamble",
+      "pack": "safety",
+      "kind": "preamble",
+      "enforce": [
+        "P",
+        "R"
+      ],
+      "hash": "347664ece51aefd3"
+    },
+    {
+      "id": "never-push-to-production-deploy-autonomously",
+      "pack": "safety",
+      "kind": "agent",
+      "enforce": [
+        "P",
+        "R",
+        "G"
+      ],
+      "hash": "d5da694014a61e2f"
+    },
+    {
+      "id": "read-only-select-s-on-production-are-allowed-whe",
+      "pack": "safety",
+      "kind": "agent",
+      "enforce": [
+        "P",
+        "R"
+      ],
+      "hash": "346fb5cbeb28816f"
+    },
+    {
+      "id": "security-config-is-applied-before-it-is-committe",
+      "pack": "safety",
+      "kind": "agent",
+      "enforce": [
+        "P",
+        "R"
+      ],
+      "hash": "7d09a6aeb9424dbe"
+    },
+    {
+      "id": "a-perf-optimization-that-requires-disabling-a-se",
+      "pack": "safety",
+      "kind": "agent",
+      "enforce": [
+        "P",
+        "R"
+      ],
+      "hash": "f0bffb43d08f365e"
+    },
+    {
+      "id": "deletions-are-measured-and-shown-and-nothing-goe",
+      "pack": "safety",
+      "kind": "agent",
+      "enforce": [
+        "P",
+        "R"
+      ],
+      "hash": "e99f93fafb574715"
+    },
+    {
+      "id": "inspecting-sensitive-system-files-disk-images-gu",
+      "pack": "safety",
+      "kind": "agent",
+      "enforce": [
+        "P",
+        "R"
+      ],
+      "hash": "d7b48c73a58e3f39"
+    },
+    {
+      "id": "privileged-probes-auto-revert",
+      "pack": "safety",
+      "kind": "agent",
+      "enforce": [
+        "P",
+        "R"
+      ],
+      "hash": "b0a1ed0ae58fcf1c"
+    },
+    {
+      "id": "don-t-spend-paid-credits-on-a-test-run-without-a",
+      "pack": "safety",
+      "kind": "agent",
+      "enforce": [
+        "P",
+        "R"
+      ],
+      "hash": "94d1ea64e4ee8aea"
+    },
+    {
+      "id": "knowledge.preamble",
+      "pack": "knowledge",
+      "kind": "preamble",
+      "enforce": [
+        "P",
+        "R"
+      ],
+      "hash": "6bea960f5375be47"
+    },
+    {
+      "id": "never-move-primed-content-behind-a-link",
+      "pack": "knowledge",
+      "kind": "knowledge",
+      "enforce": [
+        "P",
+        "R",
+        "G",
+        "C",
+        "D"
+      ],
+      "hash": "6b61411243219200"
+    },
+    {
+      "id": "one-way-or-hard-to-reverse-decisions-get-a-stand",
+      "pack": "knowledge",
+      "kind": "knowledge",
+      "enforce": [
+        "P",
+        "R"
+      ],
+      "hash": "9deb0e3246e1bc09"
+    },
+    {
+      "id": "write-notes-through-brain-new-kind-and-brain-edi",
+      "pack": "knowledge",
+      "kind": "agent",
+      "enforce": [
+        "P",
+        "R"
+      ],
+      "hash": "4a1cd5b83bc8a483"
+    },
+    {
+      "id": "retrieval-runs-in-tiers-in-order",
+      "pack": "knowledge",
+      "kind": "agent",
+      "enforce": [
+        "P",
+        "R"
+      ],
+      "hash": "58f619c2c0e1861d"
+    },
+    {
+      "id": "dependencies-and-licensing.preamble",
+      "pack": "deps",
+      "kind": "preamble",
+      "enforce": [
+        "P",
+        "R"
+      ],
+      "hash": "ec6512e1c87f657f"
+    },
+    {
+      "id": "working-preferences.preamble",
+      "pack": "preferences",
+      "kind": "preamble",
+      "enforce": [
+        "P",
+        "R"
+      ],
+      "hash": "bd56ba8923ae5df1"
+    },
+    {
+      "id": "related.preamble",
+      "pack": "related",
+      "kind": "preamble",
+      "enforce": [
+        "P",
+        "R"
+      ],
+      "hash": "b4d9fe417da24fa1"
+    }
+  ],
+  "guards": [
+    {
+      "id": "rules-files",
+      "rule": "never-move-primed-content-behind-a-link",
+      "action": "ask",
+      "reason": "a rules file or the lock changes only on the owner's yes (D15)",
+      "words": [
+        [
+          "knowledge",
+          "rules",
+          "lock"
+        ],
+        [
+          "knowledge",
+          "rules",
+          "enable"
+        ],
+        [
+          "knowledge",
+          "rules",
+          "disable"
+        ]
+      ],
+      "unless": [],
+      "paths": [
+        "*/hard-rules.md",
+        "*/identity.md",
+        "*/rules.lock",
+        "~/.claude/claude.md"
+      ],
+      "tools": [],
+      "staged": [],
+      "repo": "",
+      "branch": "",
+      "os": ""
+    },
+    {
+      "id": "production",
+      "rule": "never-push-to-production-deploy-autonomously",
+      "action": "ask",
+      "reason": "production and deploys need the owner's explicit yes, every time (Hard-Rules § Safety)",
+      "words": [
+        [
+          "vercel",
+          "--prod"
+        ],
+        [
+          "vercel",
+          "promote"
+        ],
+        [
+          "supabase",
+          "db",
+          "push"
+        ],
+        [
+          "supabase",
+          "functions",
+          "deploy"
+        ]
+      ],
+      "unless": [],
+      "paths": [],
+      "tools": [
+        "*__apply_migration",
+        "*__deploy_*",
+        "*__create_deployment",
+        "*__request_promote",
+        "*__request_rollback"
+      ],
+      "staged": [],
+      "repo": "",
+      "branch": "",
+      "os": ""
+    },
+    {
+      "id": "push-destructive-git",
+      "rule": "nothing-is-committed-until-i-give-an-explicit-go",
+      "action": "ask",
+      "reason": "each push needs its own yes, and destructive git is the owner's call (Hard-Rules § Git)",
+      "words": [
+        [
+          "git",
+          "push"
+        ],
+        [
+          "git",
+          "reset",
+          "--hard"
+        ],
+        [
+          "git",
+          "clean"
+        ],
+        [
+          "git",
+          "branch",
+          "-D"
+        ]
+      ],
+      "unless": [],
+      "paths": [],
+      "tools": [],
+      "staged": [],
+      "repo": "",
+      "branch": "",
+      "os": ""
+    }
+  ]
+}

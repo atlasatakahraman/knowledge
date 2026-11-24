@@ -367,7 +367,8 @@ fn split_long(text: &str) -> Vec<String> {
 
 /// Intentional forward links, lower-cased: each bullet's leading `` `[[name ``.
 pub fn forward_links(vault: &Path) -> HashSet<String> {
-    let Ok(text) = fs::read_to_string(vault.join("00-Meta").join("Forward-Links.md")) else {
+    let Ok(text) = fs::read_to_string(vault.join(crate::config::META).join("Forward-Links.md"))
+    else {
         return HashSet::new();
     };
     text.lines()

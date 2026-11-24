@@ -97,7 +97,7 @@ fn write_state(cfg: &Config, s: &J) {
 /// owner's half-written ADRs into a compile commit (2026-09-06).
 fn snapshot(cfg: &Config) -> Vec<(String, String)> {
     let mut args = vec!["status", "--porcelain", "--untracked-files=all", "--"];
-    args.extend([META, KNOWLEDGE, DECISIONS, SESSIONS, OPS]);
+    args.extend([META, KNOWLEDGE, DECISIONS, SESSIONS, OPS].map(|f| f.name()));
     let o = state::git(&cfg.vault, &args, Duration::from_secs(60));
     if !o.ok() {
         return Vec::new();

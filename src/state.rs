@@ -14,13 +14,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-pub const META: &str = "00-Meta";
-pub const REPOS: &str = "10-Repos";
-pub const KNOWLEDGE: &str = "20-Knowledge";
-pub const SESSIONS: &str = "30-Sessions";
-pub const PLANS: &str = "40-Plans";
-pub const OPS: &str = "50-Ops";
-pub const DECISIONS: &str = "60-Decisions";
+pub use crate::config::{DECISIONS, KNOWLEDGE, META, OPS, PLANS, REPOS, SESSIONS};
 
 // ---- time ----------------------------------------------------------------------------------------
 

@@ -207,14 +207,16 @@ pub fn validate(
     if !broken.is_empty() {
         let list: Vec<String> = broken.iter().map(|b| format!("[[{b}]]")).collect();
         problems.push(format!(
-            "links to nothing: {} — fix, or list as intentional in 00-Meta/Forward-Links.md",
-            list.join(", ")
+            "links to nothing: {} — fix, or list as intentional in {}/Forward-Links.md",
+            list.join(", "),
+            config::META
         ));
     }
     Ok((!problems.is_empty()).then(|| {
         format!(
-            "brain-validate {file_name}: {}. Conventions: 00-Meta/Conventions.md.",
-            problems.join("; ")
+            "brain-validate {file_name}: {}. Conventions: {}/Conventions.md.",
+            problems.join("; "),
+            config::META
         )
     }))
 }

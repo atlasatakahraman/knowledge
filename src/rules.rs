@@ -11,8 +11,25 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-pub const RULES: &str = "00-Meta/Hard-Rules.md";
-pub const LOCK: &str = "00-Meta/rules.lock";
+/// A file in the meta folder, vault-relative in the layout in effect: `{LOCK}` prints
+/// `00-Meta/rules.lock` in the owner's layout, and `rel()` gives the same as a `String`.
+#[derive(Clone, Copy)]
+pub struct MetaFile(&'static str);
+
+impl MetaFile {
+    pub fn rel(self) -> String {
+        self.to_string()
+    }
+}
+
+impl std::fmt::Display for MetaFile {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}/{}", config::META, self.0)
+    }
+}
+
+pub const RULES: MetaFile = MetaFile("Hard-Rules.md");
+pub const LOCK: MetaFile = MetaFile("rules.lock");
 const PRIMED: [&str; 2] = ["Identity.md", "Hard-Rules.md"];
 
 /// Code, not text: changing one is a new release (D15). The spec's nine.
@@ -440,7 +457,7 @@ fn staged(cfg: &Config) -> Result<u8, Fault> {
     if in_vault
         && git(&["diff", "--cached", "--name-only"])
             .lines()
-            .any(|n| n == RULES || n == LOCK)
+            .any(|n| n == RULES.rel() || n == LOCK.rel())
     {
         let lock: Lock = match git_show(cfg, &format!(":{LOCK}")) {
             Some(s) => serde_json::from_str(&s)?,
@@ -518,7 +535,7 @@ fn restore(cfg: &Config) -> bool {
     Command::new("git")
         .arg("-C")
         .arg(&cfg.vault)
-        .args(["restore", "--source=HEAD", "--worktree", "--", RULES])
+        .args(["restore", "--source=HEAD", "--worktree", "--", &RULES.rel()])
         .status()
         .is_ok_and(|s| s.success())
 }
@@ -536,7 +553,7 @@ fn imports(cfg: &Config, fix: bool) -> u8 {
     let has = |name: &str| {
         text.lines().any(|l| {
             let l = l.trim().replace('\\', "/");
-            l.starts_with('@') && l.ends_with(&format!("/00-Meta/{name}"))
+            l.starts_with('@') && l.ends_with(&format!("/{}/{name}", config::META))
         })
     };
     let missing: Vec<&str> = PRIMED.into_iter().filter(|n| !has(n)).collect();
@@ -546,7 +563,7 @@ fn imports(cfg: &Config, fix: bool) -> u8 {
     let root = cfg.vault.display().to_string().replace('\\', "/");
     let add: String = missing
         .iter()
-        .map(|n| format!("@{root}/00-Meta/{n}\n"))
+        .map(|n| format!("@{root}/{}/{n}\n", config::META))
         .collect();
     if fix && append(&path, &text, &add) {
         emit(&format!(

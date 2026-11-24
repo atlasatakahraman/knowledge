@@ -316,7 +316,7 @@ fn pages(d: &Path, out: &mut Vec<PathBuf>) {
 /// never a global core.hooksPath).
 fn checkouts(vault: &Path, dev: &Path) -> Vec<PathBuf> {
     let mut files = Vec::new();
-    pages(&vault.join("10-Repos"), &mut files);
+    pages(&vault.join(state::REPOS), &mut files);
     files
         .iter()
         .filter_map(|f| {
@@ -670,8 +670,8 @@ fn plan_setup(args: &Args) -> Plan {
                 fwd(&vault)
             ),
         );
-    } else if !template && !vault.join("00-Meta").join("00-MOC-Root.md").is_file() {
-        p.say("FAIL", "vault", format!("{} has no 00-Meta/00-MOC-Root.md, so it is not a vault this engine knows. Pass --vault <empty path> for a new one", fwd(&vault)));
+    } else if !template && !vault.join(state::META).join("00-MOC-Root.md").is_file() {
+        p.say("FAIL", "vault", format!("{} has no {}/00-MOC-Root.md, so it is not a vault this engine knows. Pass --vault <empty path> for a new one", fwd(&vault), state::META));
     } else if template {
         let mut n = 0;
         count(&root.join("template"), &mut n);
@@ -998,7 +998,7 @@ fn plan_setup(args: &Args) -> Plan {
     let md = claude.join("CLAUDE.md");
     let want: Vec<String> = ["Identity.md", "Hard-Rules.md"]
         .iter()
-        .map(|f| fwd(&vault.join("00-Meta").join(f)))
+        .map(|f| fwd(&vault.join(state::META).join(f)))
         .collect();
     let text = state::read(&md);
     let have = imports(&text);
@@ -1079,7 +1079,7 @@ fn plan_setup(args: &Args) -> Plan {
     if template {
         p.next.push(format!(
             "fill the FILL: placeholders in {}, then start Claude Code in {}",
-            fwd(&vault.join("00-Meta")),
+            fwd(&vault.join(state::META)),
             fwd(&vault)
         ));
     }
@@ -1521,9 +1521,12 @@ fn exec(a: &Act) -> Result<(), String> {
             if !git_get(vault, "user.email").is_empty() {
                 checked(state::git(vault, &["add", "-A"], GIT), "git add")?;
                 let subject = format!("chore: new vault from knowledge-skeleton {version}");
-                let body = "Copied from the skeleton's template/ by knowledge setup. Fill the FILL: placeholders in 00-Meta next.";
+                let body = format!(
+                    "Copied from the skeleton's template/ by knowledge setup. Fill the FILL: placeholders in {} next.",
+                    state::META
+                );
                 checked(
-                    state::git(vault, &["commit", "-q", "-m", &subject, "-m", body], GIT),
+                    state::git(vault, &["commit", "-q", "-m", &subject, "-m", &body], GIT),
                     "git commit",
                 )?;
             }
