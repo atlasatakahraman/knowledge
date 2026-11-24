@@ -750,7 +750,11 @@ fn plan_setup(args: &Args) -> Plan {
     }
     for repo in &repos {
         let was = git_get(repo, "core.hooksPath");
-        if was == hooks_dir {
+        // Compared as folders, not strings: after an apply the skeleton is found through the
+        // `~/.claude/hooks` link, whose target can be spelled otherwise (an 8.3 name, a drive
+        // letter's case, a symlinked dev folder). As strings, our own githooks read as the
+        // checkout's own, and the next plan would chain it to itself (2026-11-24).
+        if was == hooks_dir || (!was.is_empty() && same(&repo.join(&was), &root.join("githooks"))) {
             p.say("ok", "hooksPath", format!("{} -> {hooks_dir}", fwd(repo)));
             continue;
         }
