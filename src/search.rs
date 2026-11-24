@@ -244,9 +244,10 @@ pub fn run_find(raw: &[String]) -> Result<u8, Fault> {
         vault_cfg
     };
     let mut t = tuning(&args)?;
-    // The floor keeps "ok" prompts from injecting vault notes; an asked-for repo search has no such
-    // risk, and a floor tuned on 2,000 vault notes ranks nothing in a repo's handful of docs.
-    if repo.is_some() && args.get("floor").is_none() {
+    // The floor keeps "ok" prompts from injecting vault notes; an asked-for search has no such risk.
+    // Kept, it dropped every hit for "what each hook writes and when it runs" on a 28-note vault
+    // (floor -3.9 there) and printed nothing (bench/tokens.ts, 2026-11-24). Ranking still orders them.
+    if args.get("floor").is_none() {
         t.floor = f64::INFINITY;
     }
     let hits = search(
@@ -267,6 +268,8 @@ pub fn run_find(raw: &[String]) -> Result<u8, Fault> {
             })
             .collect();
         emit(&format!("{}\n", serde_json::Value::Array(items)));
+    } else if hits.is_empty() {
+        emit(&format!("no note holds a word of \"{query}\"\n"));
     } else {
         let mut out = String::new();
         for h in &hits {
