@@ -94,7 +94,7 @@ fn judge_shell<'a>(
     cwd: &str,
     ps: bool,
 ) -> Option<&'a Guard> {
-    let segments = split(line, ps);
+    let segments = segments(line, ps, 0);
     judge(lock, place, |g| {
         segments.iter().any(|seg| {
             let (cmd, rest) = command(seg, ps);
@@ -108,6 +108,40 @@ fn judge_shell<'a>(
             words_hit || path_hit
         })
     })
+}
+
+/// The segments a line runs: its own, plus those of a line handed to a shell inside it
+/// (`bash -c '…'`, `pwsh -Command '…'`, `cmd /c …`), three levels deep, so `bash -c 'git push'`
+/// is judged as `git push`. Extra words after the line are joined in: that can only add a match.
+fn segments(line: &str, ps: bool, depth: u8) -> Vec<Vec<String>> {
+    let mut out = Vec::new();
+    for seg in split(line, ps) {
+        let (cmd, rest) = command(&seg, ps);
+        let after = |flag: &dyn Fn(&str) -> bool| {
+            rest.iter()
+                .position(|w| flag(&w.to_lowercase()))
+                .map(|i| rest[i + 1..].join(" "))
+        };
+        let inner = match cmd.as_str() {
+            // `-c`, or a cluster holding it (`-lc`, `-ec`).
+            "bash" | "sh" | "zsh" | "dash" | "ksh" | "fish" => {
+                after(&|w| w.starts_with('-') && !w.starts_with("--") && w.contains('c'))
+                    .map(|s| (s, false))
+            }
+            "pwsh" | "powershell" => {
+                after(&|w| matches!(w, "-c" | "-command" | "/c" | "/command")).map(|s| (s, true))
+            }
+            "cmd" => after(&|w| matches!(w, "/c" | "/k")).map(|s| (s, false)),
+            _ => None,
+        };
+        if depth < 3
+            && let Some((s, ps)) = inner
+        {
+            out.extend(segments(&s, ps, depth + 1));
+        }
+        out.push(seg);
+    }
+    out
 }
 
 /// Segments of a shell line, each a list of tokens. Quotes are removed; `>`/`>>` are tokens.
@@ -189,9 +223,49 @@ pub fn split(line: &str, ps: bool) -> Vec<Vec<String>> {
     segs
 }
 
+/// Commands that run the command after them: the name, its options that take a separate value,
+/// and how many plain words come before the command (`timeout 120 git push`: one, the duration).
+/// `timeout` matters most: the agent's own rules wrap every long command in it, and before it was
+/// listed, `timeout 120 git push` passed the push guard as a `timeout` command (2026-11-24).
+const WRAPPERS: [(&str, &[&str], usize); 12] = [
+    ("sudo", &["-u", "-g", "-h", "-p", "-C", "-D"], 0),
+    ("doas", &["-u", "-C"], 0),
+    ("env", &["-u", "-C", "--unset", "--chdir"], 0),
+    ("command", &[], 0),
+    ("exec", &["-a"], 0),
+    ("time", &["-f", "-o", "--format", "--output"], 0),
+    ("nohup", &[], 0),
+    ("timeout", &["-k", "-s", "--kill-after", "--signal"], 1),
+    ("nice", &["-n", "--adjustment"], 0),
+    ("ionice", &["-c", "-n", "-p", "--class", "--classdata"], 0),
+    (
+        "stdbuf",
+        &["-i", "-o", "-e", "--input", "--output", "--error"],
+        0,
+    ),
+    (
+        "xargs",
+        &[
+            "-a",
+            "-d",
+            "-E",
+            "-I",
+            "-L",
+            "-n",
+            "-P",
+            "-s",
+            "--arg-file",
+            "--delimiter",
+            "--max-args",
+            "--max-procs",
+        ],
+        0,
+    ),
+];
+
 /// The command word (its file name, lower case, without `.exe`, `.cmd`, `.bat`, `.ps1`) and the
-/// words after it. Leading `VAR=value` words and the wrappers `sudo`, `env`, `command`, `exec`,
-/// `time`, `nohup` and PowerShell's `&` are skipped.
+/// words after it. Leading `VAR=value` words, PowerShell's `&` and the [`WRAPPERS`] with their
+/// options and operands are skipped.
 fn command(seg: &[String], ps: bool) -> (String, Vec<String>) {
     let mut i = 0;
     while i < seg.len() {
@@ -202,16 +276,19 @@ fn command(seg: &[String], ps: bool) -> (String, Vec<String>) {
             && w.split('=')
                 .next()
                 .is_some_and(|k| k.chars().all(|c| c.is_ascii_alphanumeric() || c == '_'));
-        if assignment
-            || matches!(
-                w.as_str(),
-                "sudo" | "env" | "command" | "exec" | "time" | "nohup"
-            )
-        {
+        if assignment {
             i += 1;
             continue;
         }
-        break;
+        let Some((_, valued, operands)) = WRAPPERS.iter().find(|(n, ..)| w == n) else {
+            break;
+        };
+        i += 1;
+        // Its options: `-k 5` takes the next word, `-k5`, `--signal=KILL` and flags do not.
+        while let Some(o) = seg.get(i).filter(|o| o.starts_with('-') && o.len() > 1) {
+            i += if valued.contains(&o.as_str()) { 2 } else { 1 };
+        }
+        i += operands;
     }
     let Some(first) = seg.get(i) else {
         return (String::new(), Vec::new());

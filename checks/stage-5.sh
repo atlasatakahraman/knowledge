@@ -119,6 +119,14 @@ check "guard: a redirect onto the lock asks" 'decides "$(bash_p "\"echo {} > 00-
 check "guard: PowerShell Set-Content on Hard-Rules asks" 'decides "{\"tool_name\":\"PowerShell\",\"tool_input\":{\"command\":\"Set-Content 00-Meta/Hard-Rules.md x\"},\"cwd\":\"$V\"}" ask'
 check "guard: knowledge rules lock asks" 'decides "$(bash_p "\"knowledge rules lock\"")" ask'
 check "guard: git push asks" 'decides "$(bash_p "\"git -C x push origin main\"")" ask'
+# Wrapped pushes: `timeout 120 git push` once passed as a `timeout` command (2026-11-24).
+for w in "timeout 120 git push origin main" "cd x && timeout -k 5 60 git push" "timeout --signal=KILL 9 git push" \
+  "nice -n 5 git push" "sudo -u me git push" "env -u X A=1 git reset --hard" "bash -lc 'git push'" \
+  "sh -c \\\"timeout 30 git push\\\""; do
+  check "guard: $w asks" 'decides "$(bash_p "\"$w\"")" ask'
+done
+check "guard: pwsh -Command 'git push' asks" 'decides "{\"tool_name\":\"PowerShell\",\"tool_input\":{\"command\":\"pwsh -NoProfile -Command \\\"git push\\\"\"},\"cwd\":\"$V\"}" ask'
+check "guard: timeout 60 git log prints nothing" '[ -z "$(pre "$(bash_p "\"timeout 60 git log --oneline\"")")" ]'
 check "guard: an MCP apply_migration asks" 'decides "{\"tool_name\":\"mcp__db__apply_migration\",\"tool_input\":{},\"cwd\":\"$V\"}" ask'
 check "guard: a Write under F: is denied" 'decides "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"F:/x.txt\"},\"cwd\":\"$V\"}" deny'
 check "guard: git log prints nothing" '[ -z "$(pre "$(bash_p "\"git log --oneline\"")")" ]'
