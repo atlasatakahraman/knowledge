@@ -40,9 +40,10 @@ each target's current content. It covers Claude Code and then every other harnes
 (Codex, opencode, the Claude desktop app), each under its own `found` line. `--apply <id>` recomputes
 the plan and refuses if anything moved in between, then writes exactly that. `knowledge setup
 --remove --plan` is the reverse, for the same harnesses, and never touches the vault. Flags, Windows, and every step by hand: [docs/install.md](docs/install.md). An agent
-installing for you follows [AGENTS.md](AGENTS.md). Then [update](docs/update.md),
-[remove](docs/remove.md), [every verb](docs/verbs.md), [security](docs/security.md) and
-[troubleshooting](docs/troubleshooting.md).
+installing for you follows [AGENTS.md](AGENTS.md). Then [verify a release](docs/verify.md),
+[update](docs/update.md), [remove](docs/remove.md), [every verb](docs/verbs.md),
+[security](docs/security.md), [troubleshooting](docs/troubleshooting.md) and, for the maintainer,
+[release](docs/release.md).
 
 ## Harnesses
 

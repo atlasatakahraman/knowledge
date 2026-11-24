@@ -111,7 +111,8 @@ grammars). Layout:
 | `template/` | the empty vault `setup --from-template` copies, with its generic rules and lock |
 | `githooks/` | the pre-commit backstop `setup` points every clone at |
 | `checks/stage-N.sh` | the runnable checks, one per stage; CI runs them on every target |
-| `docs/` | one file per task: install, update, remove, verify, verbs, security, troubleshooting |
+| `docs/` | one file per task: install, verify, update, remove, verbs, security, troubleshooting, release |
+| `allowed_signers` | the release key; `update --plan` builds it in (docs/release.md) |
 
 **Build and check.** `rust-toolchain.toml` pins the compiler. Before a commit, all of these pass:
 

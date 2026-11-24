@@ -44,7 +44,10 @@ retrieval inside Codex goes through the read-only `knowledge` MCP server instead
 
 Commits from every machine are signed with an SSH key, and each session start pulls only a tip
 signed by a key you listed. The key has no passphrase, because the hooks commit with nobody present;
-it signs commits and nothing else. In this order, because step 4 is the one that can refuse a pull:
+it signs commits and tags, and nothing else. A release is signed by a separate key with a
+passphrase, so a process running as you can't sign one ([release.md](release.md)); this repo's own
+`allowed_signers` holds that key, and the per-machine one below holds the commit keys. In this
+order, because step 4 is the one that can refuse a pull:
 
 1. **Each machine:** `knowledge setup --plan --signing`, then `--apply` its id. It writes
    `~/.config/knowledge/signing_ed25519`, sets `gpg.format ssh`, `user.signingkey`,

@@ -2,8 +2,11 @@
 # Stage 9's runnable check (S9.3, layout and conventions as config): a vault with two folders
 # renamed through config.json passes the doctor's vault checks; a bad `folders` is refused; a vault
 # made by `setup --from-template` passes them with the generic packs locked; no folder name is
-# written in src/ outside config.rs. Every run is on a fixture HOME and KNOWLEDGE_HOME, so the real
-# state never moves. Builds nothing. Run from the repo root:
+# written in src/ outside config.rs. S9.4: the docs exist, one per task. S9.5 (signed releases):
+# allowed_signers holds one file-only ed25519 key, docs/verify.md names its fingerprint, and a
+# fixture key's signature and checksum pass and fail as docs/verify.md says. Every run is on a
+# fixture HOME and KNOWLEDGE_HOME, so the real state never moves. Builds nothing. Run from the repo
+# root:
 #   bash checks/stage-9.sh target/release/knowledge
 set -u
 BIN=$(cd "$(dirname "$1")" && pwd)/$(basename "$1")
@@ -116,7 +119,7 @@ done
 check "every link between the docs resolves" '[ -z "$dead" ]'
 [ -z "$dead" ] || printf '      %s\n' $dead
 check "the docs are one per task" \
-  'for d in install update remove verbs security troubleshooting; do [ -f "$ROOT/docs/$d.md" ] || exit 1; done'
+  'for d in install verify update remove verbs security troubleshooting release; do [ -f "$ROOT/docs/$d.md" ] || exit 1; done'
 bun=$(grep -rnE '(^|[^[:alnum:]_./-])bunx?( |`|$)' $DOCS "$ROOT/skills" "$ROOT/commands" "$ROOT/template" 2>/dev/null)
 check "no doc, skill, command or template note names a bun command" '[ -z "$bun" ]'
 [ -z "$bun" ] || printf '%s\n' "$bun" | sed 's/^/      /'
@@ -133,6 +136,36 @@ fi
 check "update --apply is refused with the reason" \
   '! k update --apply x > "$TMP/ua.txt" 2>&1 && grep -q "not built" "$TMP/ua.txt"'
 unset KNOWLEDGE_HOME
+
+# --- S9.5: the release key and docs/verify.md's commands -----------------------------------------
+AS="$ROOT/allowed_signers"
+check "allowed_signers is one ed25519 key, for file signatures only" \
+  '[ "$(grep -cv "^[[:space:]]*$" "$AS")" = 1 ] && grep -qE "^atlasatakahraman namespaces=\"file\" ssh-ed25519 [A-Za-z0-9+/=]+ knowledge-release$" "$AS"'
+awk '{print $3, $4}' "$AS" > "$TMP/release.pub"
+fp=$(ssh-keygen -lf "$TMP/release.pub" 2>/dev/null | awk '{print $2}')
+check "docs/verify.md names that key and its fingerprint" \
+  '[ -n "$fp" ] && grep -qF "$fp" "$ROOT/docs/verify.md" && grep -qF "$(cat "$AS")" "$ROOT/docs/verify.md"'
+# verify.md's own command, against a throwaway key: a good signature passes, and a changed
+# SHA256SUMS or a signature for another namespace (a commit's) does not.
+# macOS has shasum, not sha256sum; verify.md says so.
+SUM=sha256sum; command -v sha256sum > /dev/null || SUM="shasum -a 256"
+mkdir "$TMP/sig" && (
+  cd "$TMP/sig" || exit 1
+  ssh-keygen -q -t ed25519 -N "" -C fixture -f k < /dev/null
+  printf 'x' > a.zip
+  printf '%s  a.zip\n' "$($SUM a.zip | cut -c1-64)" > SHA256SUMS
+  printf 'atlasatakahraman namespaces="file" %s\n' "$(cat k.pub)" > allowed_signers
+  ssh-keygen -Y sign -f k -n file SHA256SUMS < /dev/null
+  cp SHA256SUMS commit && ssh-keygen -Y sign -f k -n git commit < /dev/null
+) > /dev/null 2>&1
+sigv() { ssh-keygen -Y verify -f "$TMP/sig/allowed_signers" -I atlasatakahraman -n file -s "$1" < "$2" > /dev/null 2>&1; }
+check "verify.md's signature command passes a good signature" 'sigv "$TMP/sig/SHA256SUMS.sig" "$TMP/sig/SHA256SUMS"'
+check "and fails a changed SHA256SUMS" \
+  'cp "$TMP/sig/SHA256SUMS" "$TMP/sig/bad" && echo x >> "$TMP/sig/bad" && ! sigv "$TMP/sig/SHA256SUMS.sig" "$TMP/sig/bad"'
+check "and fails the same key's signature for a commit (namespace git)" \
+  '[ -f "$TMP/sig/commit.sig" ] && ! sigv "$TMP/sig/commit.sig" "$TMP/sig/SHA256SUMS"'
+check "verify.md's checksum command passes the archive and fails a changed one" \
+  '(cd "$TMP/sig" && grep -F "  a.zip" SHA256SUMS | $SUM -c - > /dev/null && printf y > a.zip && ! grep -F "  a.zip" SHA256SUMS | $SUM -c - > /dev/null 2>&1)'
 
 rm -rf "$TMP"
 echo

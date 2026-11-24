@@ -17,8 +17,10 @@ Update from the checkout instead:
 
 It makes one HTTPS call, to GitHub's API for the latest release, and sends nothing about you or
 your vault. Once a release exists, it names it and prints this platform's steps: the archive,
-`SHA256SUMS` and `SHA256SUMS.sig` to download, how to verify them, the folder to extract the two
-binaries into, and the plan to run after. It downloads nothing and replaces nothing.
+`SHA256SUMS` and `SHA256SUMS.sig` to download, [verify.md](verify.md)'s three checks, the folder to
+extract the two binaries into, and the plan to run after. It downloads nothing and replaces nothing.
+The release key it prints is the one built into your binary, so the new release is checked against
+a key you already trust rather than one fetched beside the archive.
 `--apply` is not built: on Windows a running `knowledge mcp` (the Claude desktop app, Codex,
 opencode) holds the binary, so the replace is a step you take with those apps quit.
 

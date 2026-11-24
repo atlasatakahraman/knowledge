@@ -1,7 +1,8 @@
 # Packages the two binaries for every target build.yml builds (spec D21, vault audit Stage 9). A v*
 # tag builds each target, writes one SHA256SUMS over the archives, attests each archive's build
-# provenance and opens a draft release; the owner signs SHA256SUMS with their SSH key on their own
-# machine and publishes the draft (docs/verify.md). workflow_dispatch is the dry run: the archives
+# provenance and opens a draft release; the owner signs SHA256SUMS with the release key on their own
+# machine and publishes the draft (docs/release.md; users check it with docs/verify.md).
+# workflow_dispatch is the dry run: the archives
 # and SHA256SUMS stay workflow artifacts, with no attestation and no release.
 name: release
 
