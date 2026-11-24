@@ -15,6 +15,7 @@ use std::process::{Command, Stdio};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 pub const META: &str = "00-Meta";
+pub const REPOS: &str = "10-Repos";
 pub const KNOWLEDGE: &str = "20-Knowledge";
 pub const SESSIONS: &str = "30-Sessions";
 pub const PLANS: &str = "40-Plans";
@@ -136,13 +137,64 @@ pub fn home() -> PathBuf {
     std::env::home_dir().unwrap_or_default()
 }
 
-/// `~/.claude/hooks`: the skeleton's hooks folder, linked. Its `.state` holds the watermarks.
+/// `~/.claude/hooks`: the skeleton's hooks folder, linked. Its `.state` held the hook state until
+/// Stage 9.
 pub fn hooks_dir() -> PathBuf {
     home().join(".claude").join("hooks")
 }
 
+/// `<home>/state`: the flush watermarks, the exports, the locks and the sweep day. It sat in
+/// `~/.claude/hooks/.state`, inside the checkout through that link, which Stage 9 removes. The home
+/// is the one `config::load` gives (KNOWLEDGE_HOME, else the config's folder), found without
+/// reading the config, since a hook needs its locks before any config error is reported. With
+/// either override set the old folder stays where it is: move it by hand into `<home>/state`.
 pub fn state_dir() -> PathBuf {
-    hooks_dir().join(".state")
+    static DIR: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+    DIR.get_or_init(|| {
+        let set = |k| std::env::var_os(k).filter(|v| !v.is_empty());
+        let home = set("KNOWLEDGE_HOME").map(PathBuf::from).unwrap_or_else(|| {
+            let c = crate::config::config_path();
+            c.parent().map(Path::to_path_buf).unwrap_or_default()
+        });
+        let dir = home.join("state");
+        // The old folder is the user's, under their real `~`, so only the default install takes
+        // it. An override points at another home (the stage checks' fixtures, a second vault):
+        // moving there would hand this user's live watermarks to it (S9.2: a fixture took them).
+        if set("KNOWLEDGE_HOME").is_none() && set("KNOWLEDGE_CONFIG").is_none() {
+            move_old_state(&hooks_dir().join(".state"), &dir);
+        }
+        dir
+    })
+    .clone()
+}
+
+/// The one-time move: each entry of the old folder, one rename each, so a crash leaves every
+/// entry whole in one place or the other. A name already in the new folder is never overwritten,
+/// so a second run moves nothing. Locks are left: they belong to a running process. Across file
+/// systems a file is copied under a temporary name and renamed into place, so a half-copied
+/// watermark file never takes the name; a folder (`exports/`, rebuilt per session) stays.
+fn move_old_state(old: &Path, new: &Path) {
+    let Ok(rd) = fs::read_dir(old) else { return };
+    let _ = fs::create_dir_all(new);
+    for e in rd.flatten() {
+        let name = e.file_name();
+        let shown = name.to_string_lossy().into_owned();
+        if shown.ends_with(".lock") || new.join(&name).exists() {
+            continue;
+        }
+        let (from, to) = (e.path(), new.join(&name));
+        if fs::rename(&from, &to).is_ok() || !e.file_type().is_ok_and(|t| t.is_file()) {
+            continue;
+        }
+        let tmp = new.join(format!("{shown}.moving"));
+        if fs::copy(&from, &tmp).is_ok() && fs::rename(&tmp, &to).is_ok() {
+            let _ = fs::remove_file(&from);
+        } else {
+            let _ = fs::remove_file(&tmp);
+        }
+    }
+    // Only when empty: a lock or an unmovable folder keeps it.
+    let _ = fs::remove_dir(old);
 }
 
 pub fn events_file(cfg: &Config) -> PathBuf {
@@ -771,8 +823,29 @@ pub fn ledger_read(cfg: &Config) -> Vec<J> {
         .collect()
 }
 
-/// Append the entries whose `src` is not in the ledger yet; how many went in.
+/// Run `f` while holding the ledger's lock: a flush's append and a promote's rewrite take turns, so
+/// a rewrite cannot drop a line appended while it ran (brain-lib's ponytail, closed). Waits up to
+/// 2 s; a lock older than 10 s is a dead process's. None when it never came free.
+pub fn ledger_locked<T>(f: impl FnOnce() -> T) -> Option<T> {
+    let mut f = Some(f);
+    for _ in 0..40 {
+        if let Some(out) = with_lock("ledger", 10_000, || f.take().map(|f| f())) {
+            return out;
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    None
+}
+
+/// Append the entries whose `src` is not in the ledger yet; how many went in. A captured decision
+/// is never dropped: when the lock never comes free, the append runs without it.
 pub fn ledger_add(cfg: &Config, entries: Vec<J>) -> usize {
+    let mut entries = Some(entries);
+    ledger_locked(|| ledger_append(cfg, entries.take().unwrap_or_default()))
+        .unwrap_or_else(|| ledger_append(cfg, entries.take().unwrap_or_default()))
+}
+
+fn ledger_append(cfg: &Config, entries: Vec<J>) -> usize {
     let seen: std::collections::HashSet<String> = ledger_read(cfg)
         .iter()
         .filter_map(|e| e.get("src").and_then(J::str).map(str::to_string))

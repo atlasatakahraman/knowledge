@@ -3,8 +3,8 @@
 #![deny(unsafe_code)]
 
 use knowledge::{
-    Fault, capture, compile, config, doctor, emit, events, fetch, graph, hook, hubs, index, mcp,
-    memory, note, recorder, records, report, rules, search, setup, usage,
+    Fault, capture, compile, config, doctor, emit, events, fetch, graph, hook, hubs, index, ledger,
+    mcp, memory, note, recorder, records, report, rules, search, setup, usage,
 };
 use std::process::{Command, ExitCode};
 
@@ -25,6 +25,7 @@ const USAGE: &str = "usage:
   knowledge code index [<repo>|--all] [--rebuild]   (the same)
   knowledge code duplicate [--staged] [<repo>] [--budget N]   (the same)
   knowledge note decision <text> [--question <q>] [--promoted <path>] | note log <text>
+  knowledge ledger list | promote <src> <path|not-a-decision>
   knowledge config [<key>]
   knowledge rules list [--json] | kernel | check [--staged] [--restore] | lock [--seed <file>]
   knowledge rules enable|disable <pack>
@@ -96,6 +97,7 @@ fn main() -> ExitCode {
         "graph" => graph::run(rest),
         "code" => hand_off(&argv),
         "note" => note::run(rest),
+        "ledger" => ledger::run(rest),
         "config" => config::run(rest),
         "rules" => rules::run(rest),
         // A hook never fails the harness: whatever happens inside, it exits 0.

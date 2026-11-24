@@ -21,6 +21,7 @@ pub mod hook;
 pub mod hubs;
 pub mod index;
 pub mod instructions;
+pub mod ledger;
 pub mod linkcheck;
 pub mod mcp;
 pub mod memory;

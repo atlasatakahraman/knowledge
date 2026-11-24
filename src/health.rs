@@ -28,13 +28,14 @@ const HOOK_LIMIT: i64 = 10_000;
 /// What a vault session loads whole: the merge left 64,691 bytes (spec item 21), plus 15%.
 const PRIMING_CEILING: i64 = 74_395;
 
-pub const IDS: [&str; 18] = [
+pub const IDS: [&str; 19] = [
     "vault-index",
     "retrieval",
     "sessions",
     "auth",
     "frontmatter",
     "links",
+    "pointers",
     "reach",
     "ignores",
     "commits",
@@ -431,6 +432,61 @@ fn check_links(cfg: &Config, v: &Vault) -> Check {
             ("broken", n(broken.len())),
             ("allowedForward", n(lc.allowed())),
             ("samples", strs(&first(&broken, 8))),
+        ]),
+    )
+}
+
+/// Every `checkout:` and `docs:` pointer in a 10-Repos note exists under the checkouts folder
+/// (brain-verify.mjs's second half). A pointer is relative (`<remote-name>[/docs]`), so one note
+/// serves both boots; an absolute one is dead on the other OS and fails. A repo this machine never
+/// cloned is listed, not failed: not every machine clones every repo.
+fn check_pointers(cfg: &Config, v: &Vault) -> Check {
+    let (mut total, mut dead, mut not_cloned) = (0, Vec::new(), Vec::<String>::new());
+    let prefix = format!("{}/", state::REPOS);
+    for f in v
+        .files
+        .iter()
+        .filter(|f| f.rel.starts_with(&prefix) && f.rel.ends_with(".md"))
+    {
+        let text = text_of(cfg, &f.rel).replace("\r\n", "\n");
+        let Some(front) = vault::split_front(&text).0 else {
+            continue;
+        };
+        let fields = vault::fields(front);
+        for key in ["checkout", "docs"] {
+            for p in vault::field(&fields, key) {
+                total += 1;
+                let b = p.as_bytes();
+                if Path::new(p).is_absolute()
+                    || p.contains('\\')
+                    || (b.len() > 1 && b[0].is_ascii_alphabetic() && b[1] == b':')
+                {
+                    dead.push(format!(
+                        "{}  {key}  {p}  (absolute: write it relative to the checkouts folder)",
+                        rel(&f.rel)
+                    ));
+                    continue;
+                }
+                let repo = p.split('/').next().unwrap_or(p);
+                if !cfg.dev.join(repo).exists() {
+                    if !not_cloned.iter().any(|r| r == repo) {
+                        not_cloned.push(repo.to_string());
+                    }
+                } else if !cfg.dev.join(p).exists() {
+                    dead.push(format!("{}  {key}  {p}", rel(&f.rel)));
+                }
+            }
+        }
+    }
+    not_cloned.sort();
+    fail(
+        "pointers",
+        dead.is_empty(),
+        obj([
+            ("pointers", n(total)),
+            ("dead", n(dead.len())),
+            ("notCloned", strs(&not_cloned)),
+            ("samples", strs(&first(&dead, 8))),
         ]),
     )
 }
@@ -939,6 +995,7 @@ fn run_check(cfg: &Config, v: &Vault, id: &'static str) -> Check {
         "auth" => Ok(check_auth()),
         "frontmatter" => Ok(check_frontmatter(cfg, v)),
         "links" => Ok(check_links(cfg, v)),
+        "pointers" => Ok(check_pointers(cfg, v)),
         "reach" => Ok(check_reach(cfg, v)),
         "ignores" => Ok(check_ignores(cfg)),
         "commits" => Ok(check_commits(cfg)),

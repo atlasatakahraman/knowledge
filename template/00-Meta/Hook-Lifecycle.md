@@ -17,8 +17,10 @@ Every hook is the `knowledge` binary's `hook` verb, and reads its paths from the
 which `knowledge setup` installs: each hook is exec form, `${user_config.knowledge_bin}` with
 `["hook", <verb>, "--harness", "claude"]`, so no shell starts and no other `knowledge` on PATH is
 picked. Other harnesses run the same verbs (§ Other harnesses). What a hook starts in the background
-is the same binary again, detached, so no hook starts a JavaScript runtime. `~/.claude/hooks` links the skeleton checkout's `hooks/` (its `.state/` holds the
-watermarks and locks), and the doctor's `skeleton-version` check fails when it does not.
+is the same binary again, detached, so no hook starts a JavaScript runtime. The watermarks, locks
+and exports live in `state/` beside the config (`~/.config/knowledge/state`, or `$KNOWLEDGE_HOME/state`);
+the first run moves an older `~/.claude/hooks/.state` there. `~/.claude/hooks` links the skeleton
+checkout's `hooks/`, and the doctor's `skeleton-version` check fails when it does not.
 `.skeleton.json` at the vault root pins the skeleton version the vault is written for: the session
 start says so when the checkout is another version, and `skeleton-version` fails.
 
@@ -36,7 +38,7 @@ says what notices a failure.
 | `Stop`, `SubagentStop` | — | `knowledge hook capture` | The same, **async**, at most once per 20 min per session, flush only | same | same | same |
 | ↳ detached | | `knowledge flush` | Takes the session's lock, appends every `AskUserQuestion` answer to the decision ledger, then sends what is new since the last flush to `claude -p --model haiku` and appends what is worth keeping to the daily note | `30-Sessions/YYYY/MM/YYYY-MM-DD.md`, `50-Ops/decisions.jsonl` | **one haiku call** per capture with new content | `!! BRAIN FLUSH FAILING` at the next session start; the flush canary after 3 days |
 | ↳ detached | | `knowledge records` | SessionEnd only. Waits for that session's flush, then commits the hook-written records alone (`30-Sessions/`, `50-Ops/Commits/`, `decisions.jsonl`, `Health/`, `Usage/`, `00-MOC-Ops`), gitleaks first (none installed → nothing committed), and pushes when every unpushed commit is a record. Your own unpushed commits hold the push | a `chore(brain): records from the <os> boot` commit, pushed | free | `!! BRAIN RECORDS FAILING` at the next start, which also retries the sync |
-| ↳ detached | | `knowledge compile` | Promotes a **finished** daily log into ADRs, knowledge and rules, links each new note from its MOC, and commits only its own changes. Does nothing while `~/.claude/hooks/.state/compile.disabled` exists | `60-Decisions/`, `20-Knowledge/`, `00-Meta/`, `50-Ops/brain-compile-state.json` | **one sonnet call**, once per finished day | `!! BRAIN COMPILE FAILING` at the next session start |
+| ↳ detached | | `knowledge compile` | Promotes a **finished** daily log into ADRs, knowledge and rules, links each new note from its MOC, and commits only its own changes. Does nothing while `~/.config/knowledge/state/compile.disabled` exists | `60-Decisions/`, `20-Knowledge/`, `00-Meta/`, `50-Ops/brain-compile-state.json` | **one sonnet call**, once per finished day | `!! BRAIN COMPILE FAILING` at the next session start |
 | ↳ detached | | `knowledge usage` | The month's token/cost digest, once a day | `50-Ops/Usage/usage-YYYY-MM-<os>.md` | free | nothing: the file's date goes stale |
 | ↳ detached | | `knowledge doctor --repair --record` | The health sweep, from the session start, once per logical day | `50-Ops/Health/health-YYYY-MM.md`, derived artifacts | free | `!! VAULT HEALTH` at the next session start when the newest line is FAIL or stale |
 | `PostToolUse` | `Edit\|Write` | `knowledge hook post-edit` | On a vault note, at once: reindexes that note, then the write-time check (frontmatter, links, `[[Note#Heading]]`), reported back, never blocking | the vault index | free; ≤ 35 ms | the doctor's `vault-index` |
@@ -68,8 +70,9 @@ leaves a file with no block alone.
 
 | Command | Does |
 |---|---|
-| `knowledge doctor [--pretty] [--repair] [--record] [--only <ids>]` | Zero-token health check, eighteen checks. **Fail:** `vault-index`, `retrieval` (the questions in `00-Meta/retrieval-cases.json` return their notes), `sessions`, `auth`, `frontmatter`, `links`, `reach`, `ignores`, `commits`, `priming` (also each harness's instructions block), `priming-size`, `rules`, `budget`, `skeleton-version`, `portable`. **Warn:** `hygiene`, `pull-trust`, `codex-trust`. `--repair` rebuilds derived artifacts only and never edits a note; `--record` writes today's line in `50-Ops/Health/`. Always exits 0 |
+| `knowledge doctor [--pretty] [--repair] [--record] [--only <ids>]` | Zero-token health check, nineteen checks. **Fail:** `vault-index`, `retrieval` (the questions in `00-Meta/retrieval-cases.json` return their notes), `sessions`, `auth`, `frontmatter`, `links`, `pointers` (every `checkout:`/`docs:` pointer in `10-Repos/` exists under `devRoot`), `reach`, `ignores`, `commits`, `priming` (also each harness's instructions block), `priming-size`, `rules`, `budget`, `skeleton-version`, `portable`. **Warn:** `hygiene`, `pull-trust`, `codex-trust`. `--repair` rebuilds derived artifacts only and never edits a note; `--record` writes today's line in `50-Ops/Health/`. Always exits 0 |
 | `knowledge hubs` | Regenerate the generated hubs from the folders. Never edit a hub by hand |
+| `knowledge ledger list \| promote <src> <path\|not-a-decision>` | The decision ledger: the unpromoted entries, or mark one promoted to an ADR (the path must be a note) or `not-a-decision`. Takes the same lock as the flush, so a promote never drops a decision being added |
 | `knowledge post-bash [--backfill YYYY-MM-DD] [--dry-run]` | The commit recorder, from a date, idempotent |
 | `knowledge flush <session-id> [<cwd>] [--date YYYY-MM-DD] [--dry-run]` | A flush by hand; `--date` backfills a missed note |
 | `knowledge compile [--force] [--dry-run]` | `--force` compiles today's still-open log |
