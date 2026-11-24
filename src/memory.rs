@@ -608,11 +608,7 @@ fn flush(cfg: &Config, args: &Args, sid: &str, cwd: &str, dry: bool) {
         ));
         return;
     }
-    state::ensure_note(cfg, &file, at);
-    if let Ok(mut f) = fs::OpenOptions::new().append(true).create(true).open(&file) {
-        use std::io::Write;
-        let _ = f.write_all(block.as_bytes());
-    }
+    let _ = state::append_note(cfg, &file, at, &block);
     advance();
     let mut fields = ev!("hook" => J::s("flush"), "sid" => J::s(sid), "outcome" => J::s("wrote"), "file" => J::s(state::native(&file)));
     fields.push(("events".into(), J::n(rows.len() as i64)));

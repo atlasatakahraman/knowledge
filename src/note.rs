@@ -8,8 +8,6 @@
 use crate::config;
 use crate::state::{self, J, obj};
 use crate::{Args, Fault, emit};
-use std::fs;
-use std::io::Write;
 
 const USAGE: &str =
     "knowledge note decision <text> [--question <q>] [--promoted <vault path> | not-a-decision]
@@ -59,17 +57,12 @@ pub fn run(raw: &[String]) -> Result<u8, Fault> {
         }
         "log" if args.get("question").is_none() && args.get("promoted").is_none() => {
             let file = state::note_path(&cfg, now);
-            state::ensure_note(&cfg, &file, now);
             let block = format!(
                 "\n### {} · note · {}\n\n- {text}\n",
                 state::hm(&state::local(now)),
                 cfg.os
             );
-            fs::OpenOptions::new()
-                .append(true)
-                .open(&file)
-                .and_then(|mut f| f.write_all(block.as_bytes()))
-                .map_err(|e| Fault::io(&file, e))?;
+            state::append_note(&cfg, &file, now, &block).map_err(|e| Fault::io(&file, e))?;
             emit(&format!("added to {}\n", state::native(&file)));
         }
         _ => return Err(Fault::Usage(USAGE.into())),

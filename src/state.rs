@@ -108,21 +108,34 @@ pub fn is_log_name(f: &str) -> bool {
         })
 }
 
-/// Create the daily note with its frontmatter, unless it exists.
-pub fn ensure_note(cfg: &Config, file: &Path, ms: i64) {
-    if file.exists() {
-        return;
+/// Append a block to the daily note, creating it with its frontmatter first. A script write fires
+/// no reindex hook, so the note is reindexed here, or `find` misses today's log and the doctor's
+/// `vault-index` reads it `stale` 10 minutes later (2026-11-24). Only an index that exists: a
+/// fixture with none gets no half-built one.
+pub fn append_note(cfg: &Config, file: &Path, ms: i64, block: &str) -> std::io::Result<()> {
+    if !file.exists() {
+        if let Some(dir) = file.parent() {
+            fs::create_dir_all(dir)?;
+        }
+        let stamp = ymd(&logical(cfg, ms));
+        fs::write(
+            file,
+            format!(
+                "---\ntype: session\nproject: knowledge\ntags: [session, log]\ncreated: {stamp}\nupdated: {stamp}\nstatus: active\n---\n\n# {stamp}\n\nAuto-captured. Write the real log with `/brain-log`.\n\n## Sessions\n\n"
+            ),
+        )?;
     }
-    if let Some(dir) = file.parent() {
-        let _ = fs::create_dir_all(dir);
+    fs::OpenOptions::new()
+        .append(true)
+        .open(file)?
+        .write_all(block.as_bytes())?;
+    if cfg.db.exists()
+        && let Some(rel) = cfg.rel_of(file)
+        && let Ok(mut conn) = crate::index::open_rw(cfg)
+    {
+        let _ = crate::index::one(&mut conn, cfg, &rel);
     }
-    let stamp = ymd(&logical(cfg, ms));
-    let _ = fs::write(
-        file,
-        format!(
-            "---\ntype: session\nproject: knowledge\ntags: [session, log]\ncreated: {stamp}\nupdated: {stamp}\nstatus: active\n---\n\n# {stamp}\n\nAuto-captured. Write the real log with `/brain-log`.\n\n## Sessions\n\n"
-        ),
-    );
+    Ok(())
 }
 
 // ---- paths ---------------------------------------------------------------------------------------
