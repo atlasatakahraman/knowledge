@@ -1,0 +1,63 @@
+# Draws the README's live pills (stars, the newest tag) and publishes them as the only commit on
+# the orphan `badges` branch, which the README reads through raw.githubusercontent.com. Runs daily,
+# on every tag push, and by hand. The runners have no bun and this repo uses no third-party action,
+# so one pinned bun release is fetched and checked against its SHA-256 before it runs (the digest
+# GitHub records for the release asset). To move bun, change both lines in env together.
+name: badges
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: badges
+
+env:
+  BUN_VERSION: 1.4.5
+  BUN_SHA256: 94559b3b528995a49452f9f2404cec74f2efd7d06e0a000a8cd214b02c3666eb
+
+jobs:
+  badges:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # the push to `badges`, and nothing else
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-tags: true
+      - name: Install bun ${{ env.BUN_VERSION }}
+        run: |
+          cd "$RUNNER_TEMP"
+          curl -fsSLo bun.zip "https://github.com/oven-sh/bun/releases/download/bun-v$BUN_VERSION/bun-linux-x64.zip"
+          echo "$BUN_SHA256  bun.zip" | sha256sum -c -
+          unzip -q bun.zip
+          echo "$RUNNER_TEMP/bun-linux-x64" >> "$GITHUB_PATH"
+      - name: Draw and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          stars=$(gh api "repos/$GITHUB_REPOSITORY" --jq .stargazers_count)
+          tag=$(git tag --list 'v*' --sort=-v:refname | head -n1)
+          out="$RUNNER_TEMP/pills"
+          mkdir -p "$out"
+          bun --bun assets/live.mjs "$stars" "$tag" "$out"
+          # Unchanged pills make no commit.
+          if git fetch -q --depth=1 origin badges; then
+            same=1
+            for f in "$out"/*.svg; do
+              git show "FETCH_HEAD:$(basename "$f")" 2>/dev/null | cmp -s - "$f" || same=0
+            done
+            if [ "$same" = 1 ]; then echo "unchanged: $stars stars, $tag"; exit 0; fi
+          fi
+          git switch -q --orphan badges
+          cp "$out"/*.svg .
+          git add -- *.svg
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -qm "badges: $stars stars, $tag"
+          git push -qf origin badges
