@@ -296,7 +296,7 @@ fn skeleton_pull(cfg: &Config) -> Option<String> {
                 if n == 1 { "" } else { "s" }
             );
             if !hooks.out().is_empty() {
-                line.push_str(" The Claude plugin changed: run `claude plugin update knowledge@knowledge-skeleton`, then /reload-plugins (an update is never automatic, K14).");
+                line.push_str(" The Claude plugin changed: run `claude plugin marketplace update knowledge-skeleton`, then `claude plugin update knowledge@knowledge-skeleton`, then /reload-plugins (an update is never automatic, K14).");
             }
             Some(line)
         }

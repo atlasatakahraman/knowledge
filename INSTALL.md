@@ -182,8 +182,11 @@ reads hooks at session start, so open a new session after.
 - **Updates are never automatic.** The marketplace is added with no `autoUpdate`: once that flag is
   set, Claude Code copies it into `~/.claude/plugins/known_marketplaces.json`, where it stays even
   after it is removed from `settings.json`. The plugin's version is the binary's, and Claude Code
-  replaces a cached plugin only when that version changes. When a pull changes `claude/`, the
-  session start names `claude plugin update knowledge@knowledge-skeleton`, then `/reload-plugins`.
+  replaces a cached plugin only when that version changes. It compares against its own clone of
+  the marketplace, which nothing refreshes on its own, so `claude plugin update` alone reports the
+  old version as the latest. When a pull changes `claude/`, the session start names
+  `claude plugin marketplace update knowledge-skeleton`, then
+  `claude plugin update knowledge@knowledge-skeleton`, then `/reload-plugins`.
 - **From 0.10.0's hook block.** `setup` takes every hook of ours out of `settings.json` (a
   `knowledge … hook` command, or a `brain-*.mjs` under `~/.claude/hooks`) after the plugin installs,
   and keeps every other hook. If the install fails, the apply stops and the old hooks keep running.
@@ -432,7 +435,8 @@ still read the files, so keep shell commands on approval.
 ## Updating
 
 The skeleton fast-forwards itself at each session start when its tree is clean; when its `claude/`
-plugin changed, that session names `claude plugin update knowledge@knowledge-skeleton`. After a
+plugin changed, that session names `claude plugin marketplace update knowledge-skeleton`, then
+`claude plugin update knowledge@knowledge-skeleton` (the update alone reads a stale clone). After a
 pull that changed `src/`, rebuild the binary (§ 4b), then `knowledge setup --plan` and `--apply`:
 that moves the Codex and opencode plugins to the new pin, and Codex asks for its hook review again.
 When the version moves past the vault's `.skeleton.json`, adapt the vault and bump the pin.
@@ -476,5 +480,6 @@ stay too: they are Obsidian's view state.
 | `this binary is x, but the codex plugin's hooks were written for y, so they stand down` | A new binary and an old plugin: `knowledge setup --plan`, `--apply`, then the Codex hook review |
 | `WARN hook trust 0 of 9 hooks trusted in Codex` | The hooks wait for your review: `/hooks` in the Codex CLI |
 | `knowledge find` in Codex: `Access denied (os error 5)` on `config.json` | Codex's Windows sandbox: the model should use `mcp__knowledge__find`; `codex mcp list` must show `knowledge` |
+| `cargo install` on Windows cannot replace `knowledge.exe` (access denied) | A running `knowledge mcp` holds the file: the Claude desktop app's server, or Codex's or opencode's. Quit the app fully (the tray too), install, start it again; a session inside that app stops with it, its background tasks included |
 | opencode runs none of the hooks after setup | The service loaded its plugins before the file existed: `opencode service restart` |
 | The desktop Chat lists no `knowledge` tools | The config is in a folder the app left (a Store install reads `%LOCALAPPDATA%\Claude-Data\<package>`), or the app was not fully restarted |

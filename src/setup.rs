@@ -923,7 +923,9 @@ fn plan_setup(args: &Args) -> Plan {
     }
 
     // The hooks live in the Claude plugin (S7.3): its marketplace is this checkout's origin, as
-    // git with no autoUpdate, so an update is the owner's `claude plugin update` (K14). It installs
+    // git with no autoUpdate, so an update is the owner's `claude plugin update` (K14), after a
+    // `marketplace update`: the update compares against the marketplace's local clone, which
+    // nothing refreshes on its own, so it reports a stale version as the latest. It installs
     // first, so a failed install leaves the old settings.json hooks running.
     let want = serde_json::from_str::<J>(&state::read(
         &root.join("claude/.claude-plugin/plugin.json"),
@@ -934,7 +936,7 @@ fn plan_setup(args: &Args) -> Plan {
     let (known, version) = plugin_state(&claude);
     match version {
         Some(v) if v == want => p.say("ok", "plugin", format!("{PLUGIN} {v}")),
-        Some(v) => p.say("WARN", "plugin", format!("{PLUGIN} {v} is installed and the checkout has {want}: run `claude plugin update {PLUGIN}`, then /reload-plugins")),
+        Some(v) => p.say("WARN", "plugin", format!("{PLUGIN} {v} is installed and the checkout has {want}: run `claude plugin marketplace update {MARKET}`, then `claude plugin update {PLUGIN}`, then /reload-plugins")),
         None => {
             let url = git_get(&root, "remote.origin.url");
             if !known && url.is_empty() {
