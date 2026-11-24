@@ -17,25 +17,30 @@ use tree_sitter::{
 };
 
 // 2: refs prefer a definition in the using file and stay in one language (S8.2).
-// 3: uses of a type are refs too (S8.4). A cache of another version is rebuilt.
-const SCHEMA_VERSION: i32 = 3;
+// 3: uses of a type are refs too (S8.4).
+// 4: a ref crosses files only to a definition the other file can name; a Rust `x.f()` reaches
+//    methods only; a function handed on as a value is a use (S8.4). A cache of another version
+//    is rebuilt.
+const SCHEMA_VERSION: i32 = 4;
 
 // `uses` holds each symbol's raw reference names; `refs` is them resolved, rebuilt in one
 // statement after any change (index.rs keeps notes' `refs` and `links` the same way).
+// `reach`: another file can name the symbol (see `reach`). `member`: a Rust method-call use.
 const SCHEMA: &str = "
 CREATE TABLE files   (id INTEGER PRIMARY KEY, path TEXT UNIQUE NOT NULL, lang TEXT NOT NULL,
                       size INTEGER NOT NULL, mtime INTEGER NOT NULL, hash TEXT NOT NULL);
 CREATE TABLE symbols (id INTEGER PRIMARY KEY, name TEXT NOT NULL, kind TEXT NOT NULL,
                       file INTEGER NOT NULL REFERENCES files(id), line INTEGER NOT NULL,
-                      signature TEXT NOT NULL, shape TEXT);
+                      signature TEXT NOT NULL, shape TEXT, reach INTEGER NOT NULL);
 CREATE INDEX symbols_name ON symbols (name);
 CREATE INDEX symbols_file ON symbols (file);
 CREATE TABLE uses    (src INTEGER NOT NULL, name TEXT NOT NULL, kind TEXT NOT NULL,
-                      PRIMARY KEY (src, name, kind)) WITHOUT ROWID;
+                      member INTEGER NOT NULL,
+                      PRIMARY KEY (src, name, kind, member)) WITHOUT ROWID;
 CREATE TABLE refs    (src INTEGER NOT NULL, dst INTEGER NOT NULL, kind TEXT NOT NULL,
                       PRIMARY KEY (src, dst, kind)) WITHOUT ROWID;
 CREATE INDEX refs_dst ON refs (dst);
-PRAGMA user_version = 3;";
+PRAGMA user_version = 4;";
 
 /// Generated or minified code: not worth a parse, and the likeliest to be slow.
 const MAX_BYTES: u64 = 1 << 20;
@@ -67,9 +72,29 @@ const RUST_CALLS: &str = "
 const RUST_TYPES: &str = r#"
 (type_identifier) @name @reference.type
 (scoped_identifier path: (identifier) @name (#match? @name "^[A-Z]")) @reference.type"#;
-/// TypeScript's annotations, `extends` and generics; JavaScript has no type nodes.
+/// A function handed on as a value is used without a call: `players.map(score)`, a callback,
+/// `actions={{ announceSaves }}` (S8.4: Queue's `score` had no user in either tool). Such a use
+/// resolves to a function or a class only (`sync`): a variable is no symbol, and one named like
+/// another file's method or constant linked to it. Not for Rust, where a bare argument is nearly
+/// always a variable: of 75 such refs in the four checkouts, about half were `path`, `args`, `len`
+/// and the like naming a function elsewhere (S8.4).
+const JS_VALUES: &str = "
+(arguments (identifier) @name) @reference.value
+(shorthand_property_identifier) @name @reference.value
+(pair value: (identifier) @name) @reference.value";
+/// `onClick={submit}`: where JSX_RENDERS goes, as plain TypeScript has no JSX nodes.
+const JSX_VALUES: &str = "
+(jsx_expression (identifier) @name) @reference.value";
+const PYTHON_VALUES: &str = "
+(argument_list (identifier) @name) @reference.value";
+
+/// TypeScript's annotations, `extends` and generics; JavaScript has no type nodes. Its tags.scm
+/// defines interfaces but not a `type` alias or an `enum`, so `parseCommand(…, commands: Commands)`
+/// found no `Commands` beside it and linked a component of that name in another file (S8.4).
 const TS_TYPES: &str = "
-(type_identifier) @name @reference.type";
+(type_identifier) @name @reference.type
+(type_alias_declaration name: (type_identifier) @name) @definition.type
+(enum_declaration name: (identifier) @name) @definition.enum";
 /// Python's annotations: `x: Foo`, and the head of `list[Foo]` (whose `Foo` is a `type` again).
 const PYTHON_TYPES: &str = "
 (type (identifier) @name) @reference.type
@@ -138,14 +163,17 @@ impl Lang {
     /// under it, and so does this (both compile on both grammars, S8.0).
     fn tags(self) -> String {
         match self {
-            Lang::JavaScript => format!("{}\n{JSX_RENDERS}", tree_sitter_javascript::TAGS_QUERY),
+            Lang::JavaScript => format!(
+                "{}\n{JSX_RENDERS}\n{JS_VALUES}\n{JSX_VALUES}",
+                tree_sitter_javascript::TAGS_QUERY
+            ),
             Lang::TypeScript => format!(
-                "{}\n{}\n{TS_TYPES}",
+                "{}\n{}\n{TS_TYPES}\n{JS_VALUES}",
                 tree_sitter_javascript::TAGS_QUERY,
                 tree_sitter_typescript::TAGS_QUERY
             ),
             Lang::Tsx => format!(
-                "{}\n{}\n{JSX_RENDERS}\n{TS_TYPES}",
+                "{}\n{}\n{JSX_RENDERS}\n{TS_TYPES}\n{JS_VALUES}\n{JSX_VALUES}",
                 tree_sitter_javascript::TAGS_QUERY,
                 tree_sitter_typescript::TAGS_QUERY
             ),
@@ -153,7 +181,10 @@ impl Lang {
                 "{}\n{RUST_CALLS}\n{RUST_TYPES}",
                 tree_sitter_rust::TAGS_QUERY
             ),
-            Lang::Python => format!("{}\n{PYTHON_TYPES}", tree_sitter_python::TAGS_QUERY),
+            Lang::Python => format!(
+                "{}\n{PYTHON_TYPES}\n{PYTHON_VALUES}",
+                tree_sitter_python::TAGS_QUERY
+            ),
         }
     }
 }
@@ -214,6 +245,7 @@ struct Def {
     line: i64,
     signature: String,
     shape: Option<String>,
+    reach: bool,
     start: usize,
     end: usize,
 }
@@ -222,13 +254,15 @@ struct Use {
     at: usize,
     name: String,
     kind: String,
+    member: bool,
 }
 
 /// The definitions and references the tags query marks in one file.
-fn extract(q: &Query, tree: &Tree, src: &[u8]) -> (Vec<Def>, Vec<Use>) {
+fn extract(lang: Lang, q: &Query, tree: &Tree, src: &[u8]) -> (Vec<Def>, Vec<Use>) {
     let names = q.capture_names();
     let (mut defs, mut uses) = (Vec::new(), Vec::new());
     let mut seen = HashSet::new();
+    let exports = Exports::of(lang, tree.root_node(), src);
     let mut cursor = QueryCursor::new();
     let mut it = cursor.matches(q, tree.root_node(), src);
     while let Some(m) = it.next() {
@@ -259,6 +293,7 @@ fn extract(q: &Query, tree: &Tree, src: &[u8]) -> (Vec<Def>, Vec<Use>) {
                     line: node.start_position().row as i64 + 1,
                     signature: signature(node, src),
                     shape: shape(node, name, src),
+                    reach: reach(lang, node, text, &exports),
                     start: node.start_byte(),
                     end: node.end_byte(),
                 });
@@ -268,10 +303,112 @@ fn extract(q: &Query, tree: &Tree, src: &[u8]) -> (Vec<Def>, Vec<Use>) {
                 at: name.start_byte(),
                 name: text.to_string(),
                 kind: kind.to_string(),
+                // Only Rust's grammar has `field_expression`: `x.f()` there is a method, never a
+                // free function (S8.4: `s.join(…)` linked to `fetch.rs`'s `fn join`).
+                member: name
+                    .parent()
+                    .is_some_and(|p| p.kind() == "field_expression"),
             });
         }
     }
     (defs, uses)
+}
+
+/// A JS or TS file's module facts: whether it imports or exports at all (a file that does neither
+/// is a script, whose top level is global), and the names `export { a, b }` and `export default a`
+/// export.
+struct Exports {
+    module: bool,
+    names: HashSet<String>,
+}
+
+impl Exports {
+    fn of(lang: Lang, root: Node, src: &[u8]) -> Exports {
+        let mut e = Exports {
+            module: false,
+            names: HashSet::new(),
+        };
+        if !matches!(lang, Lang::JavaScript | Lang::TypeScript | Lang::Tsx) {
+            return e;
+        }
+        let text = |n: Node| n.utf8_text(src).ok().map(str::to_string);
+        let mut c = root.walk();
+        for n in root.children(&mut c) {
+            match n.kind() {
+                "import_statement" => e.module = true,
+                "export_statement" => {
+                    e.module = true;
+                    e.names
+                        .extend(n.child_by_field_name("value").and_then(text));
+                    let mut cc = n.walk();
+                    for clause in n.children(&mut cc).filter(|c| c.kind() == "export_clause") {
+                        let mut sc = clause.walk();
+                        for spec in clause.children(&mut sc) {
+                            e.names
+                                .extend(spec.child_by_field_name("name").and_then(text));
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        e
+    }
+}
+
+/// Whether a file other than the definition's own can name it. Name-only resolution linked
+/// Queue's `content.replace()` to a hook's local closure and TheAtlas's `tauri::State` to a
+/// private struct in another crate (S8.4). A use in the definition's own file needs none of this.
+/// Rust: `pub` of any scope, a trait's or a trait impl's method, a macro. JS and TS: a method or
+/// an object's property, which travel with their object; a top-level declaration exported where
+/// it stands or by name, or any top-level one in a script. Python: anything not inside a function.
+/// Not followed: a Rust child module's `super::` reach into a private item, and imports, which
+/// would tell two exported names apart.
+fn reach(lang: Lang, def: Node, name: &str, exports: &Exports) -> bool {
+    match lang {
+        Lang::Rust => {
+            let mut c = def.walk();
+            def.children(&mut c)
+                .any(|n| n.kind() == "visibility_modifier")
+                || def.kind() == "macro_definition"
+                || def.parent().and_then(|l| l.parent()).is_some_and(|p| {
+                    p.kind() == "trait_item"
+                        || (p.kind() == "impl_item" && p.child_by_field_name("trait").is_some())
+                })
+        }
+        Lang::JavaScript | Lang::TypeScript | Lang::Tsx => {
+            if matches!(
+                def.kind(),
+                "method_definition"
+                    | "method_signature"
+                    | "abstract_method_signature"
+                    | "pair"
+                    | "assignment_expression"
+            ) {
+                return true;
+            }
+            let mut n = def;
+            while let Some(p) = n.parent() {
+                match p.kind() {
+                    "export_statement" => return true,
+                    "program" => return !exports.module || exports.names.contains(name),
+                    "lexical_declaration" | "variable_declaration" | "ambient_declaration" => n = p,
+                    _ => return false,
+                }
+            }
+            false
+        }
+        Lang::Python => {
+            let mut p = def.parent();
+            while let Some(n) = p {
+                if n.kind() == "function_definition" {
+                    return false;
+                }
+                p = n.parent();
+            }
+            true
+        }
+    }
 }
 
 /// The definition's first line, trimmed, at most MAX_SIGNATURE characters.
@@ -399,24 +536,25 @@ fn put_file(
     let Some(tree) = g.parse(lang, src)? else {
         return Ok(false);
     };
-    let (defs, uses) = extract(g.query(lang)?, &tree, src);
+    let (defs, uses) = extract(lang, g.query(lang)?, &tree, src);
     let mut ins = tx.prepare(
-        "INSERT INTO symbols (name, kind, file, line, signature, shape)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6) RETURNING id",
+        "INSERT INTO symbols (name, kind, file, line, signature, shape, reach)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) RETURNING id",
     )?;
     // The file itself is a symbol, so a call at the top level has a source.
-    let file_sym: i64 = ins.query_row(params![rel, "file", id, 1, rel, None::<String>], |r| {
-        r.get(0)
-    })?;
+    let file_sym: i64 = ins.query_row(
+        params![rel, "file", id, 1, rel, None::<String>, false],
+        |r| r.get(0),
+    )?;
     let mut ids = Vec::with_capacity(defs.len());
     for d in &defs {
         ids.push(ins.query_row(
-            params![d.name, d.kind, id, d.line, d.signature, d.shape],
+            params![d.name, d.kind, id, d.line, d.signature, d.shape, d.reach],
             |r| r.get::<_, i64>(0),
         )?);
     }
     let mut put_use =
-        tx.prepare("INSERT OR IGNORE INTO uses (src, name, kind) VALUES (?1, ?2, ?3)")?;
+        tx.prepare("INSERT OR IGNORE INTO uses (src, name, kind, member) VALUES (?1, ?2, ?3, ?4)")?;
     for u in &uses {
         // The innermost definition around the use is its source. O(defs × uses) per file: a few
         // hundred by a few thousand at most in the checkouts (S8.0); an interval tree if not.
@@ -426,7 +564,7 @@ fn put_file(
             .filter(|(d, _)| d.start <= u.at && u.at < d.end)
             .min_by_key(|(d, _)| d.end - d.start)
             .map_or(file_sym, |(_, id)| *id);
-        put_use.execute(params![src_id, u.name, u.kind])?;
+        put_use.execute(params![src_id, u.name, u.kind, u.member])?;
     }
     Ok(true)
 }
@@ -491,7 +629,8 @@ pub fn sync(conn: &mut Connection, root: &Path) -> Result<Stats, Fault> {
         // `open_rw`s, and `code.rs`'s own call linked to all three). Any other name links to every
         // candidate, and the verbs mark it ambiguous. A name never crosses languages: JS and TS
         // import each other, Rust and Python reach no other (S8.2: Rust's `conn.prepare` linked to
-        // a method in a `.mjs`).
+        // a method in a `.mjs`). Another file's definition is a candidate only when that file can
+        // name it, and a Rust `x.f()` only reaches a method (`reach`, `extract`; S8.4).
         tx.execute_batch(
             "DELETE FROM refs;
              INSERT OR IGNORE INTO refs (src, dst, kind)
@@ -499,13 +638,17 @@ pub fn sync(conn: &mut Connection, root: &Path) -> Result<Stats, Fault> {
                JOIN symbols us ON us.id = u.src
                JOIN files uf ON uf.id = us.file
                JOIN symbols s ON s.name = u.name AND s.kind != 'file'
+                 AND (u.member = 0 OR s.kind = 'method')
+                 AND (u.kind != 'value' OR s.kind IN ('function', 'class'))
                JOIN files sf ON sf.id = s.file
                WHERE s.id != u.src
                  AND (CASE WHEN uf.lang IN ('rust', 'python') THEN uf.lang ELSE 'js' END)
                    = (CASE WHEN sf.lang IN ('rust', 'python') THEN sf.lang ELSE 'js' END)
-                 AND (s.file = us.file OR NOT EXISTS (
+                 AND (s.file = us.file OR (s.reach = 1 AND NOT EXISTS (
                    SELECT 1 FROM symbols l WHERE l.name = u.name AND l.file = us.file
-                     AND l.kind != 'file' AND l.id != u.src));",
+                     AND l.kind != 'file' AND l.id != u.src
+                     AND (u.member = 0 OR l.kind = 'method')
+                     AND (u.kind != 'value' OR l.kind IN ('function', 'class')))));",
         )?;
     }
     s.symbols = tx.query_row(
@@ -746,7 +889,7 @@ fn label(conn: &Connection, id: i64) -> Result<String, Fault> {
 /// call, and how many symbols the name could mean when name-only resolution had to guess.
 fn edge(conn: &Connection, src: i64, dst: i64, other: i64, kind: &str) -> Result<String, Fault> {
     let n: i64 = conn.query_row(
-        "SELECT count(*) FROM refs r JOIN symbols s ON s.id = r.dst
+        "SELECT count(DISTINCT r.dst) FROM refs r JOIN symbols s ON s.id = r.dst
          WHERE r.src = ?1 AND s.name = (SELECT name FROM symbols WHERE id = ?2)",
         [src, dst],
         |r| r.get(0),
@@ -960,7 +1103,7 @@ fn defs_of(g: &mut Grammars, lang: Lang, src: &[u8]) -> Result<Vec<Def>, Fault> 
     let Some(tree) = g.parse(lang, src)? else {
         return Ok(Vec::new());
     };
-    Ok(extract(g.query(lang)?, &tree, src).0)
+    Ok(extract(lang, g.query(lang)?, &tree, src).0)
 }
 
 /// Blobs by revision spec (`HEAD:path`, `:path`), all through one `git cat-file --batch`: a git

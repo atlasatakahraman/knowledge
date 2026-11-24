@@ -180,6 +180,20 @@ g add -A && g commit -q -m s8.4
 check "graph --code: a Rust parameter type is a [type] use" 'k graph Gauge --code --repo fixture | grep -qx "    src/read.rs:1 read function \[type\]"'
 check "graph --code: a TS annotation is a [type] use" 'k graph Shape --code --repo fixture | grep -qx "    web/area.ts:1 area function \[type\]"'
 check "graph --code: a Python annotation is a [type] use" 'k graph Point --code --repo fixture | grep -qx "    tools/point.py:4 norm function \[type\]"'
+# Another file reaches only what it can name: not a module's unexported `split`, not a private Rust
+# `State`, and a Rust `v.join()` is a method, never the free `join`. A TS `type` alias is a symbol,
+# and a function handed on as a value is used.
+printf 'function split(p: string): string[] {\n  return [p];\n}\nfunction shout(s: string): string {\n  return s;\n}\nexport { shout };\n' > "$FIX/web/util.ts"
+printf 'export function menu(s: string) {\n  return s.split(",").map(shout);\n}\n' > "$FIX/web/menu.ts"
+printf 'export type Mode = "on" | "off";\nexport function flip(m: Mode): Mode {\n  return m;\n}\n' > "$FIX/web/mode.ts"
+printf 'pub fn join(a: u32) -> u32 {\n    a\n}\nstruct State;\n' > "$FIX/src/path.rs"
+printf 'pub fn walk(v: Vec<String>, s: tauri::State<u32>) -> String {\n    v.join(",")\n}\n' > "$FIX/src/walk.rs"
+g add -A && g commit -q -m s8.4-reach
+check "graph --code: an unexported function is not another file's" 'k graph split --code --repo fixture | grep -qx "  used by (0):"'
+check "graph --code: a function exported by name, handed on as a value, is a [value] use" 'k graph shout --code --repo fixture | grep -qx "    web/menu.ts:1 menu function \[value\]"'
+check "graph --code: a TS type alias is a symbol with its [type] uses" 'k graph Mode --code --repo fixture | grep -qx "    web/mode.ts:2 flip function \[type\]"'
+check "graph --code: a Rust method call never reaches a free function" 'k graph join --code --repo fixture | grep -qx "  used by (0):"'
+check "graph --code: a private Rust struct is not another file's" 'k graph State --code --repo fixture | grep -qx "  used by (0):"'
 
 rm -rf "$TMP"
 echo "$fails failed"
