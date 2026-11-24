@@ -1,30 +1,61 @@
-# knowledge-skeleton
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/banner-dark.svg">
+    <img alt="knowledge" src="assets/banner-light.svg" width="880">
+  </picture>
+</p>
 
-The engine behind a Claude Code knowledge vault: an Obsidian vault of plain Markdown notes that
-every session reads before it answers and writes back to as it works. Hooks log sessions, record
-commits, inject relevant note names into each prompt, promote decisions, and keep a search index
-and a link graph current. The vault itself holds notes only and stays private.
+<p align="center"><b>English</b> | <a href="README.tr.md">Türkçe</a> | <a href="README.es.md">Español</a> | <a href="README.pt.md">Português</a> | <a href="README.fr.md">Français</a> | <a href="README.de.md">Deutsch</a></p>
 
+<!-- Pills and hero: one SVG per theme, holding every language; the reader's browser languages pick
+     one (assets/i18n.mjs). README.<lang>.md uses the <name>-<lang>-<theme>.svg files instead. stars
+     and latest are rewritten daily and on each release by .github/workflows/badges.yml onto the
+     orphan `badges` branch; the rest are drawn by assets/build.ts. downloads joins row one once a
+     release has assets. -->
+<p align="center">
+  <a href="https://github.com/atlasatakahraman/knowledge-skeleton/stargazers"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/atlasatakahraman/knowledge-skeleton/badges/stars-dark.svg"><img alt="stars" src="https://raw.githubusercontent.com/atlasatakahraman/knowledge-skeleton/badges/stars-light.svg" height="28"></picture></a>
+  <a href="https://github.com/atlasatakahraman/knowledge-skeleton/tags"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/atlasatakahraman/knowledge-skeleton/badges/latest-dark.svg"><img alt="latest version" src="https://raw.githubusercontent.com/atlasatakahraman/knowledge-skeleton/badges/latest-light.svg" height="28"></picture></a>
+</p>
+<p align="center">
+  <a href="#harnesses"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/badges/harnesses-dark.svg"><img alt="harnesses: Claude Code, Codex, opencode, Claude app" src="assets/badges/harnesses-light.svg" height="28"></picture></a>
+  <a href="#requirements"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/badges/platforms-dark.svg"><img alt="platforms: Windows, Arch pending" src="assets/badges/platforms-light.svg" height="28"></picture></a>
+</p>
+<p align="center">
+  <a href="docs/benchmark.md"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/badges/prompt-hook-dark.svg"><img alt="prompt hook: ~17.8 ms" src="assets/badges/prompt-hook-light.svg" height="28"></picture></a>
+  <a href="docs/benchmark.md"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/badges/guard-dark.svg"><img alt="guard: ~24.9 ms" src="assets/badges/guard-light.svg" height="28"></picture></a>
+  <a href="docs/benchmark.md"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/badges/tokens-dark.svg"><img alt="tokens: 82% lower than grep" src="assets/badges/tokens-light.svg" height="28"></picture></a>
+  <a href="docs/benchmark.md"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/badges/find-dark.svg"><img alt="knowledge find: 33/33, ~33 ms" src="assets/badges/find-light.svg" height="28"></picture></a>
+</p>
+
+<p align="center">Memory and rules for coding agents. Who you are, what you ruled out and what you
+decided, loaded into every session of every harness you use.</p>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/hero-dark.svg">
+  <img alt="Agents forget you. Who you are and how you work load first, whole, in every session. They ignore your rules. A guard on every tool call denies what you ruled out: git push waits for your yes. Nobody writes it down. Sessions, commits and decisions record themselves. Each tool keeps its own memory. Claude Code, Codex, opencode and the Claude app read one vault." src="assets/hero-light.svg" width="100%">
+</picture>
+
+## Quick start
+
+### Let your agent do it
+
+Paste this into Claude Code, Codex or opencode:
+
+```text
+Install knowledge for me from https://github.com/atlasatakahraman/knowledge-skeleton.
+Follow its AGENTS.md, show me each step's output, and ask before anything you write.
 ```
-src/            *.rs          the `knowledge` binary: every hook, the vault index, search, link graph,
-                              the doctor, `setup` and the MCP server (Rust, one SQLite file per machine)
-src/harness/    <id>.rs       one translator per harness with hooks: its payload in, its reply shape out
-adapters/       <id>.json     one data file per harness: detection, instructions target, events,
-                              headless runner; built into the binary with include_str!
-claude/                       the Claude Code plugin: the hooks, in exec form
-codex/                        the Codex plugin: the hooks, pinned to the binary's version
-opencode/       knowledge.ts  the opencode plugin: a shim that spawns the binary
-hooks/          brain-*.mjs   the hooks from before the binary, kept until every machine runs it;
-                              nothing on the binary's path runs them
-skills/brain/                 /brain new|edit <kind> - writes notes in the vault's conventions
-commands/       brain-*.md    /brain-commits /brain-log /brain-sync /brain-usage
-template/                     the empty vault: folders, MOCs, conventions, system docs, Identity and
-                              Hard-Rules with the generic rule packs (`FILL:` marks each placeholder)
-AGENTS.md                     the install, step by step, for an agent; then how to work on this repo
-docs/           <task>.md     install, update, remove, verbs, security, troubleshooting
-```
 
-## Install
+[AGENTS.md](AGENTS.md) walks it through the same steps as below, with the output each one should
+print. It shows you the setup plan, applies it only on your yes, then asks which rule packs you want.
+
+### Requirements
+
+`git`, `gitleaks`, Claude Code (`claude`) and the Rust toolchain (`rustup`; `rust-toolchain.toml`
+pins 1.100.0 and rustup fetches it on the first build). No release archives are published yet, so
+the binary builds from source, in two to three minutes.
+
+### By hand
 
 ```bash
 git clone https://github.com/atlasatakahraman/knowledge-skeleton ~/dev/knowledge-skeleton
@@ -33,153 +64,159 @@ knowledge setup --plan
 knowledge setup --apply <id>      # the id is the plan's last line
 ```
 
-`--plan` writes nothing: it lists every file it would create or change (the vault, new from
-`template/` at `~/knowledge` or adopted, the config, the links into `~/.claude`, the hook block, the
-`CLAUDE.md` imports, each clone's githooks path) and ends with the plan id, a hash of the plan and of
-each target's current content. It covers Claude Code and then every other harness it finds installed
-(Codex, opencode, the Claude desktop app), each under its own `found` line. `--apply <id>` recomputes
-the plan and refuses if anything moved in between, then writes exactly that. `knowledge setup
---remove --plan` is the reverse, for the same harnesses, and never touches the vault. Flags, Windows, and every step by hand: [docs/install.md](docs/install.md). An agent
-installing for you follows [AGENTS.md](AGENTS.md). Then [verify a release](docs/verify.md),
-[update](docs/update.md), [remove](docs/remove.md), [every verb](docs/verbs.md),
-[security](docs/security.md), [troubleshooting](docs/troubleshooting.md) and, for the maintainer,
-[release](docs/release.md).
+`--plan` writes nothing. It lists every file it would create or change, for Claude Code and then
+every other harness it finds, and ends with the plan's id. `--apply <id>` refuses if anything moved
+since, then writes exactly that plan. A new vault lands at `~/knowledge`; an existing folder can be
+adopted instead. Flags, Windows, and every step by hand: [docs/install.md](docs/install.md).
+
+### After a new vault
+
+Make it yours. Fill `00-Meta/Identity.md` and `00-Meta/Hard-Rules.md`
+(`grep -rn "FILL:" ~/knowledge/00-Meta` lists what is left), and replace the questions in
+`00-Meta/retrieval-cases.json` with ones the vault must always answer. `knowledge doctor --repair
+--pretty` builds the first index, and `knowledge rules list` with `rules enable <pack>` turns on
+the rule packs you want.
+
+## A session, in practice
+
+Real output from the public fixture [docs/benchmark.md](docs/benchmark.md) uses: this repository's
+docs as the vault. Paths are shortened and long snippets cut.
+
+**You type a prompt.** The prompt hook adds the notes that answer it before the agent reads a word:
+
+```text
+> update knowledge to the newest release
+
+Relevant notes from the knowledge vault (~/knowledge):
+- **update** — $ knowledge update --plan  knowledge 0.12.0, x86_64-pc-windows-msvc …
+- **verify** — …from `knowledge setup --plan`, or update.md over an older version. How a release …
+- **release** — …A release is eight archives (build.yml's targets), one SHA256SUMS over them, …
+```
+
+**The agent looks something up** in one call, from any folder, instead of grep and a pile of reads:
+
+```text
+$ knowledge find "check the signature on a downloaded release"
+release — ~/knowledge/20-Knowledge/knowledge/release.md
+  …download v0.13.0 -R atlasatakahraman/knowledge-skeleton -p SHA256SUMS … 5. Check the signature…
+verify — ~/knowledge/20-Knowledge/knowledge/verify.md
+  …Three checks, each answering a different question: | The signature over SHA256SUMS | …
+```
+
+**The agent tries something you ruled out.** The guard answers before the tool runs:
+
+```text
+$ git reset --hard HEAD~3
+ask: push-destructive-git (nothing-is-committed-until-i-give-an-explicit-go): each push needs
+its own yes, and destructive git is the owner's call (Hard-Rules § Git)
+```
+
+**The session ends.** Its daily note, its commits and the decisions it made are written into the
+vault, and pushed to your own remote for your other machines.
 
 ## Harnesses
 
-The engine targets what a harness can do, not a list of names: T0 reads an instructions file, T1
-runs a shell, T2 loads skills, T3 runs hooks, T4 speaks MCP. A harness is one data file in
-`adapters/`, one translator in `src/harness/` if it has hooks, and one setup plan if it installs a
-plugin; no verb branches on a harness. "Verified" means a live session on a real install
-(Windows, 2026-11-23); the same checks on Arch wait for its pass.
+"Verified" means a live session on a real install (Windows, 2026-11-23); the same checks on Arch
+wait for its pass. Every adapter's code path also runs in CI on fixture installs.
 
-| Harness | Tiers used | What it gets | Enforcement points | Status |
-|---|---|---|---|---|
-| Claude Code | T0–T4 | Identity and Hard-Rules imported whole into `~/.claude/CLAUDE.md`; the plugin's hooks on nine events; `/brain`; the code map (`knowledge find --code`, `graph --code`) | The guard on `PreToolUse` (shell, edit and MCP calls) with deny and ask; the session-start restore; the pre-commit backstop | Verified |
-| Codex CLI | T0–T4 | The block written whole into `~/.codex/AGENTS.md`; the plugin's hooks on eight events, pinned to the binary's version; `/brain` through `~/.agents/skills`; `knowledge` over MCP, the code map included | The guard on `PreToolUse` (`Bash`, `apply_patch`, MCP calls), deny only: an ask rule is a deny, since Codex cannot ask; hooks run only once you review them; restore and backstop | Verified |
-| opencode | T0–T3 | The block in `~/.config/opencode/AGENTS.md`; the shim plugin on eight events, seven of which run the binary; `/brain` | The guard in `execute.before` (`shell`, `edit`, `write`, `patch`), deny only; restore and backstop | Verified; its compaction and session-delete events only run in the interactive app and were not reached |
-| Claude desktop app, Chat | T4 | `knowledge mcp`: `find`, `graph`, `read`, and `note`, which asks before it writes | None: no shell and no hooks, so no tool call of ours to guard | Verified |
-| ChatGPT app's Codex | T0–T4 | The Codex plugin's hooks, once trusted in the CLI | As Codex; hooks not yet trusted are skipped silently | Built, not verified |
-| Any other (`generic`) | T0, T1 (T4 with `knowledge mcp`) | The block in a file you name, `knowledge find` and `graph`, and `knowledge note` to write back | None at run time: the rules are text only. The pre-commit backstop still runs in every clone `setup` set | Built, not verified |
+| Harness | What it gets | Enforcement | Status |
+|---|---|---|---|
+| Claude Code | Identity and Hard-Rules imported whole into `~/.claude/CLAUDE.md`; the plugin's hooks on nine events; `/brain`; the code map (`knowledge find --code`, `graph --code`) | The guard on `PreToolUse` (shell, edit and MCP calls) with deny and ask; the session-start restore; the pre-commit backstop | Verified |
+| Codex CLI | The block written whole into `~/.codex/AGENTS.md`; the plugin's hooks on eight events, pinned to the binary's version; `/brain` through `~/.agents/skills`; `knowledge` over MCP, the code map included | The guard on `PreToolUse` (`Bash`, `apply_patch`, MCP calls), deny only: an ask rule is a deny, since Codex cannot ask; hooks run only once you review them; restore and backstop | Verified |
+| opencode | The block in `~/.config/opencode/AGENTS.md`; the shim plugin on eight events, seven of which run the binary; `/brain` | The guard in `execute.before` (`shell`, `edit`, `write`, `patch`), deny only; restore and backstop | Verified; its compaction and session-delete events only run in the interactive app and were not reached |
+| Claude desktop app, Chat | `knowledge mcp`: `find`, `graph`, `read`, and `note`, which asks before it writes | None: no shell and no hooks, so no tool call of ours to guard | Verified |
+| ChatGPT app's Codex | The Codex plugin's hooks, once trusted in the CLI | As Codex; hooks not yet trusted are skipped silently | Built, not verified |
+| Any other (`generic`) | The block in a file you name, `knowledge find` and `graph`, and `knowledge note` to write back | None at run time: the rules are text only. The pre-commit backstop still runs in every clone `setup` set | Built, not verified |
 
-Every adapter's code path also runs in CI on fixture installs (`checks/stage-7.sh`).
+How a harness is added: [docs/architecture.md](docs/architecture.md#harnesses).
 
-## After a new vault
+## How it works
 
-Fill `00-Meta/Identity.md` and `00-Meta/Hard-Rules.md` (`grep -rn "FILL:" ~/knowledge/00-Meta`
-lists what is left) and replace the questions in `00-Meta/retrieval-cases.json` with ones the vault
-must always answer: the doctor's `retrieval` check runs them. Then `knowledge doctor --repair
---pretty` builds the first index and hubs, and `knowledge rules list` with `rules enable
-<pack>` turns on the rule packs you want. The template's own `README.md` has the rest.
+One native binary, `knowledge`, answers every hook. No hook starts a JavaScript runtime, and the
+vault's index is one SQLite file per machine.
 
-## Requirements
+- **Session start** imports who you are and your rules whole, pulls the vault, and puts back any
+  rule changed without a relock.
+- **Each prompt** gets the names of the notes that answer it, with their best passage
+  (~17.8 ms).
+- **Each tool call** passes the guard first (~24.9 ms): `deny` or `ask` with the rule's id.
+- **Session end** writes the daily note, the commit notes and the decisions, then pushes only those
+  records.
+- **On demand:** `knowledge find` (notes, repo docs, captured output), `knowledge graph` (how notes
+  connect), `find --code` and `graph --code` (where a symbol lives and what uses it), and
+  `keep` and `fetch` (long output and web pages, stored and searchable).
+- **`knowledge doctor`** checks it all in one run: the index, the questions the vault must always
+  answer, links, the records, the rules. Silence at session start means healthy.
 
-`git`, Claude Code (`claude`), `gitleaks`, and the Rust toolchain (`rustup`;
-`rust-toolchain.toml` pins 1.100.0 and rustup fetches it on the first build).
-
-## The knowledge binary
-
-One native program owns the vault's index and answers every hook a harness runs, so no hook starts
-a JavaScript runtime (opencode's shim runs inside opencode's own). It is built from `src/` (`cargo install --path . --locked`) into
-`~/.cargo/bin/knowledge`, and what it starts in the background (the flush, compile, the records push,
-the usage digest, the reindex) is the same binary again, detached. Its crates: `rusqlite` (SQLite
-built in, with FTS5), `serde`, `serde_json`, `jiff` (local time for the 05:00 rollover), `ring`
-(SHA-256 for compile's state), and for `fetch` only `ureq` with `rustls` on `ring`, the OS trust
-store (`rustls-platform-verifier`, no bundled root list) and `htmd` (HTML to Markdown).
-`checks/crates.txt` lists every crate in the tree; CI fails on any other.
-
-The code map is a second binary from the same crate, `knowledge-code`, installed beside it by the
-same `cargo install`. Every hook spawns `knowledge`, so the tree-sitter grammars stay out of it:
-`knowledge` hands its code verbs to `knowledge-code` (8.4 MB beside its 6.3 MB, a Windows release
-build). Its crates:
-`tree-sitter` (the parser and query engine, C compiled by the same compiler SQLite needs) and one
-grammar per language: `tree-sitter-typescript` (`.ts`, `.tsx`), `tree-sitter-javascript` (`.js`,
-`.mjs`, `.cjs`, `.jsx`), `tree-sitter-rust` and `tree-sitter-python`. Other languages are not
-mapped; `find --repo` still searches a checkout's docs as text.
-
-Every verb, with real output: [docs/verbs.md](docs/verbs.md).
-
-Three files in `$KNOWLEDGE_HOME`, else the config's folder, all per machine and never in git:
-`vault-index.db` (rebuilt from the notes in about a second), `repos-index.db` (repo docs, kept apart
-so a repo doc never reaches the prompt hook or the vault's link checks) and `captures.db` (what
-`keep` and `fetch` stored; a capture older than 14 days is deleted at the next write). Beside them,
-`code/<checkout>.db` holds one checkout's code map. Each is built by the first code query that names
-the checkout and brought level before every one after: a file whose size and mtime are unchanged
-is not read, and git's tracked files are the only ones mapped.
-
-`fetch` refuses, before it connects: anything but `http` and `https`, credentials in a URL, and any
-host that resolves to a loopback, private (RFC 1918), link-local, unique-local, CGNAT, multicast or
-unspecified address, IPv4 inside IPv6 included. It connects only to the addresses it checked, follows
-at most 5 redirects and checks each one again, stops at 20 s and 5 MB, reads no proxy from the
-environment, and stores only HTML (converted), other text and JSON. `--allow-private` lifts the
-address check and nothing else.
+What each hook writes and when: `template/00-Meta/Hook-Lifecycle.md`. Every verb, with real output:
+[docs/verbs.md](docs/verbs.md).
 
 ### Rules and the guard
 
 `00-Meta/Hard-Rules.md` stays one note, loaded whole. Each `##` section is a pack. Each rule is a
 bullet that opens with a bold line, and that line's slug is the rule's id. `00-Meta/rules.lock`
 (JSON, tracked) holds what the text cannot: each rule's pack, kind, enforcement points and the hash
-of its whole text, and the guards. Nothing is added to the primed text. The owner edits the note,
-then runs `knowledge rules lock` in their own terminal.
+of its whole text, and the guards. Nothing is added to the primed text. You edit the note, then run
+`knowledge rules lock`, or let the agent run it: the guard asks you first.
 
-- **The guard** (`hook pre-tool`, on each harness's pre-tool event for shell, edit and MCP calls) splits a shell line
-  into segments and words, and answers `deny` or `ask` with the rule's id. It reads only
-  `rules.lock`. It prints nothing when it allows, and on a missing or broken lock it allows with
-  one stderr line.
+- **The guard** (`hook pre-tool`, on each harness's pre-tool event for shell, edit and MCP calls)
+  splits a shell line into segments and words, and answers `deny` or `ask` with the rule's id. It
+  reads only `rules.lock`. It prints nothing when it allows, and on a missing or broken lock it
+  allows with one stderr line.
 - **The backstop** is `githooks/pre-commit`. It runs the repo's own hook, gitleaks, then
   `rules check --staged`, which fails a commit holding a guard's staged names (`package-lock.json`)
   or a Hard-Rules that disagrees with the lock. `setup` sets it in the vault, the skeleton and
   each checkout a `10-Repos` page names.
 - **The restore.** Each session start runs `rules check --restore`. A rule that differs from the
   lock comes back from `HEAD` when `HEAD` matches the lock, and one line says so. Otherwise the
-  doctor FAILs until the owner relocks or reverts.
+  doctor FAILs until you relock or revert.
 
-**What it cannot stop.** An agent that runs code as the user can change any file the user can. The
-guard puts the plain forms to the owner: an Edit, `sed -i`, a redirect, `Set-Content`. It cannot
-judge a wrapper (an interpreter's `-e`, a substitution, an escape). That case is caught afterwards, by the next
-start's restore and the doctor.
+**What it cannot stop.** An agent that runs code as you can change any file you can. The guard puts
+the plain forms to you: an Edit, `sed -i`, a redirect, `Set-Content`. It cannot judge a wrapper (an
+interpreter's `-e`, a substitution, an escape). That case is caught afterwards, by the next
+session start's restore and the doctor.
 
-Every target in CI builds the binary and runs `checks/stage-3.sh` to `checks/stage-7.sh` on the
-template vault (x64 and ARM64: Windows, macOS, Linux glibc and musl). A target counts as verified
-once that run passes; until then it is built, not verified.
+## Why not a memory file
 
-## Per-machine config
+A memory file works until the agent forgets to read it, or reads the copy that belongs to another
+folder: Claude Code's own memory is sharded by working directory. Each harness keeps its own, so
+what Codex learned never reaches Claude Code. And a rule written in a file is advice; nothing stops
+the tool call that breaks it.
 
-The hooks read their paths from one untracked file, written once per machine:
+Here a hook runs whether or not the agent remembers to. Your rules load whole in every session of
+every harness, a guard enforces the ones a command can break, and the records are written by the
+hooks, not by the agent's goodwill. Every part has a watcher, because a pipeline like this fails by
+going quiet: `template/00-Meta/Why-This-Exists.md`.
 
-- Every OS: `~/.config/knowledge/config.json` (or `$XDG_CONFIG_HOME/knowledge/config.json`);
-  on Windows that is `%USERPROFILE%\.config\knowledge\`, never `%APPDATA%` ([docs/install.md](docs/install.md))
-- Any OS: `$KNOWLEDGE_HOME/config.json` when `KNOWLEDGE_HOME` is set, and `$KNOWLEDGE_CONFIG`
-  over both
+## Your data and network
 
-```json
-{ "vault": "/home/me/knowledge", "devRoot": "/home/me/dev", "os": "linux",
-  "machine": "Free text the SessionStart banner opens with.", "rolloverHour": 5 }
-```
+- **The vault is plain Markdown in your own git repository.** Nothing is stored anywhere else but
+  the per-machine indexes beside your config, which rebuild from the notes in about a second.
+- **No telemetry.** No hook phones a server of ours, and nothing checks for updates on its own.
+- **What touches the network:** `git pull` and the records push, to your vault's own remote;
+  `fetch`, when you or the agent run it; `update --plan`, when you run it; the headless flush and
+  compile, through your harness's own CLI and account.
+- **Never read:** harness credentials. The engine runs the harness's CLI and lets it sign in itself.
 
-`vault` and `devRoot` are required. `"pullTrust": "signed"` makes each session start pull only a
-tip signed by a key in `allowed_signers` beside the config ([docs/security.md](docs/security.md)). `rolloverHour` (default 5) is when a daily note starts, local
-time. `folders` renames the vault's folders. `setup` writes it. Check what the hooks see with
-`knowledge config`.
+The full list, and what `fetch` refuses: [docs/security.md](docs/security.md).
 
-## Sync
+## Obsidian is optional
 
-Each session start fast-forwards the vault and this checkout, each only when its tree is clean.
-A checkout on a detached HEAD (a tag) is pinned on purpose and left alone.
+The vault is a folder of Markdown files with `[[wikilinks]]`, and every verb works on it without
+Obsidian. Open it in Obsidian if you want the graph view: `setup` colours its groups by note type.
 
-The vault pushes one thing on its own: the records the hooks write (daily logs, commit notes, the
-decision ledger, health and usage). After the SessionEnd flush, `knowledge records` commits them alone
-and pushes when every unpushed commit is a record, so another machine pulls the session it did not
-run. Your own commits never push on their own and hold the records push while unpushed. The next
-session start retries what a shutdown cut off; `.gitattributes` merges the records by union.
+## Docs
 
-The vault's `.skeleton.json` (`{"version":"0.3.0"}`) pins the skeleton version its notes are
-written for; `setup` writes it into a new vault. When the running checkout is another
-version, the session opens with one line saying which side moves, and the doctor's
-`skeleton-version` fails. A vault without the file is not checked.
+[Install](docs/install.md) · [verify a release](docs/verify.md) · [update](docs/update.md) ·
+[remove](docs/remove.md) · [every verb](docs/verbs.md) · [security](docs/security.md) ·
+[troubleshooting](docs/troubleshooting.md) · [benchmark](docs/benchmark.md) ·
+[architecture](docs/architecture.md) · [release](docs/release.md), for the maintainer.
 
-Every version bump in `package.json` is tagged `v<version>` on the commit that makes it, so
-`git log v<pin>..` lists what changed since the vault's pin.
+## Contributing
+
+How the engine is laid out, its crates, the per-machine config, sync and CI:
+[docs/architecture.md](docs/architecture.md). How to work on this repository:
+[AGENTS.md](AGENTS.md), second part.
 
 ## Third-party tools
 
@@ -187,6 +224,9 @@ Installed from their own upstreams, never vendored here:
 
 - [gitleaks](https://github.com/gitleaks/gitleaks) - MIT. Scans every commit (`githooks/pre-commit`)
   and the records before they are pushed. Without it, nothing is committed.
+
+The fonts drawn into the images (Newsreader, Hanken Grotesk, JetBrains Mono) are SIL OFL 1.1, and
+the icons are [Lucide](https://lucide.dev) (ISC).
 
 ## License
 

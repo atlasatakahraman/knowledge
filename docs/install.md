@@ -269,8 +269,8 @@ harnesses' blocks (below), and each session start restores a block that went sta
 ### 8. The rules lock and the guard
 
 A template vault ships `00-Meta/rules.lock` for its generic packs. For rules you write yourself,
-the lock is re-stamped by you, in your own terminal; a seed supplies what the text cannot (each
-rule's kind, enforcement points and the guards):
+the lock is re-stamped by you, or by your agent once the `rules-files` guard has asked you; a seed
+supplies what the text cannot (each rule's kind, enforcement points and the guards):
 
 ```bash
 cd <vault> && knowledge rules lock --seed <seed.json>   # later edits: knowledge rules lock

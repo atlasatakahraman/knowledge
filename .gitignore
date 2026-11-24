@@ -16,3 +16,6 @@ package-lock.json
 
 # Stage probes and parity runs: real vault data, never published.
 /evidence/
+
+# A/B/C design previews, shown live and picked from; the pick is built into the repo itself.
+/.superpowers/

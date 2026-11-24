@@ -108,7 +108,7 @@ check "src/ names no folder outside config.rs" '[ -z "$hits" ]'
 [ -z "$hits" ] || printf '%s\n' "$hits" | sed 's/^/      /'
 
 # --- S9.4: the docs split by task, and `update --plan` -------------------------------------------
-DOCS="$ROOT/README.md $ROOT/AGENTS.md $ROOT/SECURITY.md $(ls "$ROOT"/docs/*.md)"
+DOCS="$ROOT/README.md $(ls "$ROOT"/README.*.md) $ROOT/AGENTS.md $ROOT/SECURITY.md $(ls "$ROOT"/docs/*.md)"
 dead=""
 for f in $DOCS; do
   dir=$(dirname "$f")
@@ -120,9 +120,35 @@ check "every link between the docs resolves" '[ -z "$dead" ]'
 [ -z "$dead" ] || printf '      %s\n' $dead
 check "the docs are one per task" \
   'for d in install verify update remove verbs security troubleshooting release; do [ -f "$ROOT/docs/$d.md" ] || exit 1; done'
-bun=$(grep -rnE '(^|[^[:alnum:]_./-])bunx?( |`|$)' $DOCS "$ROOT/skills" "$ROOT/commands" "$ROOT/template" 2>/dev/null)
-check "no doc, skill, command or template note names a bun command" '[ -z "$bun" ]'
+# architecture.md and benchmark.md are contributor docs: the benchmark and the image build run through
+# bun, so they name it. The rule is for the docs a user installs from.
+BUN_DOCS=""
+for f in $DOCS; do case "$f" in */docs/architecture.md|*/docs/benchmark.md) ;; *) BUN_DOCS="$BUN_DOCS $f" ;; esac; done
+bun=$(grep -rnE '(^|[^[:alnum:]_./-])bunx?( |`|$)' $BUN_DOCS "$ROOT/skills" "$ROOT/commands" "$ROOT/template" 2>/dev/null)
+check "no user doc, skill, command or template note names a bun command" '[ -z "$bun" ]'
 [ -z "$bun" ] || printf '%s\n' "$bun" | sed 's/^/      /'
+# Each translated README mirrors README.md: its code blocks verbatim, and the same link and image
+# targets once its own -<lang>- image names are read as README.md's. The language row, the
+# "translation of README.md" line and in-page anchors (#ajanlar, #agents) differ by design.
+fences() { awk '/^```/ { print; f = !f; next } f' "$1"; }
+targets() {
+  grep -oE '\]\([^)]*\)|(src|srcset|href)="[^"]*"' "$1" | sed -E 's/^\]\(//; s/\)$//; s/^[a-z]+="//; s/"$//' |
+    sed -E 's/-(tr|es|pt|fr|de)-(light|dark)\.svg$/-\2.svg/' | grep -vE '^(README(\.[a-z]+)?\.md|#)' | sort
+}
+fences "$ROOT/README.md" > "$TMP/en.fences"; targets "$ROOT/README.md" > "$TMP/en.targets"
+tr_bad=""
+for lang in tr es pt fr de; do
+  r="$ROOT/README.$lang.md"
+  [ -f "$r" ] || { tr_bad="$tr_bad missing:$lang"; continue; }
+  fences "$r" | cmp -s - "$TMP/en.fences" || tr_bad="$tr_bad fences:$lang"
+  targets "$r" | cmp -s - "$TMP/en.targets" || tr_bad="$tr_bad targets:$lang"
+  # Its own images exist (the raw badges/ URLs are built by badges.yml, not kept here).
+  for a in $(grep -oE '(src|srcset)="assets/[^"]*"' "$r" | sed -E 's/^[a-z]+="//; s/"$//'); do
+    [ -f "$ROOT/$a" ] || tr_bad="$tr_bad image:$lang:$a"
+  done
+done
+check "each translated README keeps README.md's code blocks, links and images" '[ -z "$tr_bad" ]'
+[ -z "$tr_bad" ] || printf '      %s\n' $tr_bad
 old=$(grep -rln 'INSTALL\.md' $DOCS "$ROOT/src" "$ROOT/template" "$ROOT/skills" "$ROOT/commands" 2>/dev/null)
 check "nothing points at INSTALL.md" '[ -z "$old" ]'
 export KNOWLEDGE_HOME="$TMP/uhome"; mkdir -p "$KNOWLEDGE_HOME"
