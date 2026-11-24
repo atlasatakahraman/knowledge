@@ -7,6 +7,7 @@ use crate::vault;
 use crate::{Args, Fault, emit};
 use rusqlite::{Connection, Transaction, params};
 use std::collections::{HashMap, HashSet};
+use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::ops::ControlFlow;
 use std::path::{Path, PathBuf};
@@ -509,35 +510,167 @@ pub struct Stats {
     pub refs: i64,
 }
 
-/// The tracked files a grammar covers, under the size cap: `git ls-files`, so `node_modules/`,
+/// git's offset varint (index v4's prefix length): returns the value and the bytes it took.
+fn varint(b: &[u8]) -> Option<(usize, usize)> {
+    let mut i = 0;
+    let mut c = *b.first()?;
+    let mut v = usize::from(c & 127);
+    while c & 128 != 0 {
+        i += 1;
+        if i > 8 {
+            return None;
+        }
+        c = *b.get(i)?;
+        v = ((v + 1) << 7) | usize::from(c & 127);
+    }
+    Some((v, i + 1))
+}
+
+/// The paths `git ls-files` lists, read straight from `.git/index` (gitformat-index, v2 to v4). A
+/// git spawn alone costs ~60 ms on Windows, over the 50 ms bar for a whole refresh (S8.6), and
+/// this is one file read. `None` for what it does not read, and the caller asks git: a `.git`
+/// file (a worktree, a submodule), an object format other than SHA-1, a split or sparse index.
+fn index_paths(root: &Path) -> Option<Vec<String>> {
+    let git = root.join(".git");
+    if !git.is_dir()
+        || fs::read_to_string(git.join("config"))
+            .ok()?
+            .contains("objectformat")
+    {
+        return None;
+    }
+    let b = match fs::read(git.join("index")) {
+        Ok(b) => b,
+        // A repo nothing was ever added to has no index: git lists nothing.
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Some(Vec::new()),
+        Err(_) => return None,
+    };
+    let be32 = |i: usize| -> Option<usize> {
+        let s: [u8; 4] = b.get(i..i + 4)?.try_into().ok()?;
+        usize::try_from(u32::from_be_bytes(s)).ok()
+    };
+    let version = be32(4)?;
+    if b.get(..4)? != b"DIRC" || !(2..=4).contains(&version) {
+        return None;
+    }
+    let count = be32(8)?;
+    let mut paths: Vec<String> = Vec::with_capacity(count);
+    let mut prev: Vec<u8> = Vec::new();
+    let mut at = 12;
+    for _ in 0..count {
+        let start = at;
+        // A sparse index's directory entry stands for files it does not list.
+        if be32(at + 24)? & 0o170000 == 0o040000 {
+            return None;
+        }
+        let flags: [u8; 2] = b.get(at + 60..at + 62)?.try_into().ok()?;
+        at += 62;
+        if version >= 3 && u16::from_be_bytes(flags) & 0x4000 != 0 {
+            at += 2;
+        }
+        let strip = if version == 4 {
+            let (n, len) = varint(b.get(at..)?)?;
+            at += len;
+            n
+        } else {
+            prev.len()
+        };
+        let end = at + b.get(at..)?.iter().position(|&c| c == 0)?;
+        prev.truncate(prev.len().checked_sub(strip)?);
+        prev.extend_from_slice(&b[at..end]);
+        // v2 and v3 pad an entry with 1 to 8 NULs to a multiple of 8 bytes; v4 has the one NUL.
+        at = if version == 4 {
+            end + 1
+        } else {
+            start + (end - start + 8) / 8 * 8
+        };
+        let name = String::from_utf8_lossy(&prev);
+        // A conflicted path has an entry per stage, one after another.
+        if paths.last().map(String::as_str) != Some(&*name) {
+            paths.push(name.into_owned());
+        }
+    }
+    // Extensions, up to the trailing 20-byte checksum. A split index keeps entries elsewhere.
+    while at + 8 <= b.len().saturating_sub(20) {
+        if matches!(b.get(at..at + 4)?, b"link" | b"sdir") {
+            return None;
+        }
+        at += 8 + be32(at + 4)?;
+    }
+    Some(paths)
+}
+
+/// The tracked files a grammar covers, under the size cap: the index's, so `node_modules/`,
 /// `target/` and anything gitignored is never read.
 fn tracked(root: &Path) -> Result<Vec<(String, Lang, i64, i64)>, Fault> {
-    let out = Command::new("git")
-        .arg("-C")
-        .arg(root)
-        .args(["ls-files", "-z"])
-        .output()
-        .map_err(|e| Fault::io(root, e))?;
-    if !out.status.success() {
-        return Err(Fault::Config(format!(
-            "{}: not a git checkout",
-            root.display()
-        )));
-    }
+    let paths = match index_paths(root) {
+        Some(p) => p,
+        None => {
+            let out = Command::new("git")
+                .arg("-C")
+                .arg(root)
+                .args(["ls-files", "-z"])
+                .output()
+                .map_err(|e| Fault::io(root, e))?;
+            if !out.status.success() {
+                return Err(Fault::Config(format!(
+                    "{}: not a git checkout",
+                    root.display()
+                )));
+            }
+            out.stdout
+                .split(|b| *b == 0)
+                .filter(|s| !s.is_empty())
+                .map(|s| String::from_utf8_lossy(s).into_owned())
+                .collect()
+        }
+    };
+    // One directory read per folder, not one stat per file: on Windows a listing carries each
+    // entry's size and mtime, where a stat opens the file (~100 µs each: 43 of the 44 ms a
+    // refresh of TheAtlas-Media's 419 files took, S8.6). Git for Windows' `core.fscache` reads
+    // them the same way. A name the listing has no regular file for (a symlink, a case
+    // mismatch) falls back to the stat.
+    let mut dirs: HashMap<String, HashMap<OsString, (u64, i64)>> = HashMap::new();
     let mut files = Vec::new();
-    for rel in out.stdout.split(|b| *b == 0).filter(|s| !s.is_empty()) {
-        let rel = String::from_utf8_lossy(rel).into_owned();
+    for rel in paths {
         let Some(lang) = Lang::of(&rel) else {
             continue;
         };
-        let Ok(meta) = fs::metadata(root.join(&rel)) else {
-            continue;
-        };
-        if meta.is_file() && meta.len() <= MAX_BYTES {
-            files.push((rel, lang, meta.len() as i64, vault::mtime(&meta)));
+        let (dir, name) = rel.rsplit_once('/').unwrap_or(("", rel.as_str()));
+        if !dirs.contains_key(dir) {
+            dirs.insert(dir.to_string(), listing(&root.join(dir)));
+        }
+        let found = dirs[dir].get(OsStr::new(name)).copied().or_else(|| {
+            let m = fs::metadata(root.join(&rel))
+                .ok()
+                .filter(fs::Metadata::is_file)?;
+            Some((m.len(), vault::mtime(&m)))
+        });
+        if let Some((len, mtime)) = found
+            && len <= MAX_BYTES
+        {
+            files.push((rel, lang, len as i64, mtime));
         }
     }
     Ok(files)
+}
+
+/// A folder's regular files that have a grammar, by name: size and mtime.
+fn listing(dir: &Path) -> HashMap<OsString, (u64, i64)> {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return HashMap::new();
+    };
+    entries
+        .filter_map(Result::ok)
+        .filter(|e| {
+            e.file_type().is_ok_and(|t| t.is_file())
+                && e.file_name().to_str().and_then(Lang::of).is_some()
+        })
+        .filter_map(|e| {
+            let m = e.metadata().ok()?;
+            Some((e.file_name(), (m.len(), vault::mtime(&m))))
+        })
+        .collect()
 }
 
 fn drop_file(tx: &Transaction, id: i64) -> Result<(), Fault> {
