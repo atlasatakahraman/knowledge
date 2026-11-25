@@ -8,7 +8,7 @@
 <p align="center"><b>English</b> | <a href="i18n/README.tr.md">Türkçe</a> | <a href="i18n/README.es.md">Español</a> | <a href="i18n/README.pt.md">Português</a> | <a href="i18n/README.fr.md">Français</a> | <a href="i18n/README.de.md">Deutsch</a></p>
 
 <!-- Pills and hero: one SVG per theme, holding every language; the reader's browser languages pick
-     one (assets/i18n.mjs). README.<lang>.md uses the <name>-<lang>-<theme>.svg files instead. stars
+     one (assets/i18n.mjs). i18n/README.<lang>.md uses the <name>-<lang>-<theme>.svg files instead. stars
      and latest are rewritten daily and on each release by .github/workflows/badges.yml onto the
      orphan `badges` branch; the rest are drawn by assets/build.ts. downloads joins row one once a
      release has assets. -->

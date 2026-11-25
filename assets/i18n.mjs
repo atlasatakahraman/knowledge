@@ -1,6 +1,6 @@
 // The words the README's images carry, in each language they are drawn in. build.ts draws every
 // language into one file per image (the viewer's browser picks, see switched() in draw.mjs) and one
-// file per language for README.<id>.md. README.md and English are the reference; the others are
+// file per language for i18n/README.<id>.md. README.md and English are the reference; the others are
 // translations of it.
 //
 // tags: the browser language tags a language answers to, as SVG systemLanguage matches them. A

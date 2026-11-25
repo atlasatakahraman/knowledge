@@ -1,11 +1,11 @@
 ---
 name: knowledge
-description: Use when creating or editing anything in the second brain vault - a new folder or structure, a repo/project page, a documentation note, a slash command, a commit, a task or todo, a hook, a plan, or a decision (ADR), including promoting captured decisions from the ledger. Also use when asked to record a decision, log a session, or write something into the vault. Triggers on "/knowledge new", "/knowledge edit", "add this to the brain", "record this decision", "document this".
+description: Use when creating or editing anything in the knowledge vault - a new folder or structure, a repo/project page, a documentation note, a slash command, a commit, a task or todo, a hook, a plan, or a decision (ADR), including promoting captured decisions from the ledger. Also use when asked to record a decision, log a session, or write something into the vault. Triggers on "/knowledge new", "/knowledge edit", "add this to the knowledge vault", "record this decision", "document this".
 ---
 
 # knowledge
 
-Router for writing to the second brain. Its path is `vault` in the machine's config:
+Router for writing to the knowledge vault. Its path is `vault` in the machine's config:
 `knowledge config vault`.
 
 ```

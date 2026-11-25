@@ -242,7 +242,7 @@ function hero(L: Lang, t: (typeof T)["light"], gl: Glyphs) {
     `<rect width="880" height="${H}" rx="12" fill="${t.cardBorder}"/><rect x="1" y="1" width="878" height="${H - 2}" rx="11" fill="${t.card}"/>` + body };
 }
 
-// hero-<theme>.svg holds every language (README.md); hero-<lang>-<theme>.svg one (README.<lang>.md).
+// hero-<theme>.svg holds every language (README.md); hero-<lang>-<theme>.svg one (i18n/README.<lang>.md).
 const en = LANGS.at(-1)!;
 for (const th of themes) {
   const gl = new Glyphs(), all = LANGS.map(L => hero(L, T[th], gl));
