@@ -1,4 +1,4 @@
-# brain: commit
+# knowledge: commit
 
 **Delegates.** The `commit-commands:commit` skill already does commits well — use it, then write
 the vault side. Do not reimplement commit logic here.
@@ -9,7 +9,7 @@ the vault side. Do not reimplement commit logic here.
 2. Branch the way `00-Meta/Hard-Rules.md` says.
 3. Nothing to append by hand: the commit recorder (`knowledge hook post-bash`) writes one note per commit into
    `50-Ops/Commits/`, with the commit body as its reason. A subject-only commit leaves an empty record.
-4. If the commit made a decision worth keeping, that is a separate `/brain new plan` or an ADR in
+4. If the commit made a decision worth keeping, that is a separate `/knowledge new plan` or an ADR in
    `60-Decisions/<Repo-Name>/` — a commit message is not a decision record.
    ADRs are central, never inside `10-Repos/<repo>/`; the vault gitignores `10-Repos/*/`.
 

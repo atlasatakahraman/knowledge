@@ -368,10 +368,13 @@ fn check_pull_trust(cfg: &Config) -> Check {
         .filter(|f| !cfg.trust_dir.join(f).exists())
         .map(|f| f.to_string())
         .collect();
-    for repo in [
-        cfg.vault.display().to_string(),
-        session::skeleton_root().display().to_string(),
-    ] {
+    let skeleton = session::skeleton_root(cfg);
+    if skeleton.is_none() {
+        missing.push("the engine checkout (knowledge setup --plan finds it)".into());
+    }
+    for repo in std::iter::once(cfg.vault.display().to_string())
+        .chain(skeleton.map(|p| p.display().to_string()))
+    {
         let o = state::git(
             Path::new(&repo),
             &["config", "commit.gpgsign"],
@@ -796,15 +799,15 @@ fn canonical(p: &Path) -> Option<PathBuf> {
     fs::canonicalize(p).ok()
 }
 
-/// The engine runs from one knowledge-skeleton checkout: ~/.claude/hooks, the /brain skill and every
-/// brain-* command resolve into it. A partial link runs new hooks with old instructions. Read-only,
-/// no fetch. A vault that pins a version in `.skeleton.json` fails on any other.
+/// The engine runs from one checkout: the /knowledge skill and every knowledge-* command resolve
+/// into it. A partial link runs new hooks with old instructions. Read-only, no fetch. A vault that
+/// pins a version in `.skeleton.json` fails on any other.
 fn check_skeleton_version(cfg: &Config) -> Result<Check, Fault> {
-    let hooks = state::hooks_dir();
-    let real = canonical(&hooks)
-        .ok_or_else(|| Fault::Usage(format!("{}: not found", state::native(&hooks))))?;
+    let found = session::skeleton_root(cfg).ok_or_else(|| {
+        Fault::Usage("no engine checkout found: run `knowledge setup --plan`".into())
+    })?;
     let top = state::git(
-        &real,
+        &found,
         &["rev-parse", "--show-toplevel"],
         Duration::from_secs(10),
     );
@@ -823,18 +826,16 @@ fn check_skeleton_version(cfg: &Config) -> Result<Check, Fault> {
             .map(str::to_string)
             .collect()
     };
-    let pkg: serde_json::Value = serde_json::from_str(&state::read(&rootp.join("package.json")))
-        .unwrap_or(serde_json::Value::Null);
     let claude = state::home().join(".claude");
     let inside = |link: PathBuf, target: PathBuf| {
         canonical(&link).is_some_and(|l| canonical(&target).is_some_and(|t| l == t))
     };
     let mut unlinked = Vec::new();
     if !inside(
-        claude.join("skills").join("brain"),
-        rootp.join("skills").join("brain"),
+        claude.join("skills").join("knowledge"),
+        rootp.join("skills").join("knowledge"),
     ) {
-        unlinked.push("skills/brain".to_string());
+        unlinked.push("skills/knowledge".to_string());
     }
     let mut commands: Vec<String> = fs::read_dir(rootp.join("commands"))
         .map(|rd| {
@@ -852,11 +853,8 @@ fn check_skeleton_version(cfg: &Config) -> Result<Check, Fault> {
             unlinked.push(format!("commands/{f}"));
         }
     }
-    let version = pkg["version"]
-        .as_str()
-        .filter(|v| !v.is_empty())
-        .map(str::to_string);
-    let is_skeleton = pkg["name"] == "knowledge-skeleton";
+    let version = session::engine_version(&rootp);
+    let is_skeleton = session::package_field(&rootp, "name").as_deref() == Some("knowledge");
     let pin_file = cfg.vault.join(".skeleton.json");
     let pin = session::json_version(&pin_file);
     let pin_ok = pin.as_ref().is_none_or(|p| Some(p) == version.as_ref());
@@ -878,8 +876,8 @@ fn check_skeleton_version(cfg: &Config) -> Result<Check, Fault> {
         detail.set(
             "problem",
             J::s(format!(
-                "{} does not resolve into a knowledge-skeleton checkout",
-                state::native(&hooks)
+                "{} is not a knowledge checkout (Cargo.toml's package is not `knowledge`)",
+                state::native(&found)
             )),
         );
     }

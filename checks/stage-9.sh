@@ -68,13 +68,12 @@ unset KNOWLEDGE_HOME
 export HOME="$TMP/fresh" USERPROFILE="$TMP/fresh"
 SK="$TMP/sk"
 mkdir -p "$SK" "$HOME/.claude/plugins"
-for d in hooks commands skills githooks template claude; do cp -R "$ROOT/$d" "$SK/$d"; done
-rm -rf "$SK/hooks/.state"
-cp "$ROOT/package.json" "$SK/"
+for d in commands skills githooks template claude; do cp -R "$ROOT/$d" "$SK/$d"; done
+cp "$ROOT/Cargo.toml" "$SK/"
 git -C "$SK" init -q
 ver=$(sed -n 's/^ *"version": "\(.*\)",$/\1/p' "$ROOT/claude/.claude-plugin/plugin.json")
-printf '{"knowledge-skeleton": {"source": {"source": "git", "url": "fixture"}}}\n' > "$HOME/.claude/plugins/known_marketplaces.json"
-printf '{"version": 2, "plugins": {"knowledge@knowledge-skeleton": [{"scope": "user", "version": "%s"}]}}\n' "$ver" > "$HOME/.claude/plugins/installed_plugins.json"
+printf '{"knowledge": {"source": {"source": "git", "url": "fixture"}}}\n' > "$HOME/.claude/plugins/known_marketplaces.json"
+printf '{"version": 2, "plugins": {"knowledge@knowledge": [{"scope": "user", "version": "%s"}]}}\n' "$ver" > "$HOME/.claude/plugins/installed_plugins.json"
 T="$TMP/tvault"
 s() { k setup "$@" --vault "$(native "$T")" --dev "$(native "$TMP/tdev")" --skeleton "$(native "$SK")" --from-template; }
 id=$(s --plan | tail -n 1 | sed -n 's/^plan \([0-9a-f]\{16\}\)$/\1/p')

@@ -379,7 +379,7 @@ pub fn run(raw: &[String]) -> Result<u8, Fault> {
         usd(grand_cost)
     ));
     out.push("- On a **Pro subscription this is not what you paid** — it is what the same traffic would have cost via the API. Useful as a relative measure of which days and models are expensive, not as a bill.".into());
-    out.push("- Rates in `brain-usage.mjs` are not authoritative. Token counts are exact.".into());
+    out.push("- Rates in `usage.rs` are not authoritative. Token counts are exact.".into());
     if !unpriced.is_empty() {
         unpriced.sort();
         out.push(format!(

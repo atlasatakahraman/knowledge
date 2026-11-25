@@ -160,7 +160,7 @@ fn file_unlinked(cfg: &Config, created: &[String], day: &str) -> Vec<String> {
             .iter()
             .map(|n| {
                 format!(
-                    "- [[{n}]] — from [[{day}]], filed by brain-compile; move it to its section"
+                    "- [[{n}]] — from [[{day}]], filed by knowledge compile; move it to its section"
                 )
             })
             .collect();
@@ -353,7 +353,7 @@ fn compile(cfg: &Config, force: bool, dry: bool) {
             format!(
                 "Promoted the finished session log [[{day}]] into the vault: the decisions, gotchas and"
             ),
-            "preferences it recorded, routed by brain-compile (sonnet).".into(),
+            "preferences it recorded, routed by knowledge compile (sonnet).".into(),
             String::new(),
             "Files:".into(),
         ];
@@ -370,7 +370,7 @@ fn compile(cfg: &Config, force: bool, dry: bool) {
         let subject = format!("chore(brain): compile {day}");
         let c = git(&[
             "-c",
-            "user.name=brain-compiler",
+            "user.name=knowledge-compile",
             "-c",
             "user.email=noreply@local",
             "commit",

@@ -1,4 +1,4 @@
-# brain: structure
+# knowledge: structure
 
 A new folder in the vault. Rare — the existing top-level layout is deliberate and mostly closed.
 

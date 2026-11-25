@@ -1,6 +1,6 @@
 //! The vault on disk: walking it, and reading one note's frontmatter, links, headings and chunks.
-//! Written in the crate, not pulled in (K30): the rules mirror brain-lib.mjs so the binary and the
-//! bun hooks agree on what a note, a link and a heading are.
+//! Written in the crate, not pulled in (K30): the rules were ported from brain-lib.mjs, so a note,
+//! a link and a heading mean what they meant to the bun hooks before them.
 use crate::Fault;
 use std::collections::HashSet;
 use std::fs;

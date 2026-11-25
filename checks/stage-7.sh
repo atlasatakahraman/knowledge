@@ -91,12 +91,12 @@ fi
 sp() { k setup --harness claude --plan --vault "$V" --dev "$(native "$TMP")" --skeleton "$(native "$ROOT")" 2>&1; }
 url=$(git -C "$ROOT" config remote.origin.url)
 check "no plugin installed: the plan installs it from the checkout's origin" \
-  'sp | grep -qF "plugin           claude plugin install knowledge@knowledge-skeleton, from $url (git, no autoUpdate)"'
+  'sp | grep -qF "plugin           claude plugin install knowledge@knowledge, from $url (git, no autoUpdate)"'
 mkdir -p "$HOME/.claude/plugins"
-printf '{"knowledge-skeleton": {}}\n' > "$HOME/.claude/plugins/known_marketplaces.json"
-printf '{"version": 2, "plugins": {"knowledge@knowledge-skeleton": [{"version": "0.0.1"}]}}\n' > "$HOME/.claude/plugins/installed_plugins.json"
+printf '{"knowledge": {}}\n' > "$HOME/.claude/plugins/known_marketplaces.json"
+printf '{"version": 2, "plugins": {"knowledge@knowledge": [{"version": "0.0.1"}]}}\n' > "$HOME/.claude/plugins/installed_plugins.json"
 check "an older plugin: the plan WARNs with the owner's update command, and installs nothing" \
-  'out=$(sp); printf "%s" "$out" | grep -q "WARN    plugin .*0.0.1 is installed .*claude plugin update knowledge@knowledge-skeleton" && ! printf "%s" "$out" | grep -q "create  plugin"'
+  'out=$(sp); printf "%s" "$out" | grep -q "WARN    plugin .*0.0.1 is installed .*claude plugin update knowledge@knowledge" && ! printf "%s" "$out" | grep -q "create  plugin"'
 
 # --- S7.4: Codex ---------------------------------------------------------------------------------
 # The template locks no guard, so these checks lock three of Stage 5's: a deny, and two asks.
@@ -197,7 +197,7 @@ CT="$HOME/.codex/config.toml"
 if command -v codex >/dev/null 2>&1; then
   out=$(k setup --harness codex --plan --skeleton "$(native "$ROOT")" 2>&1)
   check "codex setup plan: installs the plugin from the local marketplace, writes no trust" \
-    'printf "%s" "$out" | grep -q "create  plugin .*codex plugin add knowledge@knowledge-skeleton $VER, from" && ! printf "%s" "$out" | grep -q "hook trust" && [ ! -e "$CT" ]'
+    'printf "%s" "$out" | grep -q "create  plugin .*codex plugin add knowledge@knowledge $VER, from" && ! printf "%s" "$out" | grep -q "hook trust" && [ ! -e "$CT" ]'
   check "codex setup plan: registers the knowledge MCP server, or says why it cannot" \
     'printf "%s" "$out" | grep -qE "create  knowledge MCP .*codex mcp add knowledge -- .* mcp|FAIL +knowledge "'
 else
@@ -206,19 +206,19 @@ fi
 printf '[mcp_servers.knowledge]\ncommand = "C:\\\\x\\\\knowledge.exe"\nargs = ["mcp"]\n' > "$CT"
 check "codex remove plan: our knowledge MCP server goes" \
   'k setup --harness codex --remove --plan 2>&1 | grep -q "remove  knowledge MCP .*codex mcp remove knowledge"'
-printf '[tui]\nx = 1\n\n[hooks.state."knowledge@knowledge-skeleton:pre_tool_use:0:0"]\ntrusted_hash = "a"\n\n[hooks.state."other@market:stop:0:0"]\ntrusted_hash = "b"\n\n[hooks.state."knowledge@knowledge-skeleton:stop:0:0"]\ntrusted_hash = "c"\ntrusted_content_hash = "d"\n' > "$CT"
+printf '[tui]\nx = 1\n\n[hooks.state."knowledge@knowledge:pre_tool_use:0:0"]\ntrusted_hash = "a"\n\n[hooks.state."other@market:stop:0:0"]\ntrusted_hash = "b"\n\n[hooks.state."knowledge@knowledge-skeleton:stop:0:0"]\ntrusted_hash = "c"\ntrusted_content_hash = "d"\n' > "$CT"
 out=$(k setup --harness codex --remove --plan 2>&1)
 check "codex remove plan: our two trust tables, and nothing else of Codex's" \
   'printf "%s" "$out" | grep -q "remove  hook trust .*our 2 \[hooks.state\] tables" && printf "%s" "$out" | grep -q "remove  AGENTS.md"'
 id=$(printf "%s" "$out" | sed -n "s/^plan //p")
 k setup --harness codex --remove --apply "$id" >/dev/null 2>&1
 check "codex remove: our trust tables gone, the others byte-for-byte, the old file kept" \
-  '! grep -q "knowledge@knowledge-skeleton" "$CT" && grep -q "^\[hooks.state.\"other@market:stop:0:0\"\]$" "$CT" && grep -q "^trusted_hash = \"b\"$" "$CT" && grep -q "^x = 1$" "$CT" && [ -f "$CT.pre-skeleton" ]'
+  '! grep -q "knowledge@knowledge" "$CT" && grep -q "^\[hooks.state.\"other@market:stop:0:0\"\]$" "$CT" && grep -q "^trusted_hash = \"b\"$" "$CT" && grep -q "^x = 1$" "$CT" && [ -f "$CT.pre-skeleton" ]'
 check "codex remove: the AGENTS.md block is gone, the owner's text kept" \
   '! grep -qF "$BEGIN" "$CODEX" && grep -q "^Text above, mine.$" "$CODEX" && grep -q "^Text below, mine.$" "$CODEX"'
-mkdir -p "$HOME/.codex/plugins/cache/knowledge-skeleton/knowledge/$VER/hooks"
-cp "$CHJ" "$HOME/.codex/plugins/cache/knowledge-skeleton/knowledge/$VER/hooks/"
-printf '[plugins."knowledge@knowledge-skeleton"]\nenabled = true\n\n[hooks.state."knowledge@knowledge-skeleton:stop:0:0"]\ntrusted_hash = "c"\n' > "$CT"
+mkdir -p "$HOME/.codex/plugins/cache/knowledge/knowledge/$VER/hooks"
+cp "$CHJ" "$HOME/.codex/plugins/cache/knowledge/knowledge/$VER/hooks/"
+printf '[plugins."knowledge@knowledge"]\nenabled = true\n\n[hooks.state."knowledge@knowledge:stop:0:0"]\ntrusted_hash = "c"\n' > "$CT"
 # Codex alone judges trust (its hooks/list), so with no codex on PATH, as on CI, the doctor cannot
 # count a table as trusted: a stale one like this used to read as reviewed.
 NOCODEX=$(printf '%s' "$PATH" | tr ':' '\n' | while IFS= read -r d; do [ -e "$d/codex" ] || [ -e "$d/codex.exe" ] || [ -e "$d/codex.cmd" ] || printf '%s\n' "$d"; done | paste -sd: -)
@@ -249,7 +249,7 @@ check "opencode: a read is not judged" '[ -z "$(oc "$(otool read "{\"path\":\"00
 check "opencode: a pin mismatch stands the guard down" '[ -z "$(oc "$(otool shell "{\"command\":\"npm i\"}")" pre-tool 0.0.0)" ]'
 out=$(oc "{\"hook_event_name\":\"session.created\",\"session_id\":\"ses_check\",\"cwd\":\"$V\"}" session 0.0.0)
 check "opencode: a pin mismatch says so once at session start, as {context}" \
-  'printf "%s" "$out" | grep -q "^{\"context\":\"knowledge-skeleton: this binary is $VER, but the opencode plugin.*knowledge setup --harness opencode --plan"'
+  'printf "%s" "$out" | grep -q "^{\"context\":\"knowledge: this binary is $VER, but the opencode plugin.*knowledge setup --harness opencode --plan"'
 out=$(oc "{\"hook_event_name\":\"session.created\",\"session_id\":\"ses_check\",\"cwd\":\"$V\"}" session)
 check "opencode: session start is context naming AGENTS.md" 'printf "%s" "$out" | grep -q "^{\"context\":" && printf "%s" "$out" | grep -q "AGENTS.md"'
 out=$(oc "{\"hook_event_name\":\"capture\",\"session_id\":\"ses_check\",\"cwd\":\"$V\"}" capture)
@@ -344,7 +344,7 @@ k note decision "use  bun
 always" --question "which runtime?" >/dev/null 2>&1
 check "note decision: one tier-1 ledger line, unpromoted, its text on one line" \
   'tail -n 1 "$LEDGER" | grep -q "\"promoted\":null,\"tier\":1,\"sid\":null,\"src\":\"manual:[0-9]*\",\"question\":\"which runtime?\",\"answer\":\"use bun always\""'
-check "note decision: the session start counts it for /brain new decision --ledger" \
+check "note decision: the session start counts it for /knowledge new decision --ledger" \
   'printf "{\"session_id\":\"s76\",\"cwd\":\"/\",\"source\":\"startup\"}" | k hook session --harness claude 2>/dev/null | grep -q "captured decision.* not yet in 60-Decisions"'
 n=$(wc -l < "$LEDGER")
 k note decision "x" --promoted 60-Decisions/none.md >/dev/null 2>&1; code=$?
@@ -388,7 +388,7 @@ S7="$TMP/s77"
 FX7=$(native "$S7")
 SK7="$S7/sk"
 # The temp dir moves with HOME: the binary records failures there, and a fixture's records commit
-# (no git email in the fixture HOME) wrote the machine's own /tmp/brain-claude-failures.json.
+# (no git email in the fixture HOME) wrote the machine's own failures file in /tmp.
 export HOME="$S7/home" USERPROFILE="$S7/home" KNOWLEDGE_BIN="$BIN" TMPDIR="$TMP" TMP TEMP="$TMP"
 unset KNOWLEDGE_HOME KNOWLEDGE_CONFIG XDG_CONFIG_HOME CLAUDE_CONFIG_DIR
 mkdir -p "$S7/bin" "$SK7" "$HOME/.claude/plugins" "$HOME/.codex" "$HOME/.config/opencode" "$TMP/out7"
@@ -398,14 +398,13 @@ printf '# My opencode rules\n' > "$HOME/.config/opencode/AGENTS.md"
 clean() { for x in codex; do for e in "" .exe .cmd; do [ -e "$1/$x$e" ] && return 1; done; done; return 0; }
 PATH="$(dirname "$BIN"):$S7/bin:$(printf '%s' "$PATH" | tr ':' '\n' | while IFS= read -r d; do clean "$d" && printf '%s\n' "$d"; done | paste -sd: -)"
 export PATH
-for d in hooks commands skills githooks template claude; do cp -R "$ROOT/$d" "$SK7/$d"; done
-rm -rf "$SK7/hooks/.state"
-cp "$ROOT/package.json" "$SK7/"
+for d in commands skills githooks template claude; do cp -R "$ROOT/$d" "$SK7/$d"; done
+cp "$ROOT/Cargo.toml" "$SK7/"
 git -C "$SK7" init -q
 cp -R "$ROOT/template" "$S7/vault"
 git -C "$S7/vault" init -q
-printf '{"knowledge-skeleton": {"source": {"source": "git", "url": "fixture"}}}\n' > "$HOME/.claude/plugins/known_marketplaces.json"
-printf '{"version": 2, "plugins": {"knowledge@knowledge-skeleton": [{"scope": "user", "version": "%s"}]}}\n' "$VER" > "$HOME/.claude/plugins/installed_plugins.json"
+printf '{"knowledge": {"source": {"source": "git", "url": "fixture"}}}\n' > "$HOME/.claude/plugins/known_marketplaces.json"
+printf '{"version": 2, "plugins": {"knowledge@knowledge": [{"scope": "user", "version": "%s"}]}}\n' "$VER" > "$HOME/.claude/plugins/installed_plugins.json"
 mkdir -p "$HOME/AppData/Roaming/Claude" "$HOME/AppData/Local/Claude-Data/claude_fixture"
 : > "$HOME/AppData/Roaming/Claude/.user-data-left.claude_fixture"
 DC="$HOME/AppData/Local/Claude-Data/claude_fixture/claude_desktop_config.json"

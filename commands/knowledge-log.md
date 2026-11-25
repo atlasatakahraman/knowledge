@@ -1,5 +1,5 @@
 ---
-description: Write today's session note into the brain's 30-Sessions/
+description: Write today's session note into the vault's 30-Sessions/
 ---
 
 Write or append to `30-Sessions/YYYY/MM/YYYY-MM-DD.md`.
@@ -21,4 +21,4 @@ Keep it terse and factual. This is a log, not a narrative — no summary of the 
 restating what the code does.
 
 If a decision here deserves to outlive the session, promote it: an ADR in `60-Decisions/`
-(`/brain new decision`), or a note in `20-Knowledge/`. Link to it from the session note rather than duplicating it.
+(`/knowledge new decision`), or a note in `20-Knowledge/`. Link to it from the session note rather than duplicating it.

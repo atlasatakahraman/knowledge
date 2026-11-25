@@ -1,4 +1,4 @@
-# brain: task
+# knowledge: task
 
 Uses the `obsidian-tasks-plugin` format already installed in the vault. Do not invent a syntax.
 

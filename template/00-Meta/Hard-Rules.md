@@ -167,7 +167,7 @@ re-query. Nothing blocks `WebFetch`: this rule is what keeps it out.
 - **One-way or hard-to-reverse decisions get a standing note in `CLAUDE.md`.** Not just recorded
   in a decision note: a note in the repo instructions catches a future re-proposal before it gets
   re-litigated.
-- **Write notes through `/brain new <kind>` and `/brain edit <kind>`.** They know the schema in
+- **Write notes through `/knowledge new <kind>` and `/knowledge edit <kind>`.** They know the schema in
   [[Conventions]] and keep every note reachable from [[00-MOC-Root]].
 - **Retrieval runs in tiers, in order** ([[Retrieval-Protocol]]). Never sweep the vault with `ls`,
   `find` or `grep`: the MOC answers "where is X" in one hop.

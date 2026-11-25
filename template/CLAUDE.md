@@ -40,11 +40,11 @@ system exists to prevent. If tier 4 was needed, the vault has a gap: say so, and
 | `90-Inbox/` | Unsorted capture, kept empty |
 
 What each hook writes, and when: [[Hook-Lifecycle]]. Why it is built this way: [[Why-This-Exists]].
-Setup from nothing: the knowledge-skeleton's `docs/install.md`.
+Setup from nothing: the knowledge engine's `docs/install.md`.
 
 ## Writing to the vault
 
-Use `/brain new <kind>` and `/brain edit <kind>` rather than creating files by hand:
+Use `/knowledge new <kind>` and `/knowledge edit <kind>` rather than creating files by hand:
 `structure · repo · docs · command · commit · task · hook · plan · decision`
 
 Every note needs frontmatter. Schema in [[Conventions]].

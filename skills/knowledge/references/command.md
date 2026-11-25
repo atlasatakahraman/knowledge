@@ -1,4 +1,4 @@
-# brain: command
+# knowledge: command
 
 A slash command in `~/.claude/commands/<name>.md` (user scope — works in every project).
 
@@ -22,7 +22,7 @@ description: One line. This is what the agent matches on.
 Steps, imperative. Reference absolute paths - the command runs from any cwd.
 ```
 
-- Name it for what it does: `brain-usage`, not `usage`.
+- Name it for what it does: `knowledge-usage`, not `usage`.
 - `$ARGUMENTS` interpolates what the user typed after the command.
 - Keep it short. A command that needs 200 lines of instruction wants to be a skill.
 

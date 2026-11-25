@@ -1,4 +1,4 @@
-// knowledge-skeleton's opencode plugin (vault audit S7.5). Written to ~/.config/opencode/plugins/
+// knowledge's opencode plugin (vault audit S7.5). Written to ~/.config/opencode/plugins/
 // by `knowledge setup --harness opencode`, which replaces any edit made here.
 //
 // It only spawns the command: each opencode hook becomes one `knowledge hook <verb> --harness
@@ -68,7 +68,7 @@ function knowledge(verb: string, payload: object, ms: number): Promise<Reply> {
 }
 
 export default {
-  id: "knowledge-skeleton",
+  id: "knowledge",
   async setup(ctx: any) {
     // The flush's own `opencode run --standalone` inherits this from knowledge: no hooks inside it.
     if (process.env.KNOWLEDGE_INVOKED_BY) return;

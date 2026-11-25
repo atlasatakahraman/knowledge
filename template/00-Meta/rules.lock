@@ -525,14 +525,14 @@
       "hash": "9deb0e3246e1bc09"
     },
     {
-      "id": "write-notes-through-brain-new-kind-and-brain-edi",
+      "id": "write-notes-through-knowledge-new-kind-and-knowl",
       "pack": "knowledge",
       "kind": "agent",
       "enforce": [
         "P",
         "R"
       ],
-      "hash": "4a1cd5b83bc8a483"
+      "hash": "777f7157b37e3e2b"
     },
     {
       "id": "retrieval-runs-in-tiers-in-order",

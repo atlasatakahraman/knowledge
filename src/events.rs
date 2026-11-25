@@ -1,4 +1,4 @@
-//! `knowledge events <transcript> [--json]` (Stage 4, K20): the session events brain-flush hands
+//! `knowledge events <transcript> [--json]` (Stage 4, K20): the session events the flush hands
 //! its summariser, read from the transcript alone. Written from what context-mode's rows held
 //! against the same transcripts (evidence/events-recon.mjs), never from its code (ELv2):
 //! - decision: every AskUserQuestion answer, as "Q: … A: …" (context-mode kept the first only);
@@ -90,7 +90,7 @@ const IMPLEMENT: &[&str] = &[
 ];
 /// Folders whose writes are plans.
 const PLAN_DIRS: &[&str] = &["/40-plans/", "/plans/"];
-/// brain-flush cuts each event to 400 chars; so does this.
+/// The flush cuts each event to 400 chars; so does this.
 const MAX: usize = 400;
 
 pub struct Event {
@@ -210,7 +210,7 @@ fn first_heading(text: &str) -> &str {
 }
 
 /// Every event in a transcript, in the order its records appear. Pure: the same transcript always
-/// gives the same list, so brain-flush's watermark is a count.
+/// gives the same list, so the flush's watermark is a count.
 pub fn parse(jsonl: &str) -> Vec<Event> {
     let mut out = Vec::new();
     let mut calls: HashMap<String, (String, Value)> = HashMap::new();

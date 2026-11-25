@@ -1,7 +1,7 @@
 {
-  "name": "knowledge-skeleton",
+  "name": "knowledge",
   "owner": { "name": "atlasatakahraman" },
-  "description": "The knowledge-skeleton engine's Claude Code plugin. Install it with knowledge setup, which also sets the binary path.",
+  "description": "The knowledge engine's Claude Code plugin. Install it with knowledge setup, which also sets the binary path.",
   "plugins": [
     {
       "name": "knowledge",

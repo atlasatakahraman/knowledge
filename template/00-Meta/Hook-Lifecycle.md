@@ -13,14 +13,14 @@ Every hook that touches this vault: its event, what it does, what it writes, wha
 what notices when it breaks. The rationale is in [[Why-This-Exists]].
 
 Every hook is the `knowledge` binary's `hook` verb, and reads its paths from the machine's
-`config.json`. Claude Code gets the hooks from the skeleton's plugin, `knowledge@knowledge-skeleton`,
+`config.json`. Claude Code gets the hooks from the skeleton's plugin, `knowledge@knowledge`,
 which `knowledge setup` installs: each hook is exec form, `${user_config.knowledge_bin}` with
 `["hook", <verb>, "--harness", "claude"]`, so no shell starts and no other `knowledge` on PATH is
 picked. Other harnesses run the same verbs (§ Other harnesses). What a hook starts in the background
 is the same binary again, detached, so no hook starts a JavaScript runtime. The watermarks, locks
 and exports live in `state/` beside the config (`~/.config/knowledge/state`, or `$KNOWLEDGE_HOME/state`);
-the first run moves an older `~/.claude/hooks/.state` there. `~/.claude/hooks` links the skeleton
-checkout's `hooks/`, and the doctor's `skeleton-version` check fails when it does not.
+the first run moves an older `~/.claude/hooks/.state` there. The `/knowledge` skill and the
+`knowledge-*` commands link into the checkout, and the doctor's `skeleton-version` check fails when they do not.
 `.skeleton.json` at the vault root pins the skeleton version the vault is written for: the session
 start says so when the checkout is another version, and `skeleton-version` fails.
 
@@ -36,9 +36,9 @@ says what notices a failure.
 | `UserPromptSubmit` | — | `knowledge hook prompt` | Up to six vault notes matching the prompt's rarest words, one line each, and the best passage when it is short and strong | — | ≤ 1,800 chars on a hit, 0 otherwise; ≤ 35 ms | the doctor's `retrieval`, which asks `knowledge find` the same way |
 | `PreCompact`, `SessionEnd` | — | `knowledge hook capture` | Logs the event, then detaches compile, usage, flush and (SessionEnd) records (below). Timeout 10 s | `50-Ops/hook-events.jsonl` | free itself | the flush canary |
 | `Stop`, `SubagentStop` | — | `knowledge hook capture` | The same, **async**, at most once per 20 min per session, flush only | same | same | same |
-| ↳ detached | | `knowledge flush` | Takes the session's lock, appends every `AskUserQuestion` answer to the decision ledger, then sends what is new since the last flush to `claude -p --model haiku` and appends what is worth keeping to the daily note | `30-Sessions/YYYY/MM/YYYY-MM-DD.md`, `50-Ops/decisions.jsonl` | **one haiku call** per capture with new content | `!! BRAIN FLUSH FAILING` at the next session start; the flush canary after 3 days |
-| ↳ detached | | `knowledge records` | SessionEnd only. Waits for that session's flush, then commits the hook-written records alone (`30-Sessions/`, `50-Ops/Commits/`, `decisions.jsonl`, `Health/`, `Usage/`, `00-MOC-Ops`), gitleaks first (none installed → nothing committed), and pushes when every unpushed commit is a record. Your own unpushed commits hold the push | a `chore(brain): records from the <os> boot` commit, pushed | free | `!! BRAIN RECORDS FAILING` at the next start, which also retries the sync |
-| ↳ detached | | `knowledge compile` | Promotes a **finished** daily log into ADRs, knowledge and rules, links each new note from its MOC, and commits only its own changes. Does nothing while `~/.config/knowledge/state/compile.disabled` exists | `60-Decisions/`, `20-Knowledge/`, `00-Meta/`, `50-Ops/brain-compile-state.json` | **one sonnet call**, once per finished day | `!! BRAIN COMPILE FAILING` at the next session start |
+| ↳ detached | | `knowledge flush` | Takes the session's lock, appends every `AskUserQuestion` answer to the decision ledger, then sends what is new since the last flush to `claude -p --model haiku` and appends what is worth keeping to the daily note | `30-Sessions/YYYY/MM/YYYY-MM-DD.md`, `50-Ops/decisions.jsonl` | **one haiku call** per capture with new content | `!! KNOWLEDGE FLUSH FAILING` at the next session start; the flush canary after 3 days |
+| ↳ detached | | `knowledge records` | SessionEnd only. Waits for that session's flush, then commits the hook-written records alone (`30-Sessions/`, `50-Ops/Commits/`, `decisions.jsonl`, `Health/`, `Usage/`, `00-MOC-Ops`), gitleaks first (none installed → nothing committed), and pushes when every unpushed commit is a record. Your own unpushed commits hold the push | a `chore(brain): records from the <os> boot` commit, pushed | free | `!! KNOWLEDGE RECORDS FAILING` at the next start, which also retries the sync |
+| ↳ detached | | `knowledge compile` | Promotes a **finished** daily log into ADRs, knowledge and rules, links each new note from its MOC, and commits only its own changes. Does nothing while `~/.config/knowledge/state/compile.disabled` exists | `60-Decisions/`, `20-Knowledge/`, `00-Meta/`, `50-Ops/brain-compile-state.json` | **one sonnet call**, once per finished day | `!! KNOWLEDGE COMPILE FAILING` at the next session start |
 | ↳ detached | | `knowledge usage` | The month's token/cost digest, once a day | `50-Ops/Usage/usage-YYYY-MM-<os>.md` | free | nothing: the file's date goes stale |
 | ↳ detached | | `knowledge doctor --repair --record` | The health sweep, from the session start, once per logical day | `50-Ops/Health/health-YYYY-MM.md`, derived artifacts | free | `!! VAULT HEALTH` at the next session start when the newest line is FAIL or stale |
 | `PostToolUse` | `Edit\|Write` | `knowledge hook post-edit` | On a vault note, at once: reindexes that note, then the write-time check (frontmatter, links, `[[Note#Heading]]`), reported back, never blocking | the vault index | free; ≤ 35 ms | the doctor's `vault-index` |
@@ -58,7 +58,7 @@ above hold for each; what differs is below. Setup and the by-hand steps: the ske
 
 | Harness | Registered by | Differs from Claude Code |
 |---|---|---|
-| Codex CLI | The Codex plugin `knowledge@knowledge-skeleton`: `knowledge hook <verb> --harness codex --pin <version>`, from PATH | A hook runs only once you review it in `/hooks`; the doctor's `codex-trust` warns until then. The pin: a binary of another version stands every hook down, with one session-start line. An ask rule is a deny. The instructions block is inline in `~/.codex/AGENTS.md` |
+| Codex CLI | The Codex plugin `knowledge@knowledge`: `knowledge hook <verb> --harness codex --pin <version>`, from PATH | A hook runs only once you review it in `/hooks`; the doctor's `codex-trust` warns until then. The pin: a binary of another version stands every hook down, with one session-start line. An ask rule is a deny. The instructions block is inline in `~/.codex/AGENTS.md` |
 | opencode | The shim `~/.config/opencode/plugins/knowledge.ts`, written by setup and pinned the same way | The guard runs in `execute.before` and a deny throws; an ask is a deny. The flush exports the session and runs `opencode run`. The block is inline in `~/.config/opencode/AGENTS.md` |
 | Claude desktop app, Chat | No hooks: `mcpServers.knowledge` runs `knowledge mcp` | No capture and no guard. `note` writes the ledger or the session note, and asks first |
 | Any other (`generic`) | No hooks: the block goes into the file you name | The rules are text only; `knowledge find`, `graph` and `note` from its shell |
@@ -85,7 +85,7 @@ leaves a file with no block alone.
 | `knowledge update --plan` | On request only: the latest release and this platform's steps; downloads nothing |
 
 The skills and commands run only the binary: `knowledge ledger list|promote` (the decision ledger;
-the `/brain` skill drives it) and `knowledge doctor --only links,pointers` (every `[[wikilink]]`
+the `/knowledge` skill drives it) and `knowledge doctor --only links,pointers` (every `[[wikilink]]`
 and every `checkout:`/`docs:` pointer resolves).
 
 ## Change log

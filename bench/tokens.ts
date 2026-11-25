@@ -16,7 +16,7 @@ const RUNS = 5; // latency: the median of five runs per question
 // --- the fixture -------------------------------------------------------------------------------
 const tmp = mkdtempSync(join(tmpdir(), "kb-"));
 const vault = join(tmp, "vault"), dev = join(tmp, "dev"), home = join(tmp, "home"), user = join(tmp, "user");
-const checkout = join(dev, "knowledge-skeleton");
+const checkout = join(dev, "knowledge");
 cpSync(join(repo, "template"), vault, { recursive: true });
 const docs = join(vault, "20-Knowledge", "knowledge");
 mkdirSync(docs, { recursive: true });
@@ -37,7 +37,7 @@ const k = (args: string[], cwd = tmp) => {
   return { out: (r.stdout ?? "") + (r.stderr ?? ""), ms: performance.now() - t };
 };
 k(["index", "--rebuild"]);
-k(["code", "index", "knowledge-skeleton"]);
+k(["code", "index", "knowledge"]);
 
 // --- what a tool call costs -------------------------------------------------------------------
 // Characters the agent reads. Tokens are estimated at 4 characters each; the percentages below are
@@ -97,8 +97,8 @@ const codeMs: number[] = [], pairMs: number[] = [];
 const SRC = ["*.rs", "*.ts", "*.mjs", "*.js", "*.sh"];
 for (const { symbol, def } of code) {
   const runs = Array.from({ length: RUNS }, () => {
-    const f = k(["find", symbol, "--code", "--repo", "knowledge-skeleton"]);
-    const g = k(["graph", symbol, "--code", "--repo", "knowledge-skeleton"]);
+    const f = k(["find", symbol, "--code", "--repo", "knowledge"]);
+    const g = k(["graph", symbol, "--code", "--repo", "knowledge"]);
     return { out: f.out + g.out, found: f.out, ms: f.ms, both: f.ms + g.ms };
   });
   codeMs.push(median(runs.map((r) => r.ms)));

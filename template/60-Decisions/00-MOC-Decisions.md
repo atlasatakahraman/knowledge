@@ -20,8 +20,8 @@ casing. About the vault, its hooks, or how the agent behaves → `Identity/`.
 60-Decisions/Identity/<NNNN>-<slug>.md
 ```
 
-`<NNNN>` is a per-folder sequence from `0001`. Record one with `/brain new decision`; promote the
-answers the flush captured with `/brain new decision --ledger`.
+`<NNNN>` is a per-folder sequence from `0001`. Record one with `/knowledge new decision`; promote the
+answers the flush captured with `/knowledge new decision --ledger`.
 
 ## Records
 

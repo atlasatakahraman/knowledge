@@ -1,4 +1,4 @@
-# brain: decision
+# knowledge: decision
 
 Record a decision as an ADR, and keep the ledger (`50-Ops/decisions.jsonl`) in step.
 

@@ -1,6 +1,7 @@
 // Draws the README's images with their text outlined, so they render the same with no fonts
 // installed: the banner, the hero, the fixed pills, the logo and the live pills' glyph table.
 //
+//   bun install --cwd assets       (once: opentype.js, from assets/package.json)
 //   bun --bun assets/build.ts <fonts-dir>
 //
 // <fonts-dir> holds static instances of the variable fonts the previews use (Google Fonts, OFL 1.1).

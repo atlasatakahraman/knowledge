@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "knowledge-skeleton",
+      "name": "knowledge-assets",
       "devDependencies": {
         "opentype.js": "2.0.0",
       },

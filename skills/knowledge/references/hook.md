@@ -1,4 +1,4 @@
-# brain: hook
+# knowledge: hook
 
 **Delegates.** The `update-config` skill owns `settings.json` — hooks, permissions, env. Use it.
 

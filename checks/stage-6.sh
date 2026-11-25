@@ -24,9 +24,8 @@ export KNOWLEDGE_BIN="$BIN"
 # vault from its template with one finished daily log for the compile state to seed.
 SK="$TMP/sk"
 mkdir -p "$SK" "$HOME/.claude"
-for d in hooks commands skills githooks template claude; do cp -R "$ROOT/$d" "$SK/$d"; done
-rm -rf "$SK/hooks/.state"
-cp "$ROOT/package.json" "$SK/"
+for d in commands skills githooks template claude; do cp -R "$ROOT/$d" "$SK/$d"; done
+cp "$ROOT/Cargo.toml" "$SK/"
 git -C "$SK" init -q
 VAULT="$TMP/vault"
 cp -R "$ROOT/template" "$VAULT"
@@ -52,9 +51,19 @@ EOF
 # never runs the real `claude plugin` against the fixture HOME.
 mkdir -p "$HOME/.claude/plugins"
 ver=$(sed -n 's/^ *"version": "\(.*\)",$/\1/p' "$ROOT/claude/.claude-plugin/plugin.json")
-printf '{"knowledge-skeleton": {"source": {"source": "git", "url": "fixture"}}}\n' > "$HOME/.claude/plugins/known_marketplaces.json"
-printf '{"version": 2, "plugins": {"knowledge@knowledge-skeleton": [{"scope": "user", "version": "%s"}]}}\n' "$ver" > "$HOME/.claude/plugins/installed_plugins.json"
+printf '{"knowledge": {"source": {"source": "git", "url": "fixture"}}}\n' > "$HOME/.claude/plugins/known_marketplaces.json"
+printf '{"version": 2, "plugins": {"knowledge@knowledge": [{"scope": "user", "version": "%s"}]}}\n' "$ver" > "$HOME/.claude/plugins/installed_plugins.json"
 printf '# Mine\n\nThe user'"'"'s own instructions.\n' > "$HOME/.claude/CLAUDE.md"
+# The links from before 0.13.0, into a checkout renamed since, so they dangle: setup removes them
+# by their targets' tails. A junction on Windows (no privilege needed), a symlink elsewhere.
+OLD="$TMP/old/knowledge-skeleton"
+mkdir -p "$OLD/hooks" "$OLD/skills/brain" "$HOME/.claude/skills" "$HOME/.agents/skills"
+# One argument to cmd: msys rewrites a bare `/J` into a path, never one inside a longer string.
+dirlink() { if command -v cygpath >/dev/null 2>&1; then cmd //c "mklink /J $(cygpath -w "$2") $(cygpath -w "$1")" >/dev/null; else ln -s "$1" "$2"; fi; }
+dirlink "$OLD/hooks" "$HOME/.claude/hooks"
+dirlink "$OLD/skills/brain" "$HOME/.claude/skills/brain"
+dirlink "$OLD/skills/brain" "$HOME/.agents/skills/brain"
+rm -rf "$TMP/old"
 
 k() { "$BIN" setup "$@" --vault "$(native "$VAULT")" --dev "$(native "$TMP/dev")" --skeleton "$(native "$SK")"; }
 # Every file, link and empty folder under the fixture with its content (a link: its target), git's
@@ -97,6 +106,18 @@ check "--apply refuses a plan a touched file made stale" '[ "$code" != 0 ] && gr
 check "--apply that refuses leaves the tree unchanged" '[ "$(snap)" = "$touched" ]'
 cp "$TMP/out/CLAUDE.md" "$md"
 check "putting the file back makes the plan current again" '[ "$(plan_id "$(k --plan)")" = "$id" ]'
+check "--plan removes the three links from before 0.13.0, dangling, by their targets' tails" \
+  '[ "$(printf "%s\n" "$plan" | grep -cE "^  remove  link .*/(\.claude/hooks|\.claude/skills/brain|\.agents/skills/brain): renamed in 0\.13\.0$")" = 3 ]'
+# The old plugin pair beside the new one: planned away after it (plan only, so the real `claude`
+# CLI never runs against the fixture).
+cp "$HOME/.claude/plugins/known_marketplaces.json" "$TMP/out/km.json"
+cp "$HOME/.claude/plugins/installed_plugins.json" "$TMP/out/ip.json"
+printf '{"knowledge": {}, "knowledge-skeleton": {}}\n' > "$HOME/.claude/plugins/known_marketplaces.json"
+printf '{"version": 2, "plugins": {"knowledge@knowledge": [{"version": "%s"}], "knowledge@knowledge-skeleton": [{"version": "0.12.0"}]}}\n' "$ver" > "$HOME/.claude/plugins/installed_plugins.json"
+check "--plan uninstalls the plugin pair from before 0.13.0 once the new one is in" \
+  'k --plan | grep -q "^  remove  plugin  *claude plugin uninstall knowledge@knowledge-skeleton, then marketplace remove knowledge-skeleton (renamed in 0.13.0)$"'
+cp "$TMP/out/km.json" "$HOME/.claude/plugins/known_marketplaces.json"
+cp "$TMP/out/ip.json" "$HOME/.claude/plugins/installed_plugins.json"
 
 k --apply "$id" > "$TMP/out/apply.txt" 2>&1; code=$?
 after=$(snap)

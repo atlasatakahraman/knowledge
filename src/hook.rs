@@ -37,7 +37,7 @@ fn handle(raw: &[String]) -> Result<(), Fault> {
     if let Some(pin) = args.get("pin").filter(|p| *p != env!("CARGO_PKG_VERSION")) {
         if verb == "session" {
             let line = format!(
-                "knowledge-skeleton: this binary is {}, but the {} plugin's hooks were written for {pin}, so they stand down. Update the plugin: knowledge setup --harness {} --plan, then --apply.",
+                "knowledge: this binary is {}, but the {} plugin's hooks were written for {pin}, so they stand down. Update the plugin: knowledge setup --harness {} --plan, then --apply.",
                 env!("CARGO_PKG_VERSION"),
                 adapter.name,
                 adapter.id
@@ -214,7 +214,7 @@ pub fn validate(
     }
     Ok((!problems.is_empty()).then(|| {
         format!(
-            "brain-validate {file_name}: {}. Conventions: {}/Conventions.md.",
+            "knowledge validate {file_name}: {}. Conventions: {}/Conventions.md.",
             problems.join("; "),
             config::META
         )

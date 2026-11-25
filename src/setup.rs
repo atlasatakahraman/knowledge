@@ -79,8 +79,9 @@ enum Act {
     /// `claude mcp remove --scope local graphify`, run in this vault.
     McpRemove(PathBuf),
     /// Through the `claude` CLI: add the marketplace from this url, install the plugin, or
-    /// uninstall both.
+    /// uninstall both. `pair` is [`PAIR`], or [`OLD_PAIR`] when it is planned away.
     Plugin {
+        pair: Pair,
         add: Option<String>,
         install: bool,
         remove: bool,
@@ -259,8 +260,7 @@ fn os_tag() -> String {
     }
 }
 
-/// The checkout the links point into: --skeleton, else the one ~/.claude/hooks already links,
-/// else the one this binary was built in, else `<devRoot>/knowledge-skeleton`.
+/// The checkout the links point into: --skeleton, else `checkout`'s.
 fn skeleton(args: &Args, dev: &Path) -> Option<PathBuf> {
     match args.get("skeleton") {
         Some(p) => Some(expand(p)).filter(|p| is_checkout(p)),
@@ -268,21 +268,49 @@ fn skeleton(args: &Args, dev: &Path) -> Option<PathBuf> {
     }
 }
 
-/// `~/.agents/skills/brain`: the shared skills folder's link to the /brain skill.
-fn agents_brain() -> PathBuf {
-    state::home().join(".agents").join("skills").join("brain")
+/// `~/.agents/skills/<name>`: the shared skills folder's link to a skill.
+fn agents_skill(name: &str) -> PathBuf {
+    state::home().join(".agents").join("skills").join(name)
+}
+
+/// The links made before 0.13.0 (S9.7), each with the tail its target ended in: the hooks folder
+/// (the bun hooks), the /brain skill twice, the brain-* commands. One goes only when its target
+/// ends in that tail, so a link the user made is never taken. The tail, not the checkout, is
+/// matched: the checkout folder was renamed too, so the old target may be gone.
+fn old_links(claude: &Path) -> Vec<(PathBuf, String)> {
+    let mut v = vec![
+        (claude.join("hooks"), "/hooks".to_string()),
+        (
+            claude.join("skills").join("brain"),
+            "/skills/brain".to_string(),
+        ),
+        (agents_skill("brain"), "/skills/brain".to_string()),
+    ];
+    let mut cmds: Vec<String> = fs::read_dir(claude.join("commands"))
+        .map(|rd| {
+            rd.flatten()
+                .map(|e| e.file_name().to_string_lossy().into_owned())
+                .filter(|f| f.starts_with("brain-") && f.ends_with(".md"))
+                .collect()
+        })
+        .unwrap_or_default();
+    cmds.sort();
+    v.extend(
+        cmds.into_iter()
+            .map(|f| (claude.join("commands").join(&f), format!("/commands/{f}"))),
+    );
+    v
 }
 
 fn is_checkout(p: &Path) -> bool {
     p.join(HOOKS).is_file() && p.join("template").is_dir()
 }
 
-/// The checkout found without `--skeleton`; `knowledge config skeleton` prints it.
+/// The checkout found without `--skeleton`; `knowledge config skeleton` prints it. The one this
+/// binary was built in, else `<devRoot>/knowledge`, else `<devRoot>/knowledge-skeleton` (its name
+/// before 0.13.0, on a boot not renamed yet). A checkout outside devRoot is found only through
+/// --skeleton: the `~/.claude/hooks` link that once pointed at it went with the bun hooks (S9.7).
 pub fn checkout(dev: &Path) -> Option<PathBuf> {
-    let linked = session::skeleton_root();
-    if is_checkout(&linked) {
-        return Some(linked);
-    }
     if let Some(a) = std::env::current_exe()
         .ok()
         .and_then(|e| real(&e))
@@ -294,8 +322,10 @@ pub fn checkout(dev: &Path) -> Option<PathBuf> {
     {
         return Some(a);
     }
-    let d = dev.join("knowledge-skeleton");
-    is_checkout(&d).then_some(d)
+    ["knowledge", "knowledge-skeleton"]
+        .iter()
+        .map(|n| dev.join(n))
+        .find(|d| is_checkout(d))
 }
 
 fn pages(d: &Path, out: &mut Vec<PathBuf>) {
@@ -453,8 +483,14 @@ fn without_ours(settings: &J) -> J {
 /// The plugin's hooks, in the checkout; it also marks a folder as a skeleton checkout.
 const HOOKS: &str = "claude/hooks/hooks.json";
 /// `<plugin>@<marketplace>`, as `.claude-plugin/marketplace.json` names them.
-const PLUGIN: &str = "knowledge@knowledge-skeleton";
-const MARKET: &str = "knowledge-skeleton";
+const PLUGIN: &str = "knowledge@knowledge";
+const MARKET: &str = "knowledge";
+/// A plugin id and the marketplace it comes from, in Claude Code and Codex alike.
+type Pair = (&'static str, &'static str);
+const PAIR: Pair = (PLUGIN, MARKET);
+/// The pair before 0.13.0, when the repo was knowledge-skeleton (S9.7). setup plans it away after
+/// the new one installs, so it is still recognised.
+const OLD_PAIR: Pair = ("knowledge@knowledge-skeleton", "knowledge-skeleton");
 
 /// settings.json after the swap (S7.3): no hook of ours, since the plugin carries them, and the
 /// plugin's `knowledge_bin` set to the binary its exec-form hooks run.
@@ -462,6 +498,7 @@ fn swapped(settings: &J, bin: &Path) -> J {
     let mut next = without_ours(settings);
     let empty = || J::Obj(Vec::new());
     let mut configs = next.get("pluginConfigs").cloned().unwrap_or_else(empty);
+    configs.remove(OLD_PAIR.0);
     let mut mine = configs.get(PLUGIN).cloned().unwrap_or_else(empty);
     let mut options = mine.get("options").cloned().unwrap_or_else(empty);
     options.set("knowledge_bin", J::s(fwd(bin)));
@@ -476,6 +513,7 @@ fn unswapped(settings: &J) -> J {
     let mut next = without_ours(settings);
     if let Some(mut configs) = next.get("pluginConfigs").cloned() {
         configs.remove(PLUGIN);
+        configs.remove(OLD_PAIR.0);
         if configs == J::Obj(Vec::new()) {
             next.remove("pluginConfigs");
         } else {
@@ -486,13 +524,13 @@ fn unswapped(settings: &J) -> J {
 }
 
 /// The marketplace Claude Code knows, and the plugin version it installed, from its own records.
-fn plugin_state(claude: &Path) -> (bool, Option<String>) {
+fn plugin_state(claude: &Path, (plugin, market): Pair) -> (bool, Option<String>) {
     let plugins = claude.join("plugins");
     let known =
-        read_obj(&plugins.join("known_marketplaces.json")).is_ok_and(|m| m.get(MARKET).is_some());
+        read_obj(&plugins.join("known_marketplaces.json")).is_ok_and(|m| m.get(market).is_some());
     let version = read_obj(&plugins.join("installed_plugins.json"))
         .ok()
-        .and_then(|i| match i.get("plugins").and_then(|p| p.get(PLUGIN)) {
+        .and_then(|i| match i.get("plugins").and_then(|p| p.get(plugin)) {
             Some(J::Arr(v)) => v
                 .iter()
                 .find_map(|r| r.get("version").and_then(J::str).map(String::from)),
@@ -651,11 +689,11 @@ fn plan_setup(args: &Args) -> Plan {
         p.say(
             "FAIL",
             "skeleton",
-            "no knowledge-skeleton checkout found: pass --skeleton <checkout>",
+            "no knowledge checkout found: pass --skeleton <checkout>",
         );
         return p;
     };
-    let version = session::json_version(&root.join("package.json")).unwrap_or_default();
+    let version = session::engine_version(&root).unwrap_or_default();
     p.say("ok", "skeleton", format!("{} ({version})", fwd(&root)));
 
     // The vault: an empty path gets template/, anything else is adopted.
@@ -850,17 +888,37 @@ fn plan_setup(args: &Args) -> Plan {
         );
     }
 
-    // Links into ~/.claude: the hooks folder, the /brain skill, every brain-* command. And the
-    // skill again in ~/.agents/skills, the folder Codex, Gemini CLI, Cursor, opencode, Amp and Zed
-    // read (S7.6). opencode reads both folders and keeps one skill per name, so it loads once.
+    // The links before 0.13.0 go first: the hooks folder, /brain and brain-* (S9.7).
+    for (path, tail) in old_links(&claude) {
+        let seen = seen_link(&path);
+        if seen
+            .strip_prefix("link ")
+            .is_some_and(|t| t.trim_end_matches('/').ends_with(&tail))
+        {
+            p.act(
+                "remove",
+                "link",
+                format!("{}: renamed in 0.13.0", fwd(&path)),
+                seen,
+                vec![Act::Unlink(path)],
+            );
+        }
+    }
+
+    // Links into ~/.claude: the /knowledge skill and every knowledge-* command. And the skill
+    // again in ~/.agents/skills, the folder Codex, Gemini CLI, Cursor, opencode, Amp and Zed read
+    // (S7.6). opencode reads both folders and keeps one skill per name, so it loads once.
     let mut links = vec![
-        (root.join("hooks"), claude.join("hooks"), true),
         (
-            root.join("skills").join("brain"),
-            claude.join("skills").join("brain"),
+            root.join("skills").join("knowledge"),
+            claude.join("skills").join("knowledge"),
             true,
         ),
-        (root.join("skills").join("brain"), agents_brain(), true),
+        (
+            root.join("skills").join("knowledge"),
+            agents_skill("knowledge"),
+            true,
+        ),
     ];
     let mut cmds: Vec<String> = fs::read_dir(root.join("commands"))
         .map(|rd| {
@@ -937,7 +995,8 @@ fn plan_setup(args: &Args) -> Plan {
     .ok()
     .and_then(|m| m.get("version").and_then(J::str).map(String::from))
     .unwrap_or_default();
-    let (known, version) = plugin_state(&claude);
+    let (known, version) = plugin_state(&claude, PAIR);
+    let mut installed = version.is_some();
     match version {
         Some(v) if v == want => p.say("ok", "plugin", format!("{PLUGIN} {v}")),
         Some(v) => p.say("WARN", "plugin", format!("{PLUGIN} {v} is installed and the checkout has {want}: run `claude plugin marketplace update {MARKET}`, then `claude plugin update {PLUGIN}`, then /reload-plugins")),
@@ -947,15 +1006,36 @@ fn plan_setup(args: &Args) -> Plan {
                 p.say("FAIL", "plugin", format!("{} has no origin remote to add as the plugin's marketplace", fwd(&root)));
             } else {
                 let from = if known { format!("the known {MARKET} marketplace") } else { url.clone() };
+                installed = true;
                 p.act(
                     "create",
                     "plugin",
                     format!("claude plugin install {PLUGIN}, from {from} (git, no autoUpdate)"),
                     if known { "marketplace known".into() } else { "absent".into() },
-                    vec![Act::Plugin { add: (!known).then_some(url), install: true, remove: false }],
+                    vec![Act::Plugin { pair: PAIR, add: (!known).then_some(url), install: true, remove: false }],
                 );
             }
         }
+    }
+    // The pair before 0.13.0 goes once the new one is in (or planned in, the step above): its
+    // hooks would run beside the new plugin's.
+    let (old_known, old_version) = plugin_state(&claude, OLD_PAIR);
+    if installed && (old_known || old_version.is_some()) {
+        p.act(
+            "remove",
+            "plugin",
+            format!(
+                "claude plugin uninstall {}, then marketplace remove {} (renamed in 0.13.0)",
+                OLD_PAIR.0, OLD_PAIR.1
+            ),
+            old_version.unwrap_or_else(|| "marketplace known".into()),
+            vec![Act::Plugin {
+                pair: OLD_PAIR,
+                add: None,
+                install: false,
+                remove: true,
+            }],
+        );
     }
 
     // settings.json: our old hook block out, the plugin's knowledge_bin option in. Every other
@@ -1305,14 +1385,20 @@ fn plan_remove(args: &Args) -> Plan {
         }
     }
 
-    // After settings.json's own write, since `claude plugin uninstall` edits that file too.
-    let (known, version) = plugin_state(&claude);
-    if known || version.is_some() {
+    // After settings.json's own write, since `claude plugin uninstall` edits that file too. Both
+    // pairs: a boot not set up since 0.13.0 still has the old one.
+    let mut none = true;
+    for pair @ (plugin, market) in [PAIR, OLD_PAIR] {
+        let (known, version) = plugin_state(&claude, pair);
+        if !known && version.is_none() {
+            continue;
+        }
+        none = false;
         let what = match &version {
             Some(v) => {
-                format!("claude plugin uninstall {PLUGIN} ({v}), then marketplace remove {MARKET}")
+                format!("claude plugin uninstall {plugin} ({v}), then marketplace remove {market}")
             }
-            None => format!("claude plugin marketplace remove {MARKET}"),
+            None => format!("claude plugin marketplace remove {market}"),
         };
         p.act(
             "remove",
@@ -1320,12 +1406,14 @@ fn plan_remove(args: &Args) -> Plan {
             what,
             version.unwrap_or_else(|| "marketplace known".into()),
             vec![Act::Plugin {
+                pair,
                 add: None,
                 install: false,
                 remove: true,
             }],
         );
-    } else {
+    }
+    if none {
         p.say("ok", "plugin", "not installed");
     }
 
@@ -1366,10 +1454,16 @@ fn plan_remove(args: &Args) -> Plan {
     }
 
     match &root {
-        None => p.say("info", "link", "no knowledge-skeleton checkout found, so no link is known to be ours: pass --skeleton <checkout>"),
+        None => p.say("info", "link", "no knowledge checkout found, so no link is known to be ours: pass --skeleton <checkout>"),
         Some(root) => {
             let inside = |path: &Path| real(path).is_some_and(|r| real(root).is_some_and(|root| r.starts_with(root)));
-            let mut paths = vec![claude.join("hooks"), claude.join("skills").join("brain"), agents_brain()];
+            let mut paths = vec![
+                claude.join("hooks"),
+                claude.join("skills").join("brain"),
+                claude.join("skills").join("knowledge"),
+                agents_skill("brain"),
+                agents_skill("knowledge"),
+            ];
             let mut cmds: Vec<PathBuf> = fs::read_dir(claude.join("commands")).map(|rd| rd.flatten().map(|e| e.path()).collect()).unwrap_or_default();
             cmds.sort();
             paths.extend(cmds);
@@ -1524,7 +1618,7 @@ fn exec(a: &Act) -> Result<(), String> {
             // An identity is the user's to set; without one the vault stays uncommitted and says so.
             if !git_get(vault, "user.email").is_empty() {
                 checked(state::git(vault, &["add", "-A"], GIT), "git add")?;
-                let subject = format!("chore: new vault from knowledge-skeleton {version}");
+                let subject = format!("chore: new vault from knowledge {version}");
                 let body = format!(
                     "Copied from the skeleton's template/ by knowledge setup. Fill the FILL: placeholders in {} next.",
                     state::META
@@ -1551,6 +1645,7 @@ fn exec(a: &Act) -> Result<(), String> {
             backup: backup.clone(),
         }),
         Act::Plugin {
+            pair: pair @ (plugin, market),
             add,
             install,
             remove,
@@ -1568,18 +1663,21 @@ fn exec(a: &Act) -> Result<(), String> {
             }
             if *install {
                 run(
-                    &["plugin", "install", PLUGIN, "--scope", "user"],
+                    &["plugin", "install", plugin, "--scope", "user"],
                     "claude plugin install",
                 )?;
             }
             if *remove {
-                if plugin_state(&state::home().join(".claude")).1.is_some() {
-                    run(&["plugin", "uninstall", PLUGIN], "claude plugin uninstall")?;
+                let (known, version) = plugin_state(&state::home().join(".claude"), *pair);
+                if version.is_some() {
+                    run(&["plugin", "uninstall", plugin], "claude plugin uninstall")?;
                 }
-                run(
-                    &["plugin", "marketplace", "remove", MARKET],
-                    "claude plugin marketplace remove",
-                )?;
+                if known {
+                    run(
+                        &["plugin", "marketplace", "remove", market],
+                        "claude plugin marketplace remove",
+                    )?;
+                }
             }
             Ok(())
         }
@@ -1697,10 +1795,14 @@ fn table(text: &str, head: &str) -> Option<String> {
     )
 }
 
-/// One of our hooks' trust tables: `[hooks.state."knowledge@knowledge-skeleton:<event>:i:j"]`.
+/// One of our hooks' trust tables: `[hooks.state."knowledge@knowledge:<event>:i:j"]`, or one the
+/// plugin left under its id before 0.13.0.
 fn ours_trusted(line: &str) -> bool {
     let l = line.trim_start();
-    l.starts_with("[hooks.state.") && l.contains(&format!("{PLUGIN}:"))
+    l.starts_with("[hooks.state.")
+        && [PLUGIN, OLD_PAIR.0]
+            .iter()
+            .any(|id| l.contains(&format!("\"{id}:")))
 }
 
 /// config.toml without our trust tables, each header with its body; every other byte kept.
@@ -1731,12 +1833,12 @@ struct CodexState {
     trusted: usize,
 }
 
-fn codex_state(codex: &Path) -> CodexState {
+fn codex_state(codex: &Path, (plugin, market): Pair) -> CodexState {
     let text = state::read(&codex.join("config.toml"));
     let has = |head: String| text.lines().any(|l| l.trim() == head);
-    let (name, _) = PLUGIN.split_once('@').unwrap_or((PLUGIN, ""));
-    let versions = if has(format!("[plugins.\"{PLUGIN}\"]")) {
-        let cache = codex.join("plugins").join("cache").join(MARKET).join(name);
+    let (name, _) = plugin.split_once('@').unwrap_or((plugin, ""));
+    let versions = if has(format!("[plugins.\"{plugin}\"]")) {
+        let cache = codex.join("plugins").join("cache").join(market).join(name);
         fs::read_dir(cache)
             .map(|rd| {
                 rd.flatten()
@@ -1749,7 +1851,7 @@ fn codex_state(codex: &Path) -> CodexState {
         Vec::new()
     };
     CodexState {
-        known: has(format!("[marketplaces.{MARKET}]")),
+        known: has(format!("[marketplaces.{market}]")),
         versions,
         mcp: table(&text, "[mcp_servers.graphify]"),
         retrieval: table(&text, "[mcp_servers.knowledge]"),
@@ -1824,7 +1926,7 @@ fn codex_hooks() -> Option<(usize, usize)> {
 /// The doctor's `codex-trust`: None when the plugin is not installed, else what Codex answered
 /// ([`codex_hooks`]), itself None when it did not.
 pub fn codex_trust() -> Option<Option<(usize, usize)>> {
-    let st = codex_state(&state::home().join(".codex"));
+    let st = codex_state(&state::home().join(".codex"), PAIR);
     (!st.versions.is_empty()).then(codex_hooks)
 }
 
@@ -1862,7 +1964,7 @@ fn plan_codex(args: &Args, at: Option<&Place>) -> Plan {
         p.say(
             "FAIL",
             "skeleton",
-            "no knowledge-skeleton checkout found: pass --skeleton <checkout>",
+            "no knowledge checkout found: pass --skeleton <checkout>",
         );
         return p;
     };
@@ -1878,7 +1980,7 @@ fn plan_codex(args: &Args, at: Option<&Place>) -> Plan {
 
     // The plugin. A local marketplace has no upgrade: `plugin add` again copies the new version,
     // and Codex then asks for the changed hooks to be reviewed again.
-    let st = codex_state(&codex);
+    let st = codex_state(&codex, PAIR);
     let review = "Open the Codex CLI and review the plugin's hooks (it asks, or /hooks): unreviewed hooks never run, and the ChatGPT app never asks";
     if st.versions.contains(&want) {
         p.say("ok", "plugin", format!("{PLUGIN} {want}"));
@@ -1913,6 +2015,38 @@ fn plan_codex(args: &Args, at: Option<&Place>) -> Plan {
         };
         p.act(status, "plugin", detail, seen_file(&config), acts);
         p.next.push(review.into());
+    }
+
+    // The pair before 0.13.0 goes after the new one's step, so the hooks never go missing. Its
+    // trust tables match no installed plugin and stay inert; `--remove` clears them with ours.
+    let old = codex_state(&codex, OLD_PAIR);
+    let mut acts = Vec::new();
+    if !old.versions.is_empty() {
+        acts.push(Act::Codex(vec![
+            "plugin".into(),
+            "remove".into(),
+            OLD_PAIR.0.into(),
+        ]));
+    }
+    if old.known {
+        acts.push(Act::Codex(vec![
+            "plugin".into(),
+            "marketplace".into(),
+            "remove".into(),
+            OLD_PAIR.1.into(),
+        ]));
+    }
+    if !acts.is_empty() {
+        p.act(
+            "remove",
+            "plugin",
+            format!(
+                "codex plugin remove {}, then marketplace remove {} (renamed in 0.13.0)",
+                OLD_PAIR.0, OLD_PAIR.1
+            ),
+            seen_file(&config),
+            acts,
+        );
     }
 
     // Trust: as Codex judges it, never written. Only for the version already installed: an update
@@ -2015,7 +2149,7 @@ fn plan_codex_remove() -> Plan {
     let mut p = Plan::default();
     let codex = state::home().join(".codex");
     let config = codex.join("config.toml");
-    let st = codex_state(&codex);
+    let st = codex_state(&codex, PAIR);
 
     block_remove(&mut p, "codex");
 
@@ -2042,32 +2176,39 @@ fn plan_codex_remove() -> Plan {
         None => p.say("ok", "knowledge MCP", "not registered"),
     }
 
-    let mut acts = Vec::new();
-    if !st.versions.is_empty() {
-        acts.push(Act::Codex(vec![
-            "plugin".into(),
-            "remove".into(),
-            PLUGIN.into(),
-        ]));
+    // Both pairs: a boot not set up since 0.13.0 still has the old one.
+    let mut none = true;
+    for pair @ (plugin, market) in [PAIR, OLD_PAIR] {
+        let s = codex_state(&codex, pair);
+        let mut acts = Vec::new();
+        if !s.versions.is_empty() {
+            acts.push(Act::Codex(vec![
+                "plugin".into(),
+                "remove".into(),
+                plugin.into(),
+            ]));
+        }
+        if s.known {
+            acts.push(Act::Codex(vec![
+                "plugin".into(),
+                "marketplace".into(),
+                "remove".into(),
+                market.into(),
+            ]));
+        }
+        if !acts.is_empty() {
+            none = false;
+            p.act(
+                "remove",
+                "plugin",
+                format!("codex plugin remove {plugin}, then marketplace remove {market}"),
+                seen_file(&config),
+                acts,
+            );
+        }
     }
-    if st.known {
-        acts.push(Act::Codex(vec![
-            "plugin".into(),
-            "marketplace".into(),
-            "remove".into(),
-            MARKET.into(),
-        ]));
-    }
-    if acts.is_empty() {
+    if none {
         p.say("ok", "plugin", "not installed");
-    } else {
-        p.act(
-            "remove",
-            "plugin",
-            format!("codex plugin remove {PLUGIN}, then marketplace remove {MARKET}"),
-            seen_file(&config),
-            acts,
-        );
     }
 
     if st.trusted == 0 {
@@ -2258,9 +2399,10 @@ fn opencode_plugin() -> PathBuf {
     state::home().join(".config/opencode/plugins/knowledge.ts")
 }
 
-/// Ours when it is the skeleton's shim, at any version.
+/// Ours when it is the engine's shim, at any version: the header since 0.13.0, or the one before.
 fn opencode_ours(text: &str) -> bool {
-    text.starts_with("// knowledge-skeleton's opencode plugin")
+    text.starts_with("// knowledge's opencode plugin")
+        || text.starts_with("// knowledge-skeleton's opencode plugin")
 }
 
 /// `setup --harness opencode`: the plugin file and the AGENTS.md block. Retrieval is the shell's

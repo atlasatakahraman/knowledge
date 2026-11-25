@@ -160,7 +160,7 @@ fn records_sync(cfg: &Config) -> (Option<String>, i64) {
     let pulled = r.get("pulled").and_then(J::i64).unwrap_or(0);
     records::note_result(&r);
     if r.get("failed").is_some() {
-        return (None, pulled); // the `!! BRAIN RECORDS FAILING` line carries it
+        return (None, pulled); // the `!! KNOWLEDGE RECORDS FAILING` line carries it
     }
     let truthy = |k: &str| match r.get(k) {
         Some(J::Bool(b)) => *b,
@@ -243,19 +243,40 @@ fn rules_restore(cfg: &Config) -> Option<String> {
     ))
 }
 
-/// The skeleton checkout the hooks run from: `~/.claude/hooks` is a link into it.
-pub fn skeleton_root() -> PathBuf {
-    let real = fs::canonicalize(state::hooks_dir()).unwrap_or_else(|_| state::hooks_dir());
-    let s = real.to_string_lossy();
-    // Windows canonical paths carry the verbatim prefix; node's realpath does not.
-    let plain = PathBuf::from(s.strip_prefix(r"\\?\").unwrap_or(&s));
-    plain.parent().map(Path::to_path_buf).unwrap_or(plain)
+/// The engine checkout, as `setup` finds it (S9.7: no `~/.claude/hooks` link points into it now).
+pub fn skeleton_root(cfg: &Config) -> Option<PathBuf> {
+    crate::setup::checkout(&cfg.dev)
+}
+
+/// The engine's version: `Cargo.toml`'s `[package] version`. package.json held it until S9.7.
+pub fn engine_version(root: &Path) -> Option<String> {
+    package_field(root, "version")
+}
+
+/// A `key = "value"` line of `Cargo.toml`'s `[package]` table. A line scan, not a TOML parser: the
+/// manifest is ours and keeps these two keys on one line each.
+pub fn package_field(root: &Path, key: &str) -> Option<String> {
+    let text = state::read(&root.join("Cargo.toml"));
+    let mut in_package = false;
+    for line in text.lines().map(str::trim) {
+        if line.starts_with('[') {
+            in_package = line == "[package]";
+        } else if in_package {
+            let Some((k, v)) = line.split_once('=') else {
+                continue;
+            };
+            if k.trim() == key {
+                return Some(v.trim().trim_matches('"').to_string()).filter(|v| !v.is_empty());
+            }
+        }
+    }
+    None
 }
 
 /// Fast-forward the engine the hooks run from, so both machines run the skeleton the vault pins.
 /// A detached HEAD is a checkout pinned on purpose (a tag): left alone, silent.
 fn skeleton_pull(cfg: &Config) -> Option<String> {
-    let root = skeleton_root();
+    let root = skeleton_root(cfg)?;
     if !state::git(
         &root,
         &["symbolic-ref", "-q", "HEAD"],
@@ -296,7 +317,7 @@ fn skeleton_pull(cfg: &Config) -> Option<String> {
                 if n == 1 { "" } else { "s" }
             );
             if !hooks.out().is_empty() {
-                line.push_str(" The Claude plugin changed: run `claude plugin marketplace update knowledge-skeleton`, then `claude plugin update knowledge@knowledge-skeleton`, then /reload-plugins (an update is never automatic, K14).");
+                line.push_str(" The Claude plugin changed: run `claude plugin marketplace update knowledge`, then `claude plugin update knowledge@knowledge`, then /reload-plugins (an update is never automatic, K14).");
             }
             Some(line)
         }
@@ -335,8 +356,8 @@ pub fn json_version(file: &Path) -> Option<String> {
 
 /// One line when the running skeleton is not the version the vault pins, naming which side moves.
 fn pin_check(cfg: &Config) -> Option<String> {
-    let root = skeleton_root();
-    let version = json_version(&root.join("package.json")).filter(|v| !v.is_empty())?;
+    let root = skeleton_root(cfg)?;
+    let version = engine_version(&root)?;
     let pin_file = cfg.vault.join(".skeleton.json");
     let pin = json_version(&pin_file).filter(|v| !v.is_empty())?;
     match compare_versions(&version, &pin) {
@@ -681,7 +702,7 @@ pub fn hook(dry: bool, instructions: Option<(&str, Form)>) -> Option<String> {
         .count();
     let decisions = (pending > 0).then(|| {
         format!(
-            "{pending} captured decision{} not yet in {DECISIONS}/ — promote with /brain new decision --ledger",
+            "{pending} captured decision{} not yet in {DECISIONS}/ — promote with /knowledge new decision --ledger",
             if pending == 1 { "" } else { "s" }
         )
     });
@@ -695,7 +716,7 @@ pub fn hook(dry: bool, instructions: Option<(&str, Form)>) -> Option<String> {
             let at = f.get("at").and_then(J::i64).unwrap_or(0);
             let reason = f.get("reason").and_then(J::str).unwrap_or("undefined");
             format!(
-                "!! BRAIN {} FAILING since {}Z: {reason}. Tell the user in the first reply; a `claude -p` auth failure needs them to run `claude` and /login.",
+                "!! KNOWLEDGE {} FAILING since {}Z: {reason}. Tell the user in the first reply; a `claude -p` auth failure needs them to run `claude` and /login.",
                 tag.to_uppercase(),
                 &state::iso(at)[..16]
             )

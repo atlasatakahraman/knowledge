@@ -1,5 +1,5 @@
 //! `knowledge ledger list | promote <src> <path|not-a-decision>` (Stage 9): the decision ledger's
-//! reader and its promote, ported from brain-ledger.mjs so the `/brain` skill runs no bun. `add` is
+//! reader and its promote, ported from brain-ledger.mjs so the `/knowledge` skill runs no bun. `add` is
 //! `knowledge note decision`. `list` prints what the bun tool printed, byte for byte.
 use crate::config;
 use crate::state::{self, J};

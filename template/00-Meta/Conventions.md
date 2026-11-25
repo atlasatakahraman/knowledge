@@ -9,7 +9,7 @@ status: active
 
 # Conventions
 
-The vault schema. The hooks, the `/brain` skill and `knowledge doctor` all assume it.
+The vault schema. The hooks, the `/knowledge` skill and `knowledge doctor` all assume it.
 
 ## Frontmatter
 
@@ -74,7 +74,7 @@ body (which the commit recorder copies into the vault verbatim), goes in backtic
 
 Every note is at most **2 hops** from [[00-MOC-Root]]; a record at most 3. the doctor's
 `reach` check enforces it. A new note goes into its folder's MOC when it is written:
-`brain-compile` does this for the notes it creates, under an `Unsorted (brain-compile)` heading.
+`knowledge compile` does this for the notes it creates, under an `Unsorted (brain-compile)` heading.
 
 ## Note shape
 
@@ -85,7 +85,7 @@ licence, its `checkout:` pointer, and a **"Known gaps — don't chase these"** s
 stops an agent re-investigating something already decided.
 
 `checkout: <Remote-Name>` and `docs: <Remote-Name>/docs` are relative to `devRoot` in
-`config.json`, so one note resolves on every machine. `brain-verify` fails on an absolute pointer
+`config.json`, so one note resolves on every machine. the doctor's `pointers` check fails on an absolute pointer
 and on one into a cloned checkout that does not exist; a repo this machine never cloned is listed,
 not failed.
 
@@ -113,7 +113,7 @@ Path-based ignores go stale on a rename, silently: Obsidian's `userIgnoreFilters
 matching (the doctor's `ignores` check names a stale one). After renaming a repo:
 
 1. Rename its `10-Repos/<Remote-Name>/` folder and folder note, and `60-Decisions/Repos/<Remote-Name>/`,
-   to the remote's exact casing; update the `checkout:` pointer (`brain-verify` fails on a dead one).
+   to the remote's exact casing; update the `checkout:` pointer (the doctor's `pointers` check fails on a dead one).
 2. The code map is kept per checkout folder (`code/<Remote-Name>.db` in the knowledge home): the
    first `knowledge find <symbol> --code` under the new name builds its map. Delete the old name's
    file.

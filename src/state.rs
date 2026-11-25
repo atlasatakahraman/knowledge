@@ -121,7 +121,7 @@ pub fn append_note(cfg: &Config, file: &Path, ms: i64, block: &str) -> std::io::
         fs::write(
             file,
             format!(
-                "---\ntype: session\nproject: knowledge\ntags: [session, log]\ncreated: {stamp}\nupdated: {stamp}\nstatus: active\n---\n\n# {stamp}\n\nAuto-captured. Write the real log with `/brain-log`.\n\n## Sessions\n\n"
+                "---\ntype: session\nproject: knowledge\ntags: [session, log]\ncreated: {stamp}\nupdated: {stamp}\nstatus: active\n---\n\n# {stamp}\n\nAuto-captured. Write the real log with `/knowledge-log`.\n\n## Sessions\n\n"
             ),
         )?;
     }
@@ -722,9 +722,9 @@ pub fn claim(lock: &Path, stale_ms: i64) -> bool {
 // ---- failure records -----------------------------------------------------------------------------
 
 /// Why the last background step failed, by tag; the session start prints each as
-/// `!! BRAIN <TAG> FAILING`. In the temp folder, as brain-lib keeps it.
+/// `!! KNOWLEDGE <TAG> FAILING`. In the temp folder, as brain-lib keeps it.
 fn failures_file() -> PathBuf {
-    std::env::temp_dir().join("brain-claude-failures.json")
+    std::env::temp_dir().join("knowledge-failures.json")
 }
 
 pub fn failures() -> Vec<(String, J)> {

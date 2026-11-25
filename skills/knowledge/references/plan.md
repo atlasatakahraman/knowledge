@@ -1,4 +1,4 @@
-# brain: plan
+# knowledge: plan
 
 **Delegates.** Plan mode already writes plans to `~/.claude/plans/*.md`. Harvest those — do not
 re-author from memory.

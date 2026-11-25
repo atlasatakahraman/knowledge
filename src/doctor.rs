@@ -1,5 +1,5 @@
 //! `knowledge doctor --only portable`: the traps that break a vault cloned onto the other boot
-//! (D16). The rest of the doctor is bun's until Stage 6; brain-doctor runs this as its `portable` check.
+//! (D16), run by the doctor as its `portable` check.
 use crate::config;
 use crate::vault;
 use crate::{Args, Fault, emit};

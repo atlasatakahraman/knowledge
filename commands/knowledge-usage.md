@@ -1,5 +1,5 @@
 ---
-description: Write the token/model/cost digest for this month into the brain's 50-Ops/Usage/
+description: Write the token/model/cost digest for this month into the vault's 50-Ops/Usage/
 ---
 
 Run the usage digest and write it into the vault:

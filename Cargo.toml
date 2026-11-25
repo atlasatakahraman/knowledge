@@ -5,7 +5,7 @@ edition = "2024"
 rust-version = "1.100"
 license = "MIT"
 description = "The knowledge engine: one binary that indexes, searches and links an Obsidian vault for coding agents"
-repository = "https://github.com/atlasatakahraman/knowledge-skeleton"
+repository = "https://github.com/atlasatakahraman/knowledge"
 publish = false
 
 # Each crate is the owner's pick (spec D22, D23; Stage 4, 2026-11-22: ureq with rustls on ring and

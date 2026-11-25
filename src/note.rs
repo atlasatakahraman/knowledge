@@ -1,7 +1,7 @@
 //! `knowledge note decision|log <text>` (spec T1): the memory write for a harness that has a shell
 //! and no hooks to capture with, and the verb behind the MCP server's `note` tool.
 //!   decision  one line in 50-Ops/decisions.jsonl, in the shape brain-ledger's `add` writes (tier 1,
-//!             `src: manual:<ms>`), so the session start counts it and `/brain new decision
+//!             `src: manual:<ms>`), so the session start counts it and `/knowledge new decision
 //!             --ledger` promotes it like a captured one.
 //!   log       one bullet in today's session note (the rollover's day), under its own heading as a
 //!             flush writes one, so it never reads as part of the section above it.

@@ -1,4 +1,4 @@
-# brain: docs
+# knowledge: docs
 
 A reusable knowledge note. Not repo-specific — anything tied to one repo belongs in that repo's
 `docs/`, not here.
@@ -6,7 +6,7 @@ A reusable knowledge note. Not repo-specific — anything tied to one repo belon
 ## new
 
 1. **Category** → `20-Knowledge/{Rust,Tauri,Case-Studies,Web,Tooling}/`. If none fit, ask before
-   inventing a new folder — that is `/brain new structure`.
+   inventing a new folder — that is `/knowledge new structure`.
 2. **Filename** kebab-case, `.md`. Existing numbered notes keep their prefixes.
 3. **Frontmatter:**
 

@@ -1,6 +1,6 @@
 {
-  "name": "knowledge-skeleton",
-  "interface": { "displayName": "knowledge-skeleton" },
+  "name": "knowledge",
+  "interface": { "displayName": "knowledge" },
   "plugins": [
     {
       "name": "knowledge",

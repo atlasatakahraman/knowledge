@@ -16,7 +16,7 @@ in a folder named for its GitHub remote and each with its own git history.
 whose folder note `<Remote-Name>/<Remote-Name>.md` carries what the repo is, its licence, its
 known gaps and a `checkout:` pointer in frontmatter. Repo documentation is never copied here: a
 repo's own `docs/` is its wiki page, and these pages link to it by path. Add one with
-`/brain new repo`.
+`/knowledge new repo`.
 
 ## Repositories
 

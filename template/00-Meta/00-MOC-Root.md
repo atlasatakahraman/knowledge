@@ -41,9 +41,9 @@ in two hops, the vault has a gap: fix the gap, don't grep around it.
 
 | Command | Does |
 |---|---|
-| `/brain new <kind>` · `/brain edit <kind>` | structure · repo · docs · command · commit · task · hook · plan · decision |
-| `/brain-log` | Write today's session note |
-| `/brain-usage` | Token/model/cost digest into `50-Ops/Usage/` |
-| `/brain-commits` | Record every commit this month into `50-Ops/Commits/` |
-| `/brain-sync` | Rebuild graphs, re-index, prune phantom rows, verify links |
+| `/knowledge new <kind>` · `/knowledge edit <kind>` | structure · repo · docs · command · commit · task · hook · plan · decision |
+| `/knowledge-log` | Write today's session note |
+| `/knowledge-usage` | Token/model/cost digest into `50-Ops/Usage/` |
+| `/knowledge-commits` | Record every commit this month into `50-Ops/Commits/` |
+| `/knowledge-sync` | Rebuild graphs, re-index, prune phantom rows, verify links |
 | `knowledge doctor --pretty` | Zero-token health check |

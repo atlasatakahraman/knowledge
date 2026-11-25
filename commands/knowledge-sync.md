@@ -1,8 +1,8 @@
 ---
-description: Refresh the brain - re-index the vault and repo docs, verify links
+description: Refresh the knowledge indexes - re-index the vault and repo docs, verify links
 ---
 
-Bring the brain's indexes back in step with what is on disk. The vault and checkout roots come from this machine's config:
+Bring the knowledge indexes back in step with what is on disk. The vault and checkout roots come from this machine's config:
 
 ```bash
 VAULT=$(knowledge config vault); DEV=$(knowledge config devRoot)

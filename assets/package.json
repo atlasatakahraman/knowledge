@@ -1,0 +1,10 @@
+{
+  "name": "knowledge-assets",
+  "description": "Dev tooling for the README's images (build.ts): not part of the engine. Run `bun install --cwd assets` once.",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "opentype.js": "2.0.0"
+  }
+}
