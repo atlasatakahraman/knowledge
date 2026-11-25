@@ -151,13 +151,14 @@ fn sync_locked(cfg: &Config, vault: &Path) -> J {
         return with(res, "skipped", J::s("no upstream"));
     }
     // The pull's lock, not "records": a session-start pull fetching at the same moment moved
-    // origin/main under this fetch and failed "cannot lock ref" (2026-11-06).
+    // origin/main under this fetch and failed "cannot lock ref" (2026-11-06). An outside fetcher
+    // the lock cannot see is what `state::fetch`'s one retry covers.
     let name = vault
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_default();
     let Some(f) = state::with_lock(&format!("pull-{name}"), 60_000, || {
-        git(&["fetch", "--quiet"])
+        state::fetch(vault, Duration::from_secs(30))
     }) else {
         return with(res, "busy", J::Bool(true));
     };

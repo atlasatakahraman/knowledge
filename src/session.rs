@@ -122,7 +122,7 @@ fn ff_pull(cfg: &Config, cwd: &Path) -> Pull {
         let fresh = mtime_ms(&cwd.join(".git").join("FETCH_HEAD"))
             .is_some_and(|t| state::now_ms() - t < 10_000);
         if !fresh {
-            let f = git(&["fetch", "--quiet"]);
+            let f = state::fetch(cwd, Duration::from_secs(8));
             if !f.ok() {
                 return Pull::Failed(state::why(&f, false));
             }

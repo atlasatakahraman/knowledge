@@ -528,6 +528,18 @@ pub fn git(cwd: &Path, args: &[&str], timeout: Duration) -> Out {
     )
 }
 
+/// `git fetch --quiet`, retried once after a second when another process moved a remote ref under
+/// it ("cannot lock ref"). Our `pull-<name>` lock only sees our own processes: the desktop app's
+/// background fetch of the vault landed in the same second as a session start's (2026-11-25, Arch).
+pub fn fetch(cwd: &Path, timeout: Duration) -> Out {
+    let f = git(cwd, &["fetch", "--quiet"], timeout);
+    if f.ok() || !f.stderr.contains("cannot lock ref") {
+        return f;
+    }
+    std::thread::sleep(Duration::from_secs(1));
+    git(cwd, &["fetch", "--quiet"], timeout)
+}
+
 /// The first useful line of a failed child, colours stripped: what a failure record says.
 pub fn why(o: &Out, last: bool) -> String {
     let text = if !o.stderr.trim().is_empty() {
