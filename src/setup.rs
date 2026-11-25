@@ -1445,16 +1445,29 @@ fn plan_remove(args: &Args) -> Plan {
                 (false, true) => format!("{head}\n"),
                 (false, false) => format!("{head}\n\n{tail}"),
             };
+            // Nothing but our section: setup made the file, so the file goes, not an empty one
+            // left behind (S9.8, 2026-11-25).
+            let (why, act) = if next.trim().is_empty() {
+                (
+                    "only the imports section setup wrote, so the file goes",
+                    Act::Unlink(md.clone()),
+                )
+            } else {
+                (
+                    "the imports section setup wrote",
+                    Act::Write {
+                        path: md.clone(),
+                        text: next,
+                        backup: None,
+                    },
+                )
+            };
             p.act(
                 "remove",
                 "CLAUDE.md",
-                format!("{}: the imports section setup wrote", fwd(&md)),
+                format!("{}: {why}", fwd(&md)),
                 seen_file(&md),
-                vec![Act::Write {
-                    path: md.clone(),
-                    text: next,
-                    backup: None,
-                }],
+                vec![act],
             );
         }
         None if imports(&text)

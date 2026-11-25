@@ -9,11 +9,11 @@ Like the install, the plan writes nothing and the apply refuses if anything move
 plan for Claude Code alone (`--harness claude`), with the home folder shown as `~`:
 
 ```
-knowledge 0.13.1 remove plan: nothing is written
+knowledge 0.13.2 remove plan: nothing is written
 
   remove  settings.json    ~/.claude/settings.json: our 0 hooks and the plugin's option removed, every other hook kept (the old file kept as ~/.claude/settings.json.pre-skeleton-0588b9aa)
-  remove  plugin           claude plugin uninstall knowledge@knowledge (0.13.1), then marketplace remove knowledge
-  remove  CLAUDE.md        ~/.claude/CLAUDE.md: the imports section setup wrote
+  remove  plugin           claude plugin uninstall knowledge@knowledge (0.13.2), then marketplace remove knowledge
+  remove  CLAUDE.md        ~/.claude/CLAUDE.md: only the imports section setup wrote, so the file goes
   remove  link             ~/.claude/skills/knowledge
   remove  link             ~/.agents/skills/knowledge
   remove  link             ~/.claude/skills/knowledge-commits
@@ -33,7 +33,8 @@ plan 45483e7fe037b649
 ```
 
 It takes out the links, the Claude plugin, its marketplace and its option in `settings.json`
-(every other key and hook stays), the block `setup` wrote in `CLAUDE.md`, the githooks path (a
+(every other key and hook stays), the block `setup` wrote in `CLAUDE.md` (the file itself when
+nothing else is in it), the githooks path (a
 checkout's own comes back), and a graphify MCP entry an earlier `setup` registered.
 
 For each other harness found it takes out what [install.md](install.md) § Other harnesses added:
