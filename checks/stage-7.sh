@@ -267,9 +267,18 @@ else
   echo "SKIP  bun build of the opencode plugin: no bun on PATH"
 fi
 
-# setup --harness opencode: the plugin is a file, so the fixture HOME takes a real apply.
+# setup --harness opencode: the plugin is a file, so the fixture HOME takes a real apply. The plan
+# reads only `opencode --version`, so a stand-in answers it: the checks hold whatever opencode the
+# machine has (Arch had 1.16.2, 2026-11-25). `opencode` for Linux, `opencode.cmd` for PATHEXT.
+ocv() { mkdir -p "$TMP/oc$1" && printf '#!/bin/sh\necho %s\n' "$1" > "$TMP/oc$1/opencode" \
+  && printf '@echo %s\r\n' "$1" > "$TMP/oc$1/opencode.cmd" && chmod +x "$TMP/oc$1/opencode"; }
+ocv 1.16.2
+ocv 2.2.1
+check "opencode setup plan: a 1.x opencode FAILs, naming the upgrade" \
+  'PATH="$TMP/oc1.16.2:$PATH" k setup --harness opencode --plan 2>&1 | grep -q "FAIL    prerequisites    opencode 1.16.2 takes 1.x plugins, and the shim is 2.x.s: upgrade opencode"'
+PATH="$TMP/oc2.2.1:$PATH"
 OP="$HOME/.config/opencode/plugins/knowledge.ts"
-if command -v opencode >/dev/null 2>&1 && command -v knowledge >/dev/null 2>&1; then
+if command -v knowledge >/dev/null 2>&1; then
   out=$(k setup --harness opencode --plan 2>&1)
   check "opencode setup plan: creates the plugin and the AGENTS.md block, writes nothing" \
     'printf "%s" "$out" | grep -q "create  plugin .*knowledge.ts: the hooks shim, pinned to $VER" && printf "%s" "$out" | grep -q "create  AGENTS.md" && [ ! -e "$OP" ]'
@@ -278,7 +287,7 @@ if command -v opencode >/dev/null 2>&1 && command -v knowledge >/dev/null 2>&1; 
     'cmp -s "$OP" "$OTS" && grep -qF "$BEGIN" "$OPEN" && grep -q "^No block here.$" "$OPEN"'
   check "opencode setup plan again: nothing to change" 'k setup --harness opencode --plan 2>&1 | grep -q "^Nothing to change.$"'
 else
-  echo "SKIP  opencode setup apply: no opencode or knowledge on PATH"
+  echo "SKIP  opencode setup apply: no knowledge on PATH"
   mkdir -p "$(dirname "$OP")" && cp "$OTS" "$OP"
 fi
 out=$(k setup --harness opencode --remove --plan 2>&1)

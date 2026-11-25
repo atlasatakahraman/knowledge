@@ -2267,11 +2267,35 @@ fn opencode_ours(text: &str) -> bool {
 /// `knowledge find`: opencode has no sandbox between its shell and `~/.config/knowledge`.
 fn plan_opencode(at: Option<&Place>) -> Plan {
     let mut p = Plan::default();
-    if which("opencode").is_none() {
+    let Some(opencode) = which("opencode") else {
         p.say(
             "FAIL",
             "prerequisites",
             "opencode is not on PATH. Install opencode, then plan again",
+        );
+        return p;
+    };
+    // The shim has opencode 2's plugin shape (`export default { id, setup }`). opencode 1 refuses
+    // it at load ("must default export an object with server()"), which left the adapter dead
+    // behind an `ok` (Arch, 1.16.2, 2026-11-25). An unreadable version is not held against it.
+    let o = state::run(
+        &opencode,
+        &["--version"],
+        None,
+        None,
+        &[],
+        Duration::from_secs(10),
+    );
+    let v = o.out();
+    if v.split('.')
+        .next()
+        .and_then(|m| m.trim().parse::<u32>().ok())
+        .is_some_and(|m| m < 2)
+    {
+        p.say(
+            "FAIL",
+            "prerequisites",
+            format!("opencode {v} takes 1.x plugins, and the shim is 2.x's: upgrade opencode, then plan again"),
         );
         return p;
     }
