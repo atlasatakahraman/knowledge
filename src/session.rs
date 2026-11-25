@@ -94,19 +94,29 @@ fn machine(cfg: &Config, current: &str) -> String {
 
 enum Pull {
     Busy,
+    /// No upstream: a vault the person keeps on one machine has nothing to pull from.
+    Local,
     Skipped,
     Failed(String),
     Refused,
-    Done { n: i64, before: String },
+    Done {
+        n: i64,
+        before: String,
+    },
 }
 
 /// Fast-forward one checkout from its upstream, pull only. Fetch then merge under a lock: two
 /// sessions starting together each ran `git pull`, and the two fetches left FETCH_HEAD with two
 /// merge lines (2026-11-02). Uncommitted changes block only a pull that touches them
 /// (`state::incoming_overlaps`): a clean-tree precheck skipped every pull while two files nobody
-/// commits sat modified in the vault (2026-11-25).
+/// commits sat modified in the vault (2026-11-25). No upstream is not a failure: a vault kept
+/// local (install step 11 declined) said "VAULT PULL failed" every session (S9.8, 2026-11-25),
+/// and `records::sync` already skips it the same way.
 fn ff_pull(cfg: &Config, cwd: &Path) -> Pull {
     let git = |a: &[&str]| state::git(cwd, a, Duration::from_secs(8));
+    if !git(&["rev-parse", "--abbrev-ref", "@{u}"]).ok() {
+        return Pull::Local;
+    }
     let name = cwd
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
@@ -195,7 +205,7 @@ fn vault_pull(cfg: &Config, by_records: i64) -> Option<String> {
         state::reindex();
     }
     match r {
-        Pull::Busy => None,
+        Pull::Busy | Pull::Local => None,
         Pull::Skipped => Some("!! VAULT PULL skipped: incoming commits touch files with uncommitted changes. Commit or stash those, then `git pull --ff-only`.".into()),
         Pull::Failed(f) => Some(format!("!! VAULT PULL failed: {f}. Pull by hand before editing.")),
         Pull::Refused => Some(refused("pull-vault", "VAULT")),
@@ -287,7 +297,7 @@ fn skeleton_pull(cfg: &Config) -> Option<String> {
     }
     let shown = root.display();
     match ff_pull(cfg, &root) {
-        Pull::Busy => None,
+        Pull::Busy | Pull::Local => None,
         Pull::Skipped => Some(format!(
             "!! SKELETON PULL skipped: incoming commits touch files with uncommitted changes in {shown}."
         )),
@@ -441,7 +451,14 @@ fn flush_canary(cfg: &Config) -> Option<String> {
     let days = |ms: i64| (now - ms).div_euclid(DAY_MS);
     let mut logs = Vec::new();
     log_days(&cfg.vault.join(SESSIONS), &mut logs).ok()?;
-    let newest_note = logs.iter().filter_map(|d| local_noon(d)).max().unwrap_or(0);
+    // A new vault has no note yet: measured from when its sessions folder was made, not from
+    // 1970, or the first hooked session fires the canary (S9.8, 2026-11-25). One more stat.
+    let newest_note = logs
+        .iter()
+        .filter_map(|d| local_noon(d))
+        .max()
+        .or_else(|| mtime_ms(&cfg.vault.join(SESSIONS)))
+        .unwrap_or(0);
     // A transcript is created in its project's folder, so the newest folder mtime is the newest
     // session: one stat per project instead of one per transcript.
     let projects = state::home().join(".claude").join("projects");
