@@ -99,7 +99,7 @@ alone and pushes when every unpushed commit is a record, so another machine pull
 did not run. Your own commits never push on their own and hold the records push while unpushed. The
 next session start retries what a shutdown cut off; `.gitattributes` merges the records by union.
 
-The vault's `.skeleton.json` (`{"version":"0.12.0"}`) pins the skeleton version its notes are
+The vault's `.skeleton.json` (`{"version":"0.13.0"}`) pins the skeleton version its notes are
 written for; `setup` writes it into a new vault. When the running checkout is another version, the
 session opens with one line saying which side moves, and the doctor's `skeleton-version` fails. A
 vault without the file is not checked.

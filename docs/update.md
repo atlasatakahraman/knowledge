@@ -7,7 +7,7 @@ an updater that phones home is a telemetry surface, so the check runs only when 
 
 ```
 $ knowledge update --plan
-knowledge 0.12.0, x86_64-pc-windows-msvc
+knowledge 0.13.0, x86_64-pc-windows-msvc
 No release is published yet at https://github.com/atlasatakahraman/knowledge/releases.
 Update from the checkout instead:
   git -C ~/dev/knowledge pull --ff-only

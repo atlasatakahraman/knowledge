@@ -23,11 +23,11 @@ A plan on a new machine, for Claude Code alone (`--harness claude`), with the ho
 `~`:
 
 ```
-knowledge 0.12.0 setup plan: nothing is written
+knowledge 0.13.0 setup plan: nothing is written
 
   ok      prerequisites    git · claude · gitleaks
-  ok      skeleton         ~/dev/knowledge (0.12.0)
-  create  vault            ~/knowledge: new, from template/ (31 files), .skeleton.json pins 0.12.0, git init, a first commit when git knows your user.email
+  ok      skeleton         ~/dev/knowledge (0.13.0)
+  create  vault            ~/knowledge: new, from template/ (31 files), .skeleton.json pins 0.13.0, git init, a first commit when git knows your user.email
   change  core.fileMode    ~/knowledge/.git/config: false (Obsidian's mode-only rewrites would block the pull)
   change  hooksPath        ~/knowledge/.git/config: -> ~/dev/knowledge/githooks (secret scan, rules backstops)
   change  hooksPath        ~/dev/knowledge/.git/config: -> ~/dev/knowledge/githooks (secret scan, rules backstops)
@@ -38,7 +38,7 @@ knowledge 0.12.0 setup plan: nothing is written
   create  link             ~/.claude/commands/knowledge-log.md -> ~/dev/knowledge/commands/knowledge-log.md
   create  link             ~/.claude/commands/knowledge-sync.md -> ~/dev/knowledge/commands/knowledge-sync.md
   create  link             ~/.claude/commands/knowledge-usage.md -> ~/dev/knowledge/commands/knowledge-usage.md
-  ok      knowledge        ~/.cargo/bin/knowledge.exe (0.12.0)
+  ok      knowledge        ~/.cargo/bin/knowledge.exe (0.13.0)
   create  plugin           claude plugin install knowledge@knowledge, from https://github.com/atlasatakahraman/knowledge (git, no autoUpdate)
   create  settings.json    ~/.claude/settings.json: our 0 hooks out (the plugin carries them), knowledge_bin = ~/.cargo/bin/knowledge.exe
   create  CLAUDE.md        ~/.claude/CLAUDE.md: imports ~/knowledge/00-Meta/Identity.md, ~/knowledge/00-Meta/Hard-Rules.md
@@ -107,8 +107,8 @@ A new one from the template, or an existing clone (then skip to `core.fileMode`)
 
 ```bash
 cp -r <skeleton>/template <vault>
-echo '{"version":"0.12.0"}' > <vault>/.skeleton.json     # the version `knowledge --version` prints
-git -C <vault> init -b main && git -C <vault> add -A && git -C <vault> commit -m "chore: new vault from knowledge 0.12.0"
+echo '{"version":"0.13.0"}' > <vault>/.skeleton.json     # the version `knowledge --version` prints
+git -C <vault> init -b main && git -C <vault> add -A && git -C <vault> commit -m "chore: new vault from knowledge 0.13.0"
 git -C <vault> config core.fileMode false
 ```
 
@@ -205,7 +205,7 @@ and loads the skill once. Before 0.13.0 these were `~/.claude/hooks`, `skills/br
 ```
 $ cargo install --path <skeleton> --locked
 $ knowledge --version
-knowledge 0.12.0
+knowledge 0.13.0
 SQLite 3.54.1, FTS5 on
 ```
 

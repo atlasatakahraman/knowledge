@@ -32,9 +32,9 @@ every step by hand: [docs/install.md](docs/install.md).
 
    ```
    $ cargo install --path ~/dev/knowledge --locked
-      Installed package `knowledge v0.12.0 (~/dev/knowledge)` (executables `knowledge-code.exe`, `knowledge.exe`)
+      Installed package `knowledge v0.13.0 (~/dev/knowledge)` (executables `knowledge-code.exe`, `knowledge.exe`)
    $ knowledge --version
-   knowledge 0.12.0
+   knowledge 0.13.0
    SQLite 3.54.1, FTS5 on
    ```
 
@@ -44,7 +44,7 @@ every step by hand: [docs/install.md](docs/install.md).
 
    ```
    $ knowledge setup --plan
-   knowledge 0.12.0 setup plan: nothing is written
+   knowledge 0.13.0 setup plan: nothing is written
    ...
    14 change(s). Apply exactly these: knowledge setup --apply 1a5be68145b5b7a2 --harness claude
    plan 1a5be68145b5b7a2

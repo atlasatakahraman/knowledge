@@ -9,10 +9,10 @@ Like the install, the plan writes nothing and the apply refuses if anything move
 plan for Claude Code alone (`--harness claude`), with the home folder shown as `~`:
 
 ```
-knowledge 0.12.0 remove plan: nothing is written
+knowledge 0.13.0 remove plan: nothing is written
 
   remove  settings.json    ~/.claude/settings.json: our 0 hooks and the plugin's option removed, every other hook kept (the old file kept as ~/.claude/settings.json.pre-skeleton-9095b15d)
-  remove  plugin           claude plugin uninstall knowledge@knowledge (0.12.0), then marketplace remove knowledge
+  remove  plugin           claude plugin uninstall knowledge@knowledge (0.13.0), then marketplace remove knowledge
   remove  CLAUDE.md        ~/.claude/CLAUDE.md: the imports section setup wrote
   remove  link             ~/.claude/skills/knowledge
   remove  link             ~/.agents/skills/knowledge
