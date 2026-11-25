@@ -2278,6 +2278,9 @@ fn plan_opencode(at: Option<&Place>) -> Plan {
     // The shim has opencode 2's plugin shape (`export default { id, setup }`). opencode 1 refuses
     // it at load ("must default export an object with server()"), which left the adapter dead
     // behind an `ok` (Arch, 1.16.2, 2026-11-25). An unreadable version is not held against it.
+    // 1.x prints `1.19.6`, 2.x prints `opencode v2.4.1`, so the last word is read, `v` dropped.
+    // The FAIL names the path: npm's `opencode-ai` stops at 1.x, and on Arch bun's global copy
+    // shadowed pacman's 2.4.1 earlier on PATH (2026-11-25).
     let o = state::run(
         &opencode,
         &["--version"],
@@ -2287,15 +2290,20 @@ fn plan_opencode(at: Option<&Place>) -> Plan {
         Duration::from_secs(10),
     );
     let v = o.out();
+    let v = v.split_whitespace().last().unwrap_or("");
+    let v = v.strip_prefix('v').unwrap_or(v);
     if v.split('.')
         .next()
-        .and_then(|m| m.trim().parse::<u32>().ok())
+        .and_then(|m| m.parse::<u32>().ok())
         .is_some_and(|m| m < 2)
     {
         p.say(
             "FAIL",
             "prerequisites",
-            format!("opencode {v} takes 1.x plugins, and the shim is 2.x's: upgrade opencode, then plan again"),
+            format!(
+                "opencode {v} at {} takes 1.x plugins, and the shim is 2.x's: upgrade it, or remove it if a 2.x opencode sits later on PATH (npm's opencode-ai has no 2.x), then plan again",
+                opencode.display()
+            ),
         );
         return p;
     }

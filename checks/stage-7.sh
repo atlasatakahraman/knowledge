@@ -270,12 +270,16 @@ fi
 # setup --harness opencode: the plugin is a file, so the fixture HOME takes a real apply. The plan
 # reads only `opencode --version`, so a stand-in answers it: the checks hold whatever opencode the
 # machine has (Arch had 1.16.2, 2026-11-25). `opencode` for Linux, `opencode.cmd` for PATHEXT.
-ocv() { mkdir -p "$TMP/oc$1" && printf '#!/bin/sh\necho %s\n' "$1" > "$TMP/oc$1/opencode" \
-  && printf '@echo %s\r\n' "$1" > "$TMP/oc$1/opencode.cmd" && chmod +x "$TMP/oc$1/opencode"; }
+# The second argument is what `--version` prints: 2.x prints `opencode v2.4.1` (pacman, Arch).
+ocv() { mkdir -p "$TMP/oc$1" && printf '#!/bin/sh\necho %s\n' "${2:-$1}" > "$TMP/oc$1/opencode" \
+  && printf '@echo %s\r\n' "${2:-$1}" > "$TMP/oc$1/opencode.cmd" && chmod +x "$TMP/oc$1/opencode"; }
 ocv 1.16.2
 ocv 2.2.1
-check "opencode setup plan: a 1.x opencode FAILs, naming the upgrade" \
-  'PATH="$TMP/oc1.16.2:$PATH" k setup --harness opencode --plan 2>&1 | grep -q "FAIL    prerequisites    opencode 1.16.2 takes 1.x plugins, and the shim is 2.x.s: upgrade opencode"'
+ocv v1.9.0 "opencode v1.9.0"
+check "opencode setup plan: a 1.x opencode FAILs, naming its path and the upgrade" \
+  'PATH="$TMP/oc1.16.2:$PATH" k setup --harness opencode --plan 2>&1 | grep -q "FAIL    prerequisites    opencode 1.16.2 at .*oc1.16.2.opencode.* takes 1.x plugins, and the shim is 2.x.s: upgrade it"'
+check "opencode setup plan: a \`opencode v1.x\` version line is read too" \
+  'PATH="$TMP/ocv1.9.0:$PATH" k setup --harness opencode --plan 2>&1 | grep -q "FAIL    prerequisites    opencode 1.9.0 at "'
 PATH="$TMP/oc2.2.1:$PATH"
 OP="$HOME/.config/opencode/plugins/knowledge.ts"
 if command -v knowledge >/dev/null 2>&1; then
