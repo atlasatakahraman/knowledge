@@ -1,4 +1,6 @@
 ---
+name: knowledge-usage
+disable-model-invocation: true
 description: Write the token/model/cost digest for this month into the vault's 50-Ops/Usage/
 ---
 

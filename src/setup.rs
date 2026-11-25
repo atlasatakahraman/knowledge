@@ -273,32 +273,61 @@ fn agents_skill(name: &str) -> PathBuf {
     state::home().join(".agents").join("skills").join(name)
 }
 
-/// The links made before 0.13.0 (S9.7), each with the tail its target ended in: the hooks folder
-/// (the bun hooks), the /brain skill twice, the brain-* commands. One goes only when its target
-/// ends in that tail, so a link the user made is never taken. The tail, not the checkout, is
-/// matched: the checkout folder was renamed too, so the old target may be gone.
-fn old_links(claude: &Path) -> Vec<(PathBuf, String)> {
+/// The links made before 0.13.1, each with the tail its target ended in and why it went: the hooks
+/// folder (the bun hooks), the /brain skill twice and the brain-* commands (renamed in 0.13.0,
+/// S9.7), the knowledge-* commands (skills since 0.13.1: a file link on Windows needs Developer
+/// Mode, a folder's junction does not). One goes only when its target ends in that tail, so a
+/// link the user made is never taken. The tail, not the checkout, is matched: the checkout folder
+/// was renamed and the commands moved, so the old target may be gone.
+fn old_links(claude: &Path) -> Vec<(PathBuf, String, &'static str)> {
+    const RENAMED: &str = "renamed in 0.13.0";
     let mut v = vec![
-        (claude.join("hooks"), "/hooks".to_string()),
+        (claude.join("hooks"), "/hooks".to_string(), RENAMED),
         (
             claude.join("skills").join("brain"),
             "/skills/brain".to_string(),
+            RENAMED,
         ),
-        (agents_skill("brain"), "/skills/brain".to_string()),
+        (agents_skill("brain"), "/skills/brain".to_string(), RENAMED),
     ];
     let mut cmds: Vec<String> = fs::read_dir(claude.join("commands"))
         .map(|rd| {
             rd.flatten()
                 .map(|e| e.file_name().to_string_lossy().into_owned())
-                .filter(|f| f.starts_with("brain-") && f.ends_with(".md"))
+                .filter(|f| {
+                    (f.starts_with("brain-") || f.starts_with("knowledge-")) && f.ends_with(".md")
+                })
                 .collect()
         })
         .unwrap_or_default();
     cmds.sort();
-    v.extend(
-        cmds.into_iter()
-            .map(|f| (claude.join("commands").join(&f), format!("/commands/{f}"))),
-    );
+    v.extend(cmds.into_iter().map(|f| {
+        let why = if f.starts_with("brain-") {
+            RENAMED
+        } else {
+            "a skill since 0.13.1"
+        };
+        (
+            claude.join("commands").join(&f),
+            format!("/commands/{f}"),
+            why,
+        )
+    }));
+    v
+}
+
+/// Every skill in the checkout: each folder under `skills/` that holds a SKILL.md. Each links as
+/// a folder, a junction on Windows, which needs no privilege.
+pub fn skill_names(root: &Path) -> Vec<String> {
+    let mut v: Vec<String> = fs::read_dir(root.join("skills"))
+        .map(|rd| {
+            rd.flatten()
+                .filter(|e| e.path().join("SKILL.md").is_file())
+                .map(|e| e.file_name().to_string_lossy().into_owned())
+                .collect()
+        })
+        .unwrap_or_default();
+    v.sort();
     v
 }
 
@@ -888,8 +917,9 @@ fn plan_setup(args: &Args) -> Plan {
         );
     }
 
-    // The links before 0.13.0 go first: the hooks folder, /brain and brain-* (S9.7).
-    for (path, tail) in old_links(&claude) {
+    // The old links go first: the hooks folder, /brain and brain-* (S9.7), the knowledge-*
+    // commands (0.13.1).
+    for (path, tail, why) in old_links(&claude) {
         let seen = seen_link(&path);
         if seen
             .strip_prefix("link ")
@@ -898,44 +928,26 @@ fn plan_setup(args: &Args) -> Plan {
             p.act(
                 "remove",
                 "link",
-                format!("{}: renamed in 0.13.0", fwd(&path)),
+                format!("{}: {why}", fwd(&path)),
                 seen,
                 vec![Act::Unlink(path)],
             );
         }
     }
 
-    // Links into ~/.claude: the /knowledge skill and every knowledge-* command. And the skill
-    // again in ~/.agents/skills, the folder Codex, Gemini CLI, Cursor, opencode, Amp and Zed read
-    // (S7.6). opencode reads both folders and keeps one skill per name, so it loads once.
-    let mut links = vec![
-        (
-            root.join("skills").join("knowledge"),
-            claude.join("skills").join("knowledge"),
-            true,
-        ),
-        (
-            root.join("skills").join("knowledge"),
-            agents_skill("knowledge"),
-            true,
-        ),
-    ];
-    let mut cmds: Vec<String> = fs::read_dir(root.join("commands"))
-        .map(|rd| {
-            rd.flatten()
-                .map(|e| e.file_name().to_string_lossy().into_owned())
-                .filter(|f| f.ends_with(".md"))
-                .collect()
+    // Every skill links into ~/.claude/skills, and again into ~/.agents/skills, the folder Codex,
+    // Gemini CLI, Cursor, opencode, Amp and Zed read (S7.6). opencode reads both folders and keeps
+    // one skill per name, so each loads once.
+    let links: Vec<(PathBuf, PathBuf, bool)> = skill_names(&root)
+        .iter()
+        .flat_map(|n| {
+            let target = root.join("skills").join(n);
+            [
+                (target.clone(), claude.join("skills").join(n), true),
+                (target, agents_skill(n), true),
+            ]
         })
-        .unwrap_or_default();
-    cmds.sort();
-    links.extend(cmds.iter().map(|f| {
-        (
-            root.join("commands").join(f),
-            claude.join("commands").join(f),
-            false,
-        )
-    }));
+        .collect();
     for (target, path, dir) in links {
         if same(&path, &target) {
             p.say("ok", "link", fwd(&path));
@@ -1162,10 +1174,15 @@ fn plan_setup(args: &Args) -> Plan {
     p.next.push("knowledge rules list --json, then knowledge rules enable <pack> for each pack you want: the rules interview".into());
     if template {
         p.next.push(format!(
-            "fill the FILL: placeholders in {}, then start Claude Code in {}",
-            fwd(&vault.join(state::META)),
+            "fill the FILL: placeholders in {} (an agent installing for you asks about each one)",
+            fwd(&vault.join(state::META))
+        ));
+        p.next.push(format!(
+            "a private repo for the vault, if you want one: gh repo create knowledge-vault --private --source {} --remote origin --push",
             fwd(&vault)
         ));
+        p.next
+            .push(format!("then start Claude Code in {}", fwd(&vault)));
     }
     p
 }
@@ -1457,19 +1474,17 @@ fn plan_remove(args: &Args) -> Plan {
         None => p.say("info", "link", "no knowledge checkout found, so no link is known to be ours: pass --skeleton <checkout>"),
         Some(root) => {
             let inside = |path: &Path| real(path).is_some_and(|r| real(root).is_some_and(|root| r.starts_with(root)));
-            let mut paths = vec![
-                claude.join("hooks"),
-                claude.join("skills").join("brain"),
-                claude.join("skills").join("knowledge"),
-                agents_skill("brain"),
-                agents_skill("knowledge"),
-            ];
-            let mut cmds: Vec<PathBuf> = fs::read_dir(claude.join("commands")).map(|rd| rd.flatten().map(|e| e.path()).collect()).unwrap_or_default();
-            cmds.sort();
-            paths.extend(cmds);
-            for path in paths {
+            // A link of ours resolves into the checkout; an old one's target may be gone, so its
+            // tail is matched instead, as the plan does.
+            let mut paths: Vec<(PathBuf, Option<String>)> = old_links(&claude).into_iter().map(|(p, t, _)| (p, Some(t))).collect();
+            for n in skill_names(root) {
+                paths.push((claude.join("skills").join(&n), None));
+                paths.push((agents_skill(&n), None));
+            }
+            for (path, tail) in paths {
                 let seen = seen_link(&path);
-                if seen.starts_with("link ") && inside(&path) {
+                let old = tail.is_some_and(|tail| seen.strip_prefix("link ").is_some_and(|t| t.trim_end_matches('/').ends_with(&tail)));
+                if seen.starts_with("link ") && (inside(&path) || old) {
                     p.act("remove", "link", fwd(&path), seen, vec![Act::Unlink(path.clone())]);
                 }
             }

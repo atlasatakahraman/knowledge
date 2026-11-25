@@ -20,7 +20,7 @@ picked. Other harnesses run the same verbs (§ Other harnesses). What a hook sta
 is the same binary again, detached, so no hook starts a JavaScript runtime. The watermarks, locks
 and exports live in `state/` beside the config (`~/.config/knowledge/state`, or `$KNOWLEDGE_HOME/state`);
 the first run moves an older `~/.claude/hooks/.state` there. The `/knowledge` skill and the
-`knowledge-*` commands link into the checkout, and the doctor's `skeleton-version` check fails when they do not.
+slash-only `knowledge-*` skills link into the checkout, and the doctor's `skeleton-version` check fails when they do not.
 `.skeleton.json` at the vault root pins the skeleton version the vault is written for: the session
 start says so when the checkout is another version, and `skeleton-version` fails.
 

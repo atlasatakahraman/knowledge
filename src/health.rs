@@ -799,7 +799,7 @@ fn canonical(p: &Path) -> Option<PathBuf> {
     fs::canonicalize(p).ok()
 }
 
-/// The engine runs from one checkout: the /knowledge skill and every knowledge-* command resolve
+/// The engine runs from one checkout: the /knowledge skill and every knowledge-* skill resolve
 /// into it. A partial link runs new hooks with old instructions. Read-only, no fetch. A vault that
 /// pins a version in `.skeleton.json` fails on any other.
 fn check_skeleton_version(cfg: &Config) -> Result<Check, Fault> {
@@ -830,29 +830,11 @@ fn check_skeleton_version(cfg: &Config) -> Result<Check, Fault> {
     let inside = |link: PathBuf, target: PathBuf| {
         canonical(&link).is_some_and(|l| canonical(&target).is_some_and(|t| l == t))
     };
-    let mut unlinked = Vec::new();
-    if !inside(
-        claude.join("skills").join("knowledge"),
-        rootp.join("skills").join("knowledge"),
-    ) {
-        unlinked.push("skills/knowledge".to_string());
-    }
-    let mut commands: Vec<String> = fs::read_dir(rootp.join("commands"))
-        .map(|rd| {
-            rd.flatten()
-                .map(|e| e.file_name().to_string_lossy().into_owned())
-                .collect()
-        })
-        .unwrap_or_default();
-    commands.sort();
-    for f in commands.iter().filter(|f| f.ends_with(".md")) {
-        if !inside(
-            claude.join("commands").join(f),
-            rootp.join("commands").join(f),
-        ) {
-            unlinked.push(format!("commands/{f}"));
-        }
-    }
+    let unlinked: Vec<String> = crate::setup::skill_names(&rootp)
+        .into_iter()
+        .filter(|n| !inside(claude.join("skills").join(n), rootp.join("skills").join(n)))
+        .map(|n| format!("skills/{n}"))
+        .collect();
     let version = session::engine_version(&rootp);
     let is_skeleton = session::package_field(&rootp, "name").as_deref() == Some("knowledge");
     let pin_file = cfg.vault.join(".skeleton.json");

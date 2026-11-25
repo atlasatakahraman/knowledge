@@ -69,7 +69,7 @@ unset KNOWLEDGE_HOME
 export HOME="$TMP/fresh" USERPROFILE="$TMP/fresh"
 SK="$TMP/sk"
 mkdir -p "$SK" "$HOME/.claude/plugins"
-for d in commands skills githooks template claude; do cp -R "$ROOT/$d" "$SK/$d"; done
+for d in skills githooks template claude; do cp -R "$ROOT/$d" "$SK/$d"; done
 cp "$ROOT/Cargo.toml" "$SK/"
 git -C "$SK" init -q
 ver=$(sed -n 's/^ *"version": "\(.*\)",$/\1/p' "$ROOT/claude/.claude-plugin/plugin.json")
@@ -124,8 +124,8 @@ check "the docs are one per task" \
 # bun, so they name it. The rule is for the docs a user installs from.
 BUN_DOCS=""
 for f in $DOCS; do case "$f" in */docs/architecture.md|*/docs/benchmark.md) ;; *) BUN_DOCS="$BUN_DOCS $f" ;; esac; done
-bun=$(grep -rnE '(^|[^[:alnum:]_./-])bunx?( |`|$)' $BUN_DOCS "$ROOT/skills" "$ROOT/commands" "$ROOT/template" 2>/dev/null)
-check "no user doc, skill, command or template note names a bun command" '[ -z "$bun" ]'
+bun=$(grep -rnE '(^|[^[:alnum:]_./-])bunx?( |`|$)' $BUN_DOCS "$ROOT/skills" "$ROOT/template" 2>/dev/null)
+check "no user doc, skill or template note names a bun command" '[ -z "$bun" ]'
 [ -z "$bun" ] || printf '%s\n' "$bun" | sed 's/^/      /'
 # Each translated README mirrors README.md: its code blocks verbatim, and the same link and image
 # targets once its own -<lang>- image names are read as README.md's. The language row, the
@@ -150,7 +150,7 @@ for lang in tr es pt fr de; do
 done
 check "each translated README keeps README.md's code blocks, links and images" '[ -z "$tr_bad" ]'
 [ -z "$tr_bad" ] || printf '      %s\n' $tr_bad
-old=$(grep -rln 'INSTALL\.md' $DOCS "$ROOT/src" "$ROOT/template" "$ROOT/skills" "$ROOT/commands" 2>/dev/null)
+old=$(grep -rln 'INSTALL\.md' $DOCS "$ROOT/src" "$ROOT/template" "$ROOT/skills" 2>/dev/null)
 check "nothing points at INSTALL.md" '[ -z "$old" ]'
 export KNOWLEDGE_HOME="$TMP/uhome"; mkdir -p "$KNOWLEDGE_HOME"
 up=$(k update --plan 2>&1); ucode=$?

@@ -1,4 +1,6 @@
 ---
+name: knowledge-log
+disable-model-invocation: true
 description: Write today's session note into the vault's 30-Sessions/
 ---
 

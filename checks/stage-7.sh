@@ -376,8 +376,8 @@ check "codex and opencode blocks carry no note lines (their hooks capture the se
 out=$(k setup --harness generic --instructions "$(native "$GEN")" --remove --plan 2>&1)
 k setup --harness generic --instructions "$(native "$GEN")" --remove --apply "$(printf "%s" "$out" | sed -n "s/^plan //p")" >/dev/null 2>&1
 check "generic remove: the block gone, the owner's text kept" '[ "$(cat "$GEN")" = "My own line." ]'
-check "no skill or command names ~/.claude/hooks or skeleton-config.mjs" \
-  '! grep -rqE "claude/hooks|skeleton-config" "$ROOT/skills" "$ROOT/commands"'
+check "no skill names ~/.claude/hooks or skeleton-config.mjs" \
+  '! grep -rqE "claude/hooks|skeleton-config" "$ROOT/skills"'
 
 # --- S7.7: setup across harnesses ----------------------------------------------------------------
 # A fresh fixture HOME holding Claude Code, a Codex folder with no codex on PATH, opencode (an empty
@@ -398,7 +398,7 @@ printf '# My opencode rules\n' > "$HOME/.config/opencode/AGENTS.md"
 clean() { for x in codex; do for e in "" .exe .cmd; do [ -e "$1/$x$e" ] && return 1; done; done; return 0; }
 PATH="$(dirname "$BIN"):$S7/bin:$(printf '%s' "$PATH" | tr ':' '\n' | while IFS= read -r d; do clean "$d" && printf '%s\n' "$d"; done | paste -sd: -)"
 export PATH
-for d in commands skills githooks template claude; do cp -R "$ROOT/$d" "$SK7/$d"; done
+for d in skills githooks template claude; do cp -R "$ROOT/$d" "$SK7/$d"; done
 cp "$ROOT/Cargo.toml" "$SK7/"
 git -C "$SK7" init -q
 cp -R "$ROOT/template" "$S7/vault"
@@ -478,7 +478,7 @@ check "all: --remove --plan leaves the tree unchanged" '[ "$(snap)" = "$after" ]
 s7 --remove --apply "$rid" > "$TMP/out7/remove.txt" 2>&1; code=$?
 # The folders the removed links and plugin leave empty stay: setup cannot tell whether it made them.
 check "all: --remove --apply changes exactly the files its plan lists" \
-  '[ "$code" = 0 ] && [ "$(changed "$after" "$(snap)" | grep -v -e "^$FX7/home/.claude/commands$" -e "^$FX7/home/.claude/skills$" -e "^$FX7/home/.agents/skills$" -e "^$FX7/home/.config/opencode/plugins$")" = "$(listed "$rplan")" ]'
+  '[ "$code" = 0 ] && [ "$(changed "$after" "$(snap)" | grep -v -e "^$FX7/home/.claude/skills$" -e "^$FX7/home/.agents/skills$" -e "^$FX7/home/.config/opencode/plugins$")" = "$(listed "$rplan")" ]'
 check "all: --remove takes knowledge out of the desktop config and keeps the rest" \
   '! grep -q "knowledge\|mcpServers" "$DC" && grep -q "\"fixture\": true" "$DC"'
 

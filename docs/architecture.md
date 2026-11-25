@@ -15,7 +15,8 @@ claude/                       the Claude Code plugin: the hooks, in exec form
 codex/                        the Codex plugin: the hooks, pinned to the binary's version
 opencode/       knowledge.ts  the opencode plugin: a shim that spawns the binary
 skills/knowledge/             /knowledge new|edit <kind> - writes notes in the vault's conventions
-commands/       knowledge-*.md  /knowledge-commits /knowledge-log /knowledge-sync /knowledge-usage
+skills/knowledge-*/           /knowledge-commits /knowledge-log /knowledge-sync /knowledge-usage,
+                              slash-only (disable-model-invocation)
 template/                     the empty vault: folders, MOCs, conventions, system docs, Identity and
                               Hard-Rules with the generic rule packs (`FILL:` marks each placeholder)
 bench/                        the token benchmark (benchmark.md)
@@ -99,7 +100,7 @@ alone and pushes when every unpushed commit is a record, so another machine pull
 did not run. Your own commits never push on their own and hold the records push while unpushed. The
 next session start retries what a shutdown cut off; `.gitattributes` merges the records by union.
 
-The vault's `.skeleton.json` (`{"version":"0.13.0"}`) pins the skeleton version its notes are
+The vault's `.skeleton.json` (`{"version":"0.13.1"}`) pins the skeleton version its notes are
 written for; `setup` writes it into a new vault. When the running checkout is another version, the
 session opens with one line saying which side moves, and the doctor's `skeleton-version` fails. A
 vault without the file is not checked.

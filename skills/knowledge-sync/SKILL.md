@@ -1,4 +1,6 @@
 ---
+name: knowledge-sync
+disable-model-invocation: true
 description: Refresh the knowledge indexes - re-index the vault and repo docs, verify links
 ---
 

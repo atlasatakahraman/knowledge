@@ -1,4 +1,6 @@
 ---
+name: knowledge-commits
+disable-model-invocation: true
 description: Write a commit digest across the vault and all repos into 50-Ops/Commits/
 ---
 
