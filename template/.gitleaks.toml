@@ -10,3 +10,12 @@ useDefault = true
 [[allowlists]]
 description = "Obsidian plugin bundles: minified JS identifiers, not secrets"
 paths = ['''\.obsidian/plugins/[^/]+/main\.js$''']
+
+# The knowledge release key's public fingerprint. ssh-keygen prints "... ED25519 key SHA256:<it>"
+# when a release is verified (install step 4), and the generic-api-key rule reads "key" followed by
+# a high-entropy string as a secret: a captured decision quoting that line blocks every records
+# commit. A fingerprint is a hash of the public key, not a secret. Only this one is allowed; a new
+# release key (docs/release.md, rotation) replaces it here and in the repo's own .gitleaks.toml.
+[[allowlists]]
+description = "the knowledge release key's public fingerprint"
+regexes = ['''4lk0qVkGnFfrnKNselpgVf9e55AvCRSy5OkdhcCq6uc''']
