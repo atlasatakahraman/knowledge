@@ -12,7 +12,7 @@ there in two hops, the vault has a gap.
 ## First steps
 
 1. Fill [`00-Meta/Identity.md`](00-Meta/Identity.md) and [`00-Meta/Hard-Rules.md`](00-Meta/Hard-Rules.md).
-   Every `FILL:` comment is a placeholder: `grep -rn "FILL:" 00-Meta` lists what is left. Both load
+   Every `FILL:` comment is a placeholder: `grep -rn "^<!-- FILL:" 00-Meta` lists what is left. Both load
    whole into every session, so this is the highest-value writing in the vault.
 2. Add a page per repository with `/knowledge new repo`.
 3. Replace the questions in [`00-Meta/retrieval-cases.json`](00-Meta/retrieval-cases.json) with

@@ -9,7 +9,8 @@ is one line; the output shown is from a real run on Windows (paths shortened to 
 every step by hand: [docs/install.md](docs/install.md).
 
 The person decides; you do the work. Where a step needs something from them (an install, a name, a
-choice), ask one question with a concrete suggestion, then run the command yourself on their yes.
+choice), ask one question with a concrete suggestion, through the harness's question tool where it
+has one (`AskUserQuestion` in Claude Code), then run the command yourself on their yes.
 Two kinds of step stay theirs to run: a sign-in (`gh auth login`, the harness's own), and anything
 that lowers a protection (see the list at the end). An installer that asks for elevation shows its
 own prompt; that click is theirs too.
@@ -33,7 +34,10 @@ own prompt; that click is theirs too.
 
    Then git's identity, which the vault's commits carry. When `git config user.email` prints
    nothing, ask for the name and email to use, and whether for all of this machine's git or only
-   the vault. All of it: `git config --global user.name "<name>"` and `user.email` now, on a yes.
+   the vault. Suggest only what you can read, never a guess: once `gh` is signed in,
+   `gh api user --jq '.name, .id, .login'` gives the name (the login when it is empty) and
+   GitHub's no-reply address, `<id>+<login>@users.noreply.github.com`, which keeps the person's
+   own address out of every commit. All of it: `git config --global user.name "<name>"` and `user.email` now, on a yes.
    Only the vault: the same with `git -C <vault>` once step 7 has made it, then step 7's last
    paragraph.
 
@@ -46,7 +50,7 @@ own prompt; that click is theirs too.
    ```
    $ curl -fsSLO https://github.com/atlasatakahraman/knowledge/releases/latest/download/SHA256SUMS
    $ curl -fsSLO https://github.com/atlasatakahraman/knowledge/releases/latest/download/SHA256SUMS.sig
-   $ curl -fsSLO https://github.com/atlasatakahraman/knowledge/releases/latest/download/knowledge-0.13.1-x86_64-pc-windows-msvc.zip
+   $ curl -fsSLO https://github.com/atlasatakahraman/knowledge/releases/latest/download/knowledge-0.13.2-x86_64-pc-windows-msvc.zip
    ```
 
    No archive for this target: build from source instead (step 5's last paragraph).
@@ -56,7 +60,7 @@ own prompt; that click is theirs too.
    session start leaves a checkout on a tag alone.
 
    ```
-   $ git -c advice.detachedHead=false clone --branch v0.13.1 https://github.com/atlasatakahraman/knowledge ~/dev/knowledge
+   $ git -c advice.detachedHead=false clone --branch v0.13.2 https://github.com/atlasatakahraman/knowledge ~/dev/knowledge
    Cloning into '~/dev/knowledge'...
    ```
 
@@ -69,9 +73,9 @@ own prompt; that click is theirs too.
    ```
    $ cmd /c "ssh-keygen -Y verify -f allowed_signers -I atlasatakahraman -n file -s SHA256SUMS.sig < SHA256SUMS"
    Good "file" signature for atlasatakahraman with ED25519 key SHA256:4lk0qVkGnFfrnKNselpgVf9e55AvCRSy5OkdhcCq6uc
-   $ $f = "knowledge-0.13.1-x86_64-pc-windows-msvc.zip"; ((Get-FileHash $f -Algorithm SHA256).Hash + "  $f") -in (Get-Content SHA256SUMS)
+   $ $f = "knowledge-0.13.2-x86_64-pc-windows-msvc.zip"; ((Get-FileHash $f -Algorithm SHA256).Hash + "  $f") -in (Get-Content SHA256SUMS)
    True
-   $ gh attestation verify knowledge-0.13.1-x86_64-pc-windows-msvc.zip --repo atlasatakahraman/knowledge --signer-workflow atlasatakahraman/knowledge/.github/workflows/release.yml --source-ref refs/tags/v0.13.1 --deny-self-hosted-runners
+   $ gh attestation verify knowledge-0.13.2-x86_64-pc-windows-msvc.zip --repo atlasatakahraman/knowledge --signer-workflow atlasatakahraman/knowledge/.github/workflows/release.yml --source-ref refs/tags/v0.13.2 --deny-self-hosted-runners
    ```
 
    The last one exits 0 on a match.
@@ -84,9 +88,9 @@ own prompt; that click is theirs too.
 
    ```
    $ mkdir -p ~/.local/bin
-   $ tar -xf knowledge-0.13.1-x86_64-pc-windows-msvc.zip -C ~/.local/bin --strip-components 1 knowledge-0.13.1-x86_64-pc-windows-msvc/knowledge.exe knowledge-0.13.1-x86_64-pc-windows-msvc/knowledge-code.exe
+   $ tar -xf knowledge-0.13.2-x86_64-pc-windows-msvc.zip -C ~/.local/bin --strip-components 1 knowledge-0.13.2-x86_64-pc-windows-msvc/knowledge.exe knowledge-0.13.2-x86_64-pc-windows-msvc/knowledge-code.exe
    $ knowledge --version
-   knowledge 0.13.1
+   knowledge 0.13.2
    SQLite 3.54.1, FTS5 on
    ```
 
@@ -99,7 +103,7 @@ own prompt; that click is theirs too.
 
    ```
    $ knowledge setup --plan
-   knowledge 0.13.1 setup plan: nothing is written
+   knowledge 0.13.2 setup plan: nothing is written
    ...
    18 change(s). Apply exactly these: knowledge setup --apply d9305150d8d7ceea --harness claude
    plan d9305150d8d7ceea
@@ -141,7 +145,7 @@ own prompt; that click is theirs too.
    turn on, one question with the packs as options, then `knowledge rules enable <pack>` for each
    one they chose.
 
-10. **For a new vault, fill it in with the person,** one section at a time. `grep -n "FILL:"` on
+10. **For a new vault, fill it in with the person,** one section at a time. `grep -n "^<!-- FILL:"` on
     `<vault>/00-Meta/Identity.md` and `<vault>/00-Meta/Hard-Rules.md` lists the placeholders. For
     each, ask one question that quotes it and offers a concrete answer from what you already know
     (their earlier answers, this machine's OS, shell and installed tools); they accept it, change

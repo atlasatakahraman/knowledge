@@ -13,7 +13,7 @@ Who the owner is, what they know, and how they want to be talked to. `~/.claude/
 this note whole into every session, so keep it to what is always true. Rules of *behaviour* live in
 [[Hard-Rules]]; this note is about the person.
 
-Every `FILL:` comment marks a placeholder. `grep -rn "FILL:" 00-Meta` lists what is left.
+Every `FILL:` comment marks a placeholder. `grep -rn "^<!-- FILL:" 00-Meta` lists what is left.
 
 ## Who
 

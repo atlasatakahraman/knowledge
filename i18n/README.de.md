@@ -57,7 +57,7 @@ Rust-Toolchain (`rustup`) aus dem Quellcode gebaut, in zwei bis drei Minuten.
 ### Von Hand
 
 ```bash
-git -c advice.detachedHead=false clone --branch v0.13.1 https://github.com/atlasatakahraman/knowledge ~/dev/knowledge
+git -c advice.detachedHead=false clone --branch v0.13.2 https://github.com/atlasatakahraman/knowledge ~/dev/knowledge
 # the binary: your platform's release archive, verified, into ~/.local/bin (docs/install.md),
 # or from source: cargo install --path ~/dev/knowledge --locked
 knowledge setup --plan
@@ -73,7 +73,7 @@ werden. Optionen, Windows und jeder Schritt von Hand: [docs/install.md](../docs/
 ### Nach einem neuen Vault
 
 Mach ihn zu deinem. Fülle `00-Meta/Identity.md` und `00-Meta/Hard-Rules.md` aus
-(`grep -rn "FILL:" ~/knowledge/00-Meta` listet, was noch fehlt), und ersetze die Fragen in
+(`grep -rn "^<!-- FILL:" ~/knowledge/00-Meta` listet, was noch fehlt), und ersetze die Fragen in
 `00-Meta/retrieval-cases.json` durch solche, die der Vault immer beantworten muss. `knowledge doctor
 --repair --pretty` baut den ersten Index, und `knowledge rules list` mit `rules enable <pack>`
 schaltet die Regelpakete ein, die du willst.
@@ -90,7 +90,7 @@ Agent ein Wort liest:
 > update knowledge to the newest release
 
 Relevant notes from the knowledge vault (~/knowledge):
-- **update** — $ knowledge update --plan  knowledge 0.13.1, x86_64-pc-windows-msvc …
+- **update** — $ knowledge update --plan  knowledge 0.13.2, x86_64-pc-windows-msvc …
 - **verify** — …from `knowledge setup --plan`, or update.md over an older version. How a release …
 - **release** — …A release is eight archives (build.yml's targets), one SHA256SUMS over them, …
 ```
@@ -101,7 +101,7 @@ einem Stapel Lesezugriffe:
 ```text
 $ knowledge find "check the signature on a downloaded release"
 release — ~/knowledge/20-Knowledge/knowledge/release.md
-  …download v0.13.1 -R atlasatakahraman/knowledge -p SHA256SUMS … 5. Check the signature…
+  …download v0.13.2 -R atlasatakahraman/knowledge -p SHA256SUMS … 5. Check the signature…
 verify — ~/knowledge/20-Knowledge/knowledge/verify.md
   …Three checks, each answering a different question: | The signature over SHA256SUMS | …
 ```

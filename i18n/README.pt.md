@@ -57,7 +57,7 @@ compilado a partir do código-fonte com a toolchain do Rust (`rustup`), em dois 
 ### À mão
 
 ```bash
-git -c advice.detachedHead=false clone --branch v0.13.1 https://github.com/atlasatakahraman/knowledge ~/dev/knowledge
+git -c advice.detachedHead=false clone --branch v0.13.2 https://github.com/atlasatakahraman/knowledge ~/dev/knowledge
 # the binary: your platform's release archive, verified, into ~/.local/bin (docs/install.md),
 # or from source: cargo install --path ~/dev/knowledge --locked
 knowledge setup --plan
@@ -73,7 +73,7 @@ mão: [docs/install.md](../docs/install.md).
 ### Depois de um vault novo
 
 Deixe-o com a sua cara. Preencha `00-Meta/Identity.md` e `00-Meta/Hard-Rules.md`
-(`grep -rn "FILL:" ~/knowledge/00-Meta` lista o que falta) e troque as perguntas de
+(`grep -rn "^<!-- FILL:" ~/knowledge/00-Meta` lista o que falta) e troque as perguntas de
 `00-Meta/retrieval-cases.json` pelas que o vault deve sempre responder. `knowledge doctor
 --repair --pretty` constrói o primeiro índice, e `knowledge rules list` com `rules enable <pack>`
 ativa os pacotes de regras que você quiser.
@@ -90,7 +90,7 @@ uma palavra:
 > update knowledge to the newest release
 
 Relevant notes from the knowledge vault (~/knowledge):
-- **update** — $ knowledge update --plan  knowledge 0.13.1, x86_64-pc-windows-msvc …
+- **update** — $ knowledge update --plan  knowledge 0.13.2, x86_64-pc-windows-msvc …
 - **verify** — …from `knowledge setup --plan`, or update.md over an older version. How a release …
 - **release** — …A release is eight archives (build.yml's targets), one SHA256SUMS over them, …
 ```
@@ -101,7 +101,7 @@ leituras:
 ```text
 $ knowledge find "check the signature on a downloaded release"
 release — ~/knowledge/20-Knowledge/knowledge/release.md
-  …download v0.13.1 -R atlasatakahraman/knowledge -p SHA256SUMS … 5. Check the signature…
+  …download v0.13.2 -R atlasatakahraman/knowledge -p SHA256SUMS … 5. Check the signature…
 verify — ~/knowledge/20-Knowledge/knowledge/verify.md
   …Three checks, each answering a different question: | The signature over SHA256SUMS | …
 ```

@@ -57,7 +57,7 @@ desde el código fuente con la toolchain de Rust (`rustup`), en dos o tres minut
 ### A mano
 
 ```bash
-git -c advice.detachedHead=false clone --branch v0.13.1 https://github.com/atlasatakahraman/knowledge ~/dev/knowledge
+git -c advice.detachedHead=false clone --branch v0.13.2 https://github.com/atlasatakahraman/knowledge ~/dev/knowledge
 # the binary: your platform's release archive, verified, into ~/.local/bin (docs/install.md),
 # or from source: cargo install --path ~/dev/knowledge --locked
 knowledge setup --plan
@@ -73,7 +73,7 @@ algo cambió desde entonces; si no, escribe exactamente ese plan. Un vault nuevo
 ### Después de un vault nuevo
 
 Hazlo tuyo. Rellena `00-Meta/Identity.md` y `00-Meta/Hard-Rules.md`
-(`grep -rn "FILL:" ~/knowledge/00-Meta` lista lo que falta) y sustituye las preguntas de
+(`grep -rn "^<!-- FILL:" ~/knowledge/00-Meta` lista lo que falta) y sustituye las preguntas de
 `00-Meta/retrieval-cases.json` por las que el vault debe responder siempre. `knowledge doctor
 --repair --pretty` construye el primer índice, y `knowledge rules list` con `rules enable <pack>`
 activa los paquetes de reglas que quieras.
@@ -90,7 +90,7 @@ una sola palabra:
 > update knowledge to the newest release
 
 Relevant notes from the knowledge vault (~/knowledge):
-- **update** — $ knowledge update --plan  knowledge 0.13.1, x86_64-pc-windows-msvc …
+- **update** — $ knowledge update --plan  knowledge 0.13.2, x86_64-pc-windows-msvc …
 - **verify** — …from `knowledge setup --plan`, or update.md over an older version. How a release …
 - **release** — …A release is eight archives (build.yml's targets), one SHA256SUMS over them, …
 ```
@@ -101,7 +101,7 @@ de lecturas:
 ```text
 $ knowledge find "check the signature on a downloaded release"
 release — ~/knowledge/20-Knowledge/knowledge/release.md
-  …download v0.13.1 -R atlasatakahraman/knowledge -p SHA256SUMS … 5. Check the signature…
+  …download v0.13.2 -R atlasatakahraman/knowledge -p SHA256SUMS … 5. Check the signature…
 verify — ~/knowledge/20-Knowledge/knowledge/verify.md
   …Three checks, each answering a different question: | The signature over SHA256SUMS | …
 ```

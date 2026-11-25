@@ -57,7 +57,7 @@ release'in platform başına imzalı bir arşivi var, açmadan önce doğrulanı
 ### Elle
 
 ```bash
-git -c advice.detachedHead=false clone --branch v0.13.1 https://github.com/atlasatakahraman/knowledge ~/dev/knowledge
+git -c advice.detachedHead=false clone --branch v0.13.2 https://github.com/atlasatakahraman/knowledge ~/dev/knowledge
 # the binary: your platform's release archive, verified, into ~/.local/bin (docs/install.md),
 # or from source: cargo install --path ~/dev/knowledge --locked
 knowledge setup --plan
@@ -73,7 +73,7 @@ yapılışı: [docs/install.md](../docs/install.md).
 ### Yeni bir vault'tan sonra
 
 Onu kendine göre doldur. `00-Meta/Identity.md` ve `00-Meta/Hard-Rules.md` dosyalarını doldur
-(`grep -rn "FILL:" ~/knowledge/00-Meta` kalanları listeler) ve `00-Meta/retrieval-cases.json`
+(`grep -rn "^<!-- FILL:" ~/knowledge/00-Meta` kalanları listeler) ve `00-Meta/retrieval-cases.json`
 içindeki soruları vault'un her zaman cevaplaması gereken sorularla değiştir. `knowledge doctor
 --repair --pretty` ilk index'i kurar, `knowledge rules list` ile `rules enable <pack>` de istediğin
 kural paketlerini açar.
@@ -89,7 +89,7 @@ bu repository'nin docs'u. Yollar kısaltıldı, uzun snippet'ler kesildi.
 > update knowledge to the newest release
 
 Relevant notes from the knowledge vault (~/knowledge):
-- **update** — $ knowledge update --plan  knowledge 0.13.1, x86_64-pc-windows-msvc …
+- **update** — $ knowledge update --plan  knowledge 0.13.2, x86_64-pc-windows-msvc …
 - **verify** — …from `knowledge setup --plan`, or update.md over an older version. How a release …
 - **release** — …A release is eight archives (build.yml's targets), one SHA256SUMS over them, …
 ```
@@ -99,7 +99,7 @@ Relevant notes from the knowledge vault (~/knowledge):
 ```text
 $ knowledge find "check the signature on a downloaded release"
 release — ~/knowledge/20-Knowledge/knowledge/release.md
-  …download v0.13.1 -R atlasatakahraman/knowledge -p SHA256SUMS … 5. Check the signature…
+  …download v0.13.2 -R atlasatakahraman/knowledge -p SHA256SUMS … 5. Check the signature…
 verify — ~/knowledge/20-Knowledge/knowledge/verify.md
   …Three checks, each answering a different question: | The signature over SHA256SUMS | …
 ```
