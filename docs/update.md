@@ -8,10 +8,10 @@ an updater that phones home is a telemetry surface, so the check runs only when 
 ```
 $ knowledge update --plan
 knowledge 0.12.0, x86_64-pc-windows-msvc
-No release is published yet at https://github.com/atlasatakahraman/knowledge-skeleton/releases.
+No release is published yet at https://github.com/atlasatakahraman/knowledge/releases.
 Update from the checkout instead:
-  git -C ~/dev/knowledge-skeleton pull --ff-only
-  cargo install --path ~/dev/knowledge-skeleton --locked
+  git -C ~/dev/knowledge pull --ff-only
+  cargo install --path ~/dev/knowledge --locked
   knowledge setup --plan     (then --apply <id>)
 ```
 
@@ -49,8 +49,8 @@ nothing refreshes on its own, so `claude plugin update` alone reports the old ve
 latest. When a pull changes `claude/`, the session start names the three steps:
 
 ```bash
-claude plugin marketplace update knowledge-skeleton
-claude plugin update knowledge@knowledge-skeleton
+claude plugin marketplace update knowledge
+claude plugin update knowledge@knowledge
 ```
 
 then `/reload-plugins` in a running session.

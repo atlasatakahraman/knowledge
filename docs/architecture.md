@@ -14,16 +14,15 @@ adapters/       <id>.json     one data file per harness: detection, instructions
 claude/                       the Claude Code plugin: the hooks, in exec form
 codex/                        the Codex plugin: the hooks, pinned to the binary's version
 opencode/       knowledge.ts  the opencode plugin: a shim that spawns the binary
-hooks/          brain-*.mjs   the hooks from before the binary, kept until every machine runs it;
-                              nothing on the binary's path runs them
-skills/brain/                 /brain new|edit <kind> - writes notes in the vault's conventions
-commands/       brain-*.md    /brain-commits /brain-log /brain-sync /brain-usage
+skills/knowledge/             /knowledge new|edit <kind> - writes notes in the vault's conventions
+commands/       knowledge-*.md  /knowledge-commits /knowledge-log /knowledge-sync /knowledge-usage
 template/                     the empty vault: folders, MOCs, conventions, system docs, Identity and
                               Hard-Rules with the generic rule packs (`FILL:` marks each placeholder)
 bench/                        the token benchmark (benchmark.md)
 assets/                       the README's images, text outlined: banner, hero, pills, logo; build.ts
                               draws them in every language of i18n.mjs, live.mjs draws the live
-                              pills (see "The README's images")
+                              pills (see "The README's images"). Dev tooling run by bun, with its own
+                              package.json; the engine has none
 README.<id>.md                the README in tr, es, pt, fr, de
 AGENTS.md                     the install, step by step, for an agent; then how to work on this repo
 docs/           <task>.md     install, update, remove, verbs, security, troubleshooting, benchmark
@@ -102,7 +101,7 @@ written for; `setup` writes it into a new vault. When the running checkout is an
 session opens with one line saying which side moves, and the doctor's `skeleton-version` fails. A
 vault without the file is not checked.
 
-Every version bump in `Cargo.toml` and `package.json` is tagged `v<version>` on the commit that
+The checkout's version is `Cargo.toml`'s. Every bump is tagged `v<version>` on the commit that
 makes it, so `git log v<pin>..` lists what changed since the vault's pin.
 
 ## CI
@@ -126,6 +125,7 @@ them all, following the CSS of the design previews to the pixel: Chrome's metric
 ligatures and wrapping, checked glyph by glyph against the browser.
 
 ```bash
+bun install --cwd assets
 bun --bun assets/build.ts <fonts-dir>
 ```
 

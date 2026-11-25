@@ -25,14 +25,14 @@ every step by hand: [docs/install.md](docs/install.md).
 2. **Clone the skeleton** into the person's checkouts folder (`~/dev` unless they keep another):
 
    ```
-   $ git clone https://github.com/atlasatakahraman/knowledge-skeleton ~/dev/knowledge-skeleton
+   $ git clone https://github.com/atlasatakahraman/knowledge ~/dev/knowledge
    ```
 
 3. **Build and install the binary** (two to three minutes):
 
    ```
-   $ cargo install --path ~/dev/knowledge-skeleton --locked
-      Installed package `knowledge v0.12.0 (~/dev/knowledge-skeleton)` (executables `knowledge-code.exe`, `knowledge.exe`)
+   $ cargo install --path ~/dev/knowledge --locked
+      Installed package `knowledge v0.12.0 (~/dev/knowledge)` (executables `knowledge-code.exe`, `knowledge.exe`)
    $ knowledge --version
    knowledge 0.12.0
    SQLite 3.54.1, FTS5 on

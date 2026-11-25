@@ -7,9 +7,9 @@ Secure**: the least code that solves the problem, no telemetry, nothing that pho
 
 | You have | Go to |
 |---|---|
-| A question about install, setup or use | [Discussions → Q&A](https://github.com/atlasatakahraman/knowledge-skeleton/discussions/categories/q-a) |
-| An idea or a feature request | [Discussions → Ideas](https://github.com/atlasatakahraman/knowledge-skeleton/discussions/categories/ideas) |
-| Something broken | [a bug report](https://github.com/atlasatakahraman/knowledge-skeleton/issues/new/choose) |
+| A question about install, setup or use | [Discussions → Q&A](https://github.com/atlasatakahraman/knowledge/discussions/categories/q-a) |
+| An idea or a feature request | [Discussions → Ideas](https://github.com/atlasatakahraman/knowledge/discussions/categories/ideas) |
+| Something broken | [a bug report](https://github.com/atlasatakahraman/knowledge/issues/new/choose) |
 | A security problem | a private report, never a public issue ([SECURITY.md](SECURITY.md)) |
 
 Open an issue or an idea before a large pull request, so the approach is agreed before the work.

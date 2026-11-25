@@ -8,8 +8,8 @@
 <p align="center"><a href="README.md">English</a> | <a href="README.tr.md">Türkçe</a> | <b>Español</b> | <a href="README.pt.md">Português</a> | <a href="README.fr.md">Français</a> | <a href="README.de.md">Deutsch</a></p>
 
 <p align="center">
-  <a href="https://github.com/atlasatakahraman/knowledge-skeleton/stargazers"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/atlasatakahraman/knowledge-skeleton/badges/stars-es-dark.svg"><img alt="estrellas" src="https://raw.githubusercontent.com/atlasatakahraman/knowledge-skeleton/badges/stars-es-light.svg" height="28"></picture></a>
-  <a href="https://github.com/atlasatakahraman/knowledge-skeleton/tags"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/atlasatakahraman/knowledge-skeleton/badges/latest-es-dark.svg"><img alt="última versión" src="https://raw.githubusercontent.com/atlasatakahraman/knowledge-skeleton/badges/latest-es-light.svg" height="28"></picture></a>
+  <a href="https://github.com/atlasatakahraman/knowledge/stargazers"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/atlasatakahraman/knowledge/badges/stars-es-dark.svg"><img alt="estrellas" src="https://raw.githubusercontent.com/atlasatakahraman/knowledge/badges/stars-es-light.svg" height="28"></picture></a>
+  <a href="https://github.com/atlasatakahraman/knowledge/tags"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/atlasatakahraman/knowledge/badges/latest-es-dark.svg"><img alt="última versión" src="https://raw.githubusercontent.com/atlasatakahraman/knowledge/badges/latest-es-light.svg" height="28"></picture></a>
 </p>
 <p align="center">
   <a href="#agentes"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/badges/harnesses-es-dark.svg"><img alt="agentes: Claude Code, Codex, opencode, app de Claude" src="assets/badges/harnesses-es-light.svg" height="28"></picture></a>
@@ -22,7 +22,8 @@
   <a href="docs/benchmark.md"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/badges/find-es-dark.svg"><img alt="knowledge find: 33/33, ~33 ms" src="assets/badges/find-es-light.svg" height="28"></picture></a>
 </p>
 
-<p align="center">Memoria y reglas para agentes de programación. Quién eres, qué descartaste y qué
+<p align="center"><b>Conocimiento que crece contigo y con tus agentes.</b><br>
+Memoria y reglas para agentes de programación. Quién eres, qué descartaste y qué
 decidiste, cargado en cada sesión de cada agente que usas.</p>
 
 <picture>
@@ -37,7 +38,7 @@ decidiste, cargado en cada sesión de cada agente que usas.</p>
 Pega esto en Claude Code, Codex u opencode:
 
 ```text
-Install knowledge for me from https://github.com/atlasatakahraman/knowledge-skeleton.
+Install knowledge for me from https://github.com/atlasatakahraman/knowledge.
 Follow its AGENTS.md, show me each step's output, and ask before anything you write.
 ```
 
@@ -54,8 +55,8 @@ release, así que el binario se compila desde el código fuente, en dos o tres m
 ### A mano
 
 ```bash
-git clone https://github.com/atlasatakahraman/knowledge-skeleton ~/dev/knowledge-skeleton
-cargo install --path ~/dev/knowledge-skeleton --locked
+git clone https://github.com/atlasatakahraman/knowledge ~/dev/knowledge
+cargo install --path ~/dev/knowledge --locked
 knowledge setup --plan
 knowledge setup --apply <id>      # the id is the plan's last line
 ```
@@ -97,7 +98,7 @@ de lecturas:
 ```text
 $ knowledge find "check the signature on a downloaded release"
 release — ~/knowledge/20-Knowledge/knowledge/release.md
-  …download v0.13.0 -R atlasatakahraman/knowledge-skeleton -p SHA256SUMS … 5. Check the signature…
+  …download v0.13.0 -R atlasatakahraman/knowledge -p SHA256SUMS … 5. Check the signature…
 verify — ~/knowledge/20-Knowledge/knowledge/verify.md
   …Three checks, each answering a different question: | The signature over SHA256SUMS | …
 ```
@@ -121,9 +122,9 @@ CI sobre instalaciones de prueba.
 
 | Agente | Qué recibe | Aplicación | Estado |
 |---|---|---|---|
-| Claude Code | Identity y Hard-Rules importados enteros en `~/.claude/CLAUDE.md`; los hooks del plugin en nueve eventos; `/brain`; el mapa de código (`knowledge find --code`, `graph --code`) | El guard en `PreToolUse` (llamadas de shell, edición y MCP) con deny y ask; la restauración al inicio de sesión; el backstop de pre-commit | Verificado |
-| Codex CLI | El bloque escrito entero en `~/.codex/AGENTS.md`; los hooks del plugin en ocho eventos, fijados a la versión del binario; `/brain` vía `~/.agents/skills`; `knowledge` por MCP, mapa de código incluido | El guard en `PreToolUse` (`Bash`, `apply_patch`, llamadas MCP), solo deny: una regla ask es un deny, porque Codex no puede preguntar; los hooks solo se ejecutan cuando los revisas; restauración y backstop | Verificado |
-| opencode | El bloque en `~/.config/opencode/AGENTS.md`; el plugin shim en ocho eventos, siete de los cuales ejecutan el binario; `/brain` | El guard en `execute.before` (`shell`, `edit`, `write`, `patch`), solo deny; restauración y backstop | Verificado; sus eventos de compactación y borrado de sesión solo se ejecutan en la app interactiva y no se alcanzaron |
+| Claude Code | Identity y Hard-Rules importados enteros en `~/.claude/CLAUDE.md`; los hooks del plugin en nueve eventos; `/knowledge`; el mapa de código (`knowledge find --code`, `graph --code`) | El guard en `PreToolUse` (llamadas de shell, edición y MCP) con deny y ask; la restauración al inicio de sesión; el backstop de pre-commit | Verificado |
+| Codex CLI | El bloque escrito entero en `~/.codex/AGENTS.md`; los hooks del plugin en ocho eventos, fijados a la versión del binario; `/knowledge` vía `~/.agents/skills`; `knowledge` por MCP, mapa de código incluido | El guard en `PreToolUse` (`Bash`, `apply_patch`, llamadas MCP), solo deny: una regla ask es un deny, porque Codex no puede preguntar; los hooks solo se ejecutan cuando los revisas; restauración y backstop | Verificado |
+| opencode | El bloque en `~/.config/opencode/AGENTS.md`; el plugin shim en ocho eventos, siete de los cuales ejecutan el binario; `/knowledge` | El guard en `execute.before` (`shell`, `edit`, `write`, `patch`), solo deny; restauración y backstop | Verificado; sus eventos de compactación y borrado de sesión solo se ejecutan en la app interactiva y no se alcanzaron |
 | App de escritorio de Claude, Chat | `knowledge mcp`: `find`, `graph`, `read` y `note`, que pregunta antes de escribir | Ninguna: sin shell ni hooks, no hay llamada nuestra que vigilar | Verificado |
 | Codex de la app de ChatGPT | Los hooks del plugin de Codex, una vez aceptados en la CLI | Como Codex; los hooks aún no aceptados se omiten en silencio | Compilado, no verificado |
 | Cualquier otro (`generic`) | El bloque en un archivo que tú indicas, `knowledge find` y `graph`, y `knowledge note` para escribir de vuelta | Ninguna en ejecución: las reglas son solo texto. El backstop de pre-commit sigue corriendo en cada clon que configuró `setup` | Compilado, no verificado |

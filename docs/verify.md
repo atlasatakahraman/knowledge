@@ -22,7 +22,7 @@ From the release page, into an empty folder: your platform's archive, `SHA256SUM
 `SHA256SUMS.sig`. Then `allowed_signers` from the same tag:
 
 ```
-https://raw.githubusercontent.com/atlasatakahraman/knowledge-skeleton/v0.13.0/allowed_signers
+https://raw.githubusercontent.com/atlasatakahraman/knowledge/v0.13.0/allowed_signers
 ```
 
 It holds one line, the release key:
@@ -90,8 +90,8 @@ $f = "knowledge-0.13.0-x86_64-pc-windows-msvc.zip"
 
 ```bash
 gh attestation verify knowledge-0.13.0-x86_64-unknown-linux-gnu.tar.gz \
-  --repo atlasatakahraman/knowledge-skeleton \
-  --signer-workflow atlasatakahraman/knowledge-skeleton/.github/workflows/release.yml \
+  --repo atlasatakahraman/knowledge \
+  --signer-workflow atlasatakahraman/knowledge/.github/workflows/release.yml \
   --source-ref refs/tags/v0.13.0 --deny-self-hosted-runners
 ```
 
@@ -100,7 +100,7 @@ from the tag, on a GitHub-hosted runner. It exits 0 on a match. An archive with 
 exits 1:
 
 ```
-Error: HTTP 404: Not Found (https://api.github.com/repos/atlasatakahraman/knowledge-skeleton/attestations/sha256:…)
+Error: HTTP 404: Not Found (https://api.github.com/repos/atlasatakahraman/knowledge/attestations/sha256:…)
 ```
 
 ## Then

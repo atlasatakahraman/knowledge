@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        A security bug goes in a [private report](https://github.com/atlasatakahraman/knowledge-skeleton/security/advisories/new), not here.
+        A security bug goes in a [private report](https://github.com/atlasatakahraman/knowledge/security/advisories/new), not here.
         Write in English or any language the README is in.
   - type: input
     id: version

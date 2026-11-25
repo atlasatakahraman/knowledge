@@ -8,8 +8,8 @@
 <p align="center"><a href="README.md">English</a> | <b>Türkçe</b> | <a href="README.es.md">Español</a> | <a href="README.pt.md">Português</a> | <a href="README.fr.md">Français</a> | <a href="README.de.md">Deutsch</a></p>
 
 <p align="center">
-  <a href="https://github.com/atlasatakahraman/knowledge-skeleton/stargazers"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/atlasatakahraman/knowledge-skeleton/badges/stars-tr-dark.svg"><img alt="yıldız" src="https://raw.githubusercontent.com/atlasatakahraman/knowledge-skeleton/badges/stars-tr-light.svg" height="28"></picture></a>
-  <a href="https://github.com/atlasatakahraman/knowledge-skeleton/tags"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/atlasatakahraman/knowledge-skeleton/badges/latest-tr-dark.svg"><img alt="son sürüm" src="https://raw.githubusercontent.com/atlasatakahraman/knowledge-skeleton/badges/latest-tr-light.svg" height="28"></picture></a>
+  <a href="https://github.com/atlasatakahraman/knowledge/stargazers"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/atlasatakahraman/knowledge/badges/stars-tr-dark.svg"><img alt="yıldız" src="https://raw.githubusercontent.com/atlasatakahraman/knowledge/badges/stars-tr-light.svg" height="28"></picture></a>
+  <a href="https://github.com/atlasatakahraman/knowledge/tags"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/atlasatakahraman/knowledge/badges/latest-tr-dark.svg"><img alt="son sürüm" src="https://raw.githubusercontent.com/atlasatakahraman/knowledge/badges/latest-tr-light.svg" height="28"></picture></a>
 </p>
 <p align="center">
   <a href="#ajanlar"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/badges/harnesses-tr-dark.svg"><img alt="ajanlar: Claude Code, Codex, opencode, Claude uygulaması" src="assets/badges/harnesses-tr-light.svg" height="28"></picture></a>
@@ -22,7 +22,8 @@
   <a href="docs/benchmark.md"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/badges/find-tr-dark.svg"><img alt="knowledge find: 33/33, ~33 ms" src="assets/badges/find-tr-light.svg" height="28"></picture></a>
 </p>
 
-<p align="center">Coding ajanları için hafıza ve kurallar. Kim olduğun, neyi yasakladığın ve neye karar
+<p align="center"><b>Seninle ve ajanlarınla birlikte büyüyen bilgi.</b><br>
+Coding ajanları için hafıza ve kurallar. Kim olduğun, neyi yasakladığın ve neye karar
 verdiğin, kullandığın her ajanın her oturumuna yüklenir.</p>
 
 <picture>
@@ -37,7 +38,7 @@ verdiğin, kullandığın her ajanın her oturumuna yüklenir.</p>
 Bunu Claude Code, Codex ya da opencode'a yapıştır:
 
 ```text
-Install knowledge for me from https://github.com/atlasatakahraman/knowledge-skeleton.
+Install knowledge for me from https://github.com/atlasatakahraman/knowledge.
 Follow its AGENTS.md, show me each step's output, and ask before anything you write.
 ```
 
@@ -54,8 +55,8 @@ kaynaktan, iki üç dakikada build edilir.
 ### Elle
 
 ```bash
-git clone https://github.com/atlasatakahraman/knowledge-skeleton ~/dev/knowledge-skeleton
-cargo install --path ~/dev/knowledge-skeleton --locked
+git clone https://github.com/atlasatakahraman/knowledge ~/dev/knowledge
+cargo install --path ~/dev/knowledge --locked
 knowledge setup --plan
 knowledge setup --apply <id>      # the id is the plan's last line
 ```
@@ -95,7 +96,7 @@ Relevant notes from the knowledge vault (~/knowledge):
 ```text
 $ knowledge find "check the signature on a downloaded release"
 release — ~/knowledge/20-Knowledge/knowledge/release.md
-  …download v0.13.0 -R atlasatakahraman/knowledge-skeleton -p SHA256SUMS … 5. Check the signature…
+  …download v0.13.0 -R atlasatakahraman/knowledge -p SHA256SUMS … 5. Check the signature…
 verify — ~/knowledge/20-Knowledge/knowledge/verify.md
   …Three checks, each answering a different question: | The signature over SHA256SUMS | …
 ```
@@ -118,9 +119,9 @@ Arch'ta kendi turunu bekliyor. Her adapter'ın kod yolu CI'da fixture kurulumlar
 
 | Ajan | Ne alır | Uygulama | Durum |
 |---|---|---|---|
-| Claude Code | `~/.claude/CLAUDE.md` içine bütün olarak import edilen Identity ve Hard-Rules; plugin'in dokuz event'teki hook'ları; `/brain`; kod haritası (`knowledge find --code`, `graph --code`) | `PreToolUse`'taki guard (shell, edit ve MCP çağrıları), deny ve ask ile; session-start restore; pre-commit backstop | Doğrulandı |
-| Codex CLI | `~/.codex/AGENTS.md` içine bütün olarak yazılan blok; plugin'in sekiz event'teki hook'ları, binary'nin sürümüne sabitlenmiş; `~/.agents/skills` üzerinden `/brain`; MCP üzerinden `knowledge`, kod haritası dahil | `PreToolUse`'taki guard (`Bash`, `apply_patch`, MCP çağrıları), yalnızca deny: Codex soramadığı için bir ask kuralı deny olur; hook'lar ancak sen onları gözden geçirince çalışır; restore ve backstop | Doğrulandı |
-| opencode | `~/.config/opencode/AGENTS.md` içindeki blok; sekiz event'te shim plugin, yedisi binary'yi çalıştırır; `/brain` | `execute.before` içindeki guard (`shell`, `edit`, `write`, `patch`), yalnızca deny; restore ve backstop | Doğrulandı; compaction ve session-delete event'leri yalnızca interaktif uygulamada çalışır ve onlara ulaşılmadı |
+| Claude Code | `~/.claude/CLAUDE.md` içine bütün olarak import edilen Identity ve Hard-Rules; plugin'in dokuz event'teki hook'ları; `/knowledge`; kod haritası (`knowledge find --code`, `graph --code`) | `PreToolUse`'taki guard (shell, edit ve MCP çağrıları), deny ve ask ile; session-start restore; pre-commit backstop | Doğrulandı |
+| Codex CLI | `~/.codex/AGENTS.md` içine bütün olarak yazılan blok; plugin'in sekiz event'teki hook'ları, binary'nin sürümüne sabitlenmiş; `~/.agents/skills` üzerinden `/knowledge`; MCP üzerinden `knowledge`, kod haritası dahil | `PreToolUse`'taki guard (`Bash`, `apply_patch`, MCP çağrıları), yalnızca deny: Codex soramadığı için bir ask kuralı deny olur; hook'lar ancak sen onları gözden geçirince çalışır; restore ve backstop | Doğrulandı |
+| opencode | `~/.config/opencode/AGENTS.md` içindeki blok; sekiz event'te shim plugin, yedisi binary'yi çalıştırır; `/knowledge` | `execute.before` içindeki guard (`shell`, `edit`, `write`, `patch`), yalnızca deny; restore ve backstop | Doğrulandı; compaction ve session-delete event'leri yalnızca interaktif uygulamada çalışır ve onlara ulaşılmadı |
 | Claude masaüstü uygulaması, Chat | `knowledge mcp`: `find`, `graph`, `read` ve yazmadan önce soran `note` | Yok: shell yok, hook yok, dolayısıyla korunacak bir tool çağrımız da yok | Doğrulandı |
 | ChatGPT uygulamasının Codex'i | CLI'da güvenildikten sonra Codex plugin'inin hook'ları | Codex gibi; henüz güvenilmemiş hook'lar sessizce atlanır | Build edildi, doğrulanmadı |
 | Diğer herhangi biri (`generic`) | Senin belirttiğin bir dosyadaki blok, `knowledge find` ve `graph`, geri yazmak için `knowledge note` | Çalışma anında yok: kurallar yalnızca metin. Pre-commit backstop yine de `setup`'ın kurduğu her clone'da çalışır | Build edildi, doğrulanmadı |

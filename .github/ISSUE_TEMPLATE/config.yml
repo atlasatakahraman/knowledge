@@ -4,8 +4,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Question
-    url: https://github.com/atlasatakahraman/knowledge-skeleton/discussions/categories/q-a
+    url: https://github.com/atlasatakahraman/knowledge/discussions/categories/q-a
     about: How to install, set up or use the engine.
   - name: Idea or feature request
-    url: https://github.com/atlasatakahraman/knowledge-skeleton/discussions/categories/ideas
+    url: https://github.com/atlasatakahraman/knowledge/discussions/categories/ideas
     about: Something the engine should do that it does not.

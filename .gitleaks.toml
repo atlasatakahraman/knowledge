@@ -1,5 +1,5 @@
 # gitleaks config for this repo. Extends the default ruleset; it only narrows it.
-title = "knowledge-skeleton"
+title = "knowledge"
 
 [extend]
 useDefault = true

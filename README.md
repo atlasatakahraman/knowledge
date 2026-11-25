@@ -13,8 +13,8 @@
      orphan `badges` branch; the rest are drawn by assets/build.ts. downloads joins row one once a
      release has assets. -->
 <p align="center">
-  <a href="https://github.com/atlasatakahraman/knowledge-skeleton/stargazers"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/atlasatakahraman/knowledge-skeleton/badges/stars-dark.svg"><img alt="stars" src="https://raw.githubusercontent.com/atlasatakahraman/knowledge-skeleton/badges/stars-light.svg" height="28"></picture></a>
-  <a href="https://github.com/atlasatakahraman/knowledge-skeleton/tags"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/atlasatakahraman/knowledge-skeleton/badges/latest-dark.svg"><img alt="latest version" src="https://raw.githubusercontent.com/atlasatakahraman/knowledge-skeleton/badges/latest-light.svg" height="28"></picture></a>
+  <a href="https://github.com/atlasatakahraman/knowledge/stargazers"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/atlasatakahraman/knowledge/badges/stars-dark.svg"><img alt="stars" src="https://raw.githubusercontent.com/atlasatakahraman/knowledge/badges/stars-light.svg" height="28"></picture></a>
+  <a href="https://github.com/atlasatakahraman/knowledge/tags"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/atlasatakahraman/knowledge/badges/latest-dark.svg"><img alt="latest version" src="https://raw.githubusercontent.com/atlasatakahraman/knowledge/badges/latest-light.svg" height="28"></picture></a>
 </p>
 <p align="center">
   <a href="#harnesses"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/badges/harnesses-dark.svg"><img alt="harnesses: Claude Code, Codex, opencode, Claude app" src="assets/badges/harnesses-light.svg" height="28"></picture></a>
@@ -27,7 +27,8 @@
   <a href="docs/benchmark.md"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/badges/find-dark.svg"><img alt="knowledge find: 33/33, ~33 ms" src="assets/badges/find-light.svg" height="28"></picture></a>
 </p>
 
-<p align="center">Memory and rules for coding agents. Who you are, what you ruled out and what you
+<p align="center"><b>Knowledge that grows with you and your agents.</b><br>
+Memory and rules for coding agents. Who you are, what you ruled out and what you
 decided, loaded into every session of every harness you use.</p>
 
 <picture>
@@ -42,7 +43,7 @@ decided, loaded into every session of every harness you use.</p>
 Paste this into Claude Code, Codex or opencode:
 
 ```text
-Install knowledge for me from https://github.com/atlasatakahraman/knowledge-skeleton.
+Install knowledge for me from https://github.com/atlasatakahraman/knowledge.
 Follow its AGENTS.md, show me each step's output, and ask before anything you write.
 ```
 
@@ -58,8 +59,8 @@ the binary builds from source, in two to three minutes.
 ### By hand
 
 ```bash
-git clone https://github.com/atlasatakahraman/knowledge-skeleton ~/dev/knowledge-skeleton
-cargo install --path ~/dev/knowledge-skeleton --locked
+git clone https://github.com/atlasatakahraman/knowledge ~/dev/knowledge
+cargo install --path ~/dev/knowledge --locked
 knowledge setup --plan
 knowledge setup --apply <id>      # the id is the plan's last line
 ```
@@ -98,7 +99,7 @@ Relevant notes from the knowledge vault (~/knowledge):
 ```text
 $ knowledge find "check the signature on a downloaded release"
 release — ~/knowledge/20-Knowledge/knowledge/release.md
-  …download v0.13.0 -R atlasatakahraman/knowledge-skeleton -p SHA256SUMS … 5. Check the signature…
+  …download v0.13.0 -R atlasatakahraman/knowledge -p SHA256SUMS … 5. Check the signature…
 verify — ~/knowledge/20-Knowledge/knowledge/verify.md
   …Three checks, each answering a different question: | The signature over SHA256SUMS | …
 ```
@@ -121,9 +122,9 @@ wait for its pass. Every adapter's code path also runs in CI on fixture installs
 
 | Harness | What it gets | Enforcement | Status |
 |---|---|---|---|
-| Claude Code | Identity and Hard-Rules imported whole into `~/.claude/CLAUDE.md`; the plugin's hooks on nine events; `/brain`; the code map (`knowledge find --code`, `graph --code`) | The guard on `PreToolUse` (shell, edit and MCP calls) with deny and ask; the session-start restore; the pre-commit backstop | Verified |
-| Codex CLI | The block written whole into `~/.codex/AGENTS.md`; the plugin's hooks on eight events, pinned to the binary's version; `/brain` through `~/.agents/skills`; `knowledge` over MCP, the code map included | The guard on `PreToolUse` (`Bash`, `apply_patch`, MCP calls), deny only: an ask rule is a deny, since Codex cannot ask; hooks run only once you review them; restore and backstop | Verified |
-| opencode | The block in `~/.config/opencode/AGENTS.md`; the shim plugin on eight events, seven of which run the binary; `/brain` | The guard in `execute.before` (`shell`, `edit`, `write`, `patch`), deny only; restore and backstop | Verified; its compaction and session-delete events only run in the interactive app and were not reached |
+| Claude Code | Identity and Hard-Rules imported whole into `~/.claude/CLAUDE.md`; the plugin's hooks on nine events; `/knowledge`; the code map (`knowledge find --code`, `graph --code`) | The guard on `PreToolUse` (shell, edit and MCP calls) with deny and ask; the session-start restore; the pre-commit backstop | Verified |
+| Codex CLI | The block written whole into `~/.codex/AGENTS.md`; the plugin's hooks on eight events, pinned to the binary's version; `/knowledge` through `~/.agents/skills`; `knowledge` over MCP, the code map included | The guard on `PreToolUse` (`Bash`, `apply_patch`, MCP calls), deny only: an ask rule is a deny, since Codex cannot ask; hooks run only once you review them; restore and backstop | Verified |
+| opencode | The block in `~/.config/opencode/AGENTS.md`; the shim plugin on eight events, seven of which run the binary; `/knowledge` | The guard in `execute.before` (`shell`, `edit`, `write`, `patch`), deny only; restore and backstop | Verified; its compaction and session-delete events only run in the interactive app and were not reached |
 | Claude desktop app, Chat | `knowledge mcp`: `find`, `graph`, `read`, and `note`, which asks before it writes | None: no shell and no hooks, so no tool call of ours to guard | Verified |
 | ChatGPT app's Codex | The Codex plugin's hooks, once trusted in the CLI | As Codex; hooks not yet trusted are skipped silently | Built, not verified |
 | Any other (`generic`) | The block in a file you name, `knowledge find` and `graph`, and `knowledge note` to write back | None at run time: the rules are text only. The pre-commit backstop still runs in every clone `setup` set | Built, not verified |

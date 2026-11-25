@@ -6,15 +6,15 @@ then every other harness it finds installed (Codex, opencode, the Claude desktop
 its own `found` line. An agent installing for someone follows [AGENTS.md](../AGENTS.md) instead.
 
 ```bash
-git clone https://github.com/atlasatakahraman/knowledge-skeleton ~/dev/knowledge-skeleton
-cargo install --path ~/dev/knowledge-skeleton --locked
+git clone https://github.com/atlasatakahraman/knowledge ~/dev/knowledge
+cargo install --path ~/dev/knowledge --locked
 knowledge setup --plan            # what it would write; nothing is written
 knowledge setup --apply <id>      # exactly that, where <id> is the plan's last line
 ```
 
 ```powershell
-git clone https://github.com/atlasatakahraman/knowledge-skeleton C:\dev\knowledge-skeleton
-cargo install --path C:\dev\knowledge-skeleton --locked
+git clone https://github.com/atlasatakahraman/knowledge C:\dev\knowledge
+cargo install --path C:\dev\knowledge --locked
 knowledge setup --plan
 knowledge setup --apply <id>
 ```
@@ -26,21 +26,20 @@ A plan on a new machine, for Claude Code alone (`--harness claude`), with the ho
 knowledge 0.12.0 setup plan: nothing is written
 
   ok      prerequisites    git · claude · gitleaks
-  ok      skeleton         ~/dev/knowledge-skeleton (0.12.0)
+  ok      skeleton         ~/dev/knowledge (0.12.0)
   create  vault            ~/knowledge: new, from template/ (31 files), .skeleton.json pins 0.12.0, git init, a first commit when git knows your user.email
   change  core.fileMode    ~/knowledge/.git/config: false (Obsidian's mode-only rewrites would block the pull)
-  change  hooksPath        ~/knowledge/.git/config: -> ~/dev/knowledge-skeleton/githooks (secret scan, rules backstops)
-  change  hooksPath        ~/dev/knowledge-skeleton/.git/config: -> ~/dev/knowledge-skeleton/githooks (secret scan, rules backstops)
+  change  hooksPath        ~/knowledge/.git/config: -> ~/dev/knowledge/githooks (secret scan, rules backstops)
+  change  hooksPath        ~/dev/knowledge/.git/config: -> ~/dev/knowledge/githooks (secret scan, rules backstops)
   create  config           ~/.config/knowledge/config.json: vault ~/knowledge, devRoot ~/dev, os windows
-  create  link             ~/.claude/hooks -> ~/dev/knowledge-skeleton/hooks
-  create  link             ~/.claude/skills/brain -> ~/dev/knowledge-skeleton/skills/brain
-  create  link             ~/.agents/skills/brain -> ~/dev/knowledge-skeleton/skills/brain
-  create  link             ~/.claude/commands/brain-commits.md -> ~/dev/knowledge-skeleton/commands/brain-commits.md
-  create  link             ~/.claude/commands/brain-log.md -> ~/dev/knowledge-skeleton/commands/brain-log.md
-  create  link             ~/.claude/commands/brain-sync.md -> ~/dev/knowledge-skeleton/commands/brain-sync.md
-  create  link             ~/.claude/commands/brain-usage.md -> ~/dev/knowledge-skeleton/commands/brain-usage.md
+  create  link             ~/.claude/skills/knowledge -> ~/dev/knowledge/skills/knowledge
+  create  link             ~/.agents/skills/knowledge -> ~/dev/knowledge/skills/knowledge
+  create  link             ~/.claude/commands/knowledge-commits.md -> ~/dev/knowledge/commands/knowledge-commits.md
+  create  link             ~/.claude/commands/knowledge-log.md -> ~/dev/knowledge/commands/knowledge-log.md
+  create  link             ~/.claude/commands/knowledge-sync.md -> ~/dev/knowledge/commands/knowledge-sync.md
+  create  link             ~/.claude/commands/knowledge-usage.md -> ~/dev/knowledge/commands/knowledge-usage.md
   ok      knowledge        ~/.cargo/bin/knowledge.exe (0.12.0)
-  ok      plugin           knowledge@knowledge-skeleton 0.12.0
+  create  plugin           claude plugin install knowledge@knowledge, from https://github.com/atlasatakahraman/knowledge (git, no autoUpdate)
   create  settings.json    ~/.claude/settings.json: our 0 hooks out (the plugin carries them), knowledge_bin = ~/.cargo/bin/knowledge.exe
   create  CLAUDE.md        ~/.claude/CLAUDE.md: imports ~/knowledge/00-Meta/Identity.md, ~/knowledge/00-Meta/Hard-Rules.md
   ok      compile state    a new vault has no finished log
@@ -50,8 +49,8 @@ After apply:
   knowledge rules list --json, then knowledge rules enable <pack> for each pack you want: the rules interview
   fill the FILL: placeholders in ~/knowledge/00-Meta, then start Claude Code in ~/knowledge
 
-14 change(s). Apply exactly these: knowledge setup --apply 1a5be68145b5b7a2 --harness claude
-plan 1a5be68145b5b7a2
+14 change(s). Apply exactly these: knowledge setup --apply 09ab01df7a24ef40 --harness claude
+plan 09ab01df7a24ef40
 ```
 
 The apply ends with `Done.`, and a second `--plan` on the same machine says `Nothing to change.`
@@ -109,7 +108,7 @@ A new one from the template, or an existing clone (then skip to `core.fileMode`)
 ```bash
 cp -r <skeleton>/template <vault>
 echo '{"version":"0.12.0"}' > <vault>/.skeleton.json     # the version `knowledge --version` prints
-git -C <vault> init -b main && git -C <vault> add -A && git -C <vault> commit -m "chore: new vault from knowledge-skeleton"
+git -C <vault> init -b main && git -C <vault> add -A && git -C <vault> commit -m "chore: new vault from knowledge 0.12.0"
 git -C <vault> config core.fileMode false
 ```
 
@@ -169,7 +168,7 @@ $ knowledge config
   "os": "windows",
   "pullTrust": "",
   "rolloverHour": 5,
-  "skeleton": "~\\dev\\knowledge-skeleton",
+  "skeleton": "~\\dev\\knowledge",
   "source": "~\\.config\\knowledge\\config.json",
   "trustDir": "~\\.config\\knowledge",
   "vault": "~\\knowledge"
@@ -181,26 +180,25 @@ $ knowledge config
 ### 4. Links into `~/.claude`
 
 ```bash
-ln -s <skeleton>/hooks ~/.claude/hooks
 mkdir -p ~/.claude/skills ~/.claude/commands
-ln -s <skeleton>/skills/brain ~/.claude/skills/brain
-ln -s <skeleton>/commands/brain-*.md ~/.claude/commands/
-mkdir -p ~/.agents/skills && ln -s <skeleton>/skills/brain ~/.agents/skills/brain
+ln -s <skeleton>/skills/knowledge ~/.claude/skills/knowledge
+ln -s <skeleton>/commands/knowledge-*.md ~/.claude/commands/
+mkdir -p ~/.agents/skills && ln -s <skeleton>/skills/knowledge ~/.agents/skills/knowledge
 ```
 
 ```powershell
-New-Item -ItemType Junction -Path $HOME\.claude\hooks -Target C:\dev\knowledge-skeleton\hooks
-New-Item -ItemType Junction -Path $HOME\.claude\skills\brain -Target C:\dev\knowledge-skeleton\skills\brain
-Get-ChildItem C:\dev\knowledge-skeleton\commands\brain-*.md | ForEach-Object {
+New-Item -ItemType Junction -Path $HOME\.claude\skills\knowledge -Target C:\dev\knowledge\skills\knowledge
+Get-ChildItem C:\dev\knowledge\commands\knowledge-*.md | ForEach-Object {
   New-Item -ItemType SymbolicLink -Path "$HOME\.claude\commands\$($_.Name)" -Target $_.FullName }
 New-Item -ItemType Directory -Force $HOME\.agents\skills | Out-Null
-New-Item -ItemType Junction -Path $HOME\.agents\skills\brain -Target C:\dev\knowledge-skeleton\skills\brain
+New-Item -ItemType Junction -Path $HOME\.agents\skills\knowledge -Target C:\dev\knowledge\skills\knowledge
 ```
 
 A file symlink on Windows needs Developer Mode (Settings > For developers) or an elevated shell; a
-junction needs neither. Move an existing `~/.claude/hooks` folder aside first rather than deleting it.
-`~/.agents/skills` is the skills folder Codex, opencode, Gemini CLI, Cursor, Amp and Zed read, so
-`/brain` reaches them through the same link; opencode reads both folders and loads the skill once.
+junction needs neither. `~/.agents/skills` is the skills folder Codex, opencode, Gemini CLI, Cursor,
+Amp and Zed read, so `/knowledge` reaches them through the same link; opencode reads both folders
+and loads the skill once. Before 0.13.0 these were `~/.claude/hooks`, `skills/brain` and
+`commands/brain-*`: `knowledge setup` removes those links when their targets end in those paths.
 
 ### 5. The knowledge binary
 
@@ -231,14 +229,14 @@ The hooks ship as a plugin, `claude/`, served by this repo's own marketplace
 no shell starts per hook and no other `knowledge` earlier on `PATH` can be picked.
 
 ```bash
-claude plugin marketplace add https://github.com/atlasatakahraman/knowledge-skeleton
-claude plugin install knowledge@knowledge-skeleton --scope user
+claude plugin marketplace add https://github.com/atlasatakahraman/knowledge
+claude plugin install knowledge@knowledge --scope user
 ```
 
 Then the plugin's one option, in `~/.claude/settings.json`, beside every other key:
 
 ```json
-{ "pluginConfigs": { "knowledge@knowledge-skeleton": {
+{ "pluginConfigs": { "knowledge@knowledge": {
     "options": { "knowledge_bin": "/home/me/.cargo/bin/knowledge" } } } }
 ```
 
@@ -351,13 +349,13 @@ not the binary that is planning.
 
 ```bash
 codex plugin marketplace add <skeleton>
-codex plugin add knowledge@knowledge-skeleton
+codex plugin add knowledge@knowledge
 codex mcp add knowledge -- "$(command -v knowledge)" mcp
 ```
 
 ```powershell
-codex plugin marketplace add C:\dev\knowledge-skeleton
-codex plugin add knowledge@knowledge-skeleton
+codex plugin marketplace add C:\dev\knowledge
+codex plugin add knowledge@knowledge
 codex mcp add knowledge -- (Get-Command knowledge).Source mcp
 ```
 
@@ -397,7 +395,7 @@ opencode service restart
 
 ```powershell
 New-Item -ItemType Directory -Force $HOME\.config\opencode\plugins | Out-Null
-Copy-Item C:\dev\knowledge-skeleton\opencode\knowledge.ts $HOME\.config\opencode\plugins\
+Copy-Item C:\dev\knowledge\opencode\knowledge.ts $HOME\.config\opencode\plugins\
 opencode service restart
 ```
 

@@ -11,20 +11,21 @@ plan for Claude Code alone (`--harness claude`), with the home folder shown as `
 ```
 knowledge 0.12.0 remove plan: nothing is written
 
-  remove  settings.json    ~/.claude/settings.json: our 0 hooks and the plugin's option removed, every other hook kept (the old file kept as ~/.claude/settings.json.pre-skeleton-f3876bf0)
-  remove  plugin           claude plugin uninstall knowledge@knowledge-skeleton (0.12.0), then marketplace remove knowledge-skeleton
+  remove  settings.json    ~/.claude/settings.json: our 0 hooks and the plugin's option removed, every other hook kept (the old file kept as ~/.claude/settings.json.pre-skeleton-9095b15d)
+  remove  plugin           claude plugin uninstall knowledge@knowledge (0.12.0), then marketplace remove knowledge
   remove  CLAUDE.md        ~/.claude/CLAUDE.md: the imports section setup wrote
-  remove  link             ~/.claude/hooks
-  remove  link             ~/.claude/skills/brain
-  remove  link             ~/.agents/skills/brain
-  remove  link             ~/.claude/commands/brain-commits.md
-  remove  link             ~/.claude/commands/brain-log.md
-  remove  link             ~/.claude/commands/brain-sync.md
-  remove  link             ~/.claude/commands/brain-usage.md
+  remove  link             ~/.claude/skills/knowledge
+  remove  link             ~/.agents/skills/knowledge
+  remove  link             ~/.claude/commands/knowledge-commits.md
+  remove  link             ~/.claude/commands/knowledge-log.md
+  remove  link             ~/.claude/commands/knowledge-sync.md
+  remove  link             ~/.claude/commands/knowledge-usage.md
+  remove  hooksPath        ~/knowledge/.git/config: core.hooksPath unset
+  remove  hooksPath        ~/dev/knowledge/.git/config: core.hooksPath unset
   info    kept             the vault, config.json, the compile state and any signing key: --remove deletes no data
 
-10 change(s). Apply exactly these: knowledge setup --remove --apply 356a39e9fbfa4955 --harness claude
-plan 356a39e9fbfa4955
+11 change(s). Apply exactly these: knowledge setup --remove --apply 7b91790e0269d18d --harness claude
+plan 7b91790e0269d18d
 ```
 
 It takes out the links, the Claude plugin, its marketplace and its option in `settings.json`

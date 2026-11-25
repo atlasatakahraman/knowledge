@@ -42,7 +42,7 @@ then drop the old line in the next.
    `SHA256SUMS.sig`:
 
    ```bash
-   gh release download v0.13.0 -R atlasatakahraman/knowledge-skeleton -p SHA256SUMS
+   gh release download v0.13.0 -R atlasatakahraman/knowledge -p SHA256SUMS
    ssh-keygen -Y sign -f ~/.ssh/knowledge_release_ed25519 -n file SHA256SUMS
    ```
 
@@ -50,13 +50,13 @@ then drop the old line in the next.
    then attach it:
 
    ```bash
-   gh release upload v0.13.0 SHA256SUMS.sig -R atlasatakahraman/knowledge-skeleton
+   gh release upload v0.13.0 SHA256SUMS.sig -R atlasatakahraman/knowledge
    ```
 
 6. Download one archive from the draft and run all of [verify.md](verify.md) on it. Then publish:
 
    ```bash
-   gh release edit v0.13.0 --draft=false -R atlasatakahraman/knowledge-skeleton
+   gh release edit v0.13.0 --draft=false -R atlasatakahraman/knowledge
    ```
 
 `workflow_dispatch` on `release.yml` is the dry run: the archives and `SHA256SUMS` are left as the
