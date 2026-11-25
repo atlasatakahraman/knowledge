@@ -92,6 +92,7 @@ knowledge doctor  PASS  2026-11-24T10:49:51.520Z
 | `knowledge rules check [--staged] [--restore]` | Hard-Rules against the lock; the staged copy and the guards' backstops; a changed rule back from `HEAD` |
 | `knowledge rules lock [--seed <file>]` | re-stamps the lock after you edit Hard-Rules |
 | `knowledge rules enable\|disable <pack>` | turns a pack's guards on or off |
+| `knowledge rules guard add --rule <id> --action deny\|ask --reason <text> …` | adds a guard to the lock: `--words "git push --force; git push -f"`, `--paths`, `--tools`, `--backstop` (staged names that fail a commit), each list comma-separated, and `--unless`, `--repo`, `--branch`, `--os` to narrow it. Add-only: no verb removes or weakens a guard, and the `rules-files` guard asks first |
 
 ## Machine and session
 

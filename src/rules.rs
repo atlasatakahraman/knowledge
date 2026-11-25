@@ -122,10 +122,19 @@ struct Meta {
     enforce: Vec<String>,
 }
 
-const USAGE: &str = "usage: knowledge rules list [--json] | kernel | check [--staged] [--restore] | lock [--seed <file>] | enable|disable <pack>";
+const USAGE: &str = "usage: knowledge rules list [--json] | kernel | check [--staged] [--restore] | lock [--seed <file>] | enable|disable <pack>
+  | guard add --rule <id> --action deny|ask --reason <text> [--id <id>]
+      [--words \"<word> <word>; <word> …\"] [--unless <w>,<w>] [--paths <p>,<p>] [--tools <t>,<t>]
+      [--backstop <staged name>,…] [--repo <folder>] [--branch <name>] [--os windows|linux|macos]";
 
 pub fn run(raw: &[String]) -> Result<u8, Fault> {
-    let args = Args::parse(raw, &["seed"])?;
+    let args = Args::parse(
+        raw,
+        &[
+            "seed", "rule", "action", "reason", "id", "words", "unless", "paths", "tools",
+            "backstop", "repo", "branch", "os",
+        ],
+    )?;
     let verb = args.words.first().map(String::as_str);
     if verb == Some("kernel") {
         emit(&KERNEL.map(|k| format!("- {k}\n")).concat());
@@ -137,8 +146,111 @@ pub fn run(raw: &[String]) -> Result<u8, Fault> {
         Some("check") => check(&cfg, &args),
         Some("lock") => lock(&cfg, &args),
         Some(v @ ("enable" | "disable")) => toggle(&cfg, &args, v == "enable"),
+        Some("guard") if args.words.get(1).is_some_and(|w| w == "add") => guard_add(&cfg, &args),
         _ => Err(Fault::Usage(USAGE.into())),
     }
+}
+
+/// `rules guard add` (S9.8): a new guard, appended to the lock, so an agent that writes a new
+/// Hard-Rule can propose the guard that enforces it. Add-only: no verb removes or weakens a guard
+/// (kernel rule 9), and an id already taken is refused, never replaced. The `rules-files` guard
+/// asks before it runs, so the owner's yes is the gate, as for `rules lock`.
+fn guard_add(cfg: &Config, args: &Args) -> Result<u8, Fault> {
+    let one = |k: &str| args.get(k).unwrap_or("").trim().to_string();
+    let list = |k: &str| -> Vec<String> {
+        args.get(k)
+            .unwrap_or("")
+            .split(',')
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(String::from)
+            .collect()
+    };
+    let mut lock = need_lock(cfg)?;
+    let rule = one("rule");
+    // As in `lock`: a rule of this note, or one elsewhere as `<Note>#<heading>`.
+    if rule.is_empty() || !(rule.contains('#') || lock.rules.iter().any(|r| r.id == rule)) {
+        return Err(Fault::Usage(format!(
+            "--rule names no rule in {LOCK}: `knowledge rules list` prints the ids"
+        )));
+    }
+    let action = one("action");
+    if action != "deny" && action != "ask" {
+        return Err(Fault::Usage("--action is deny or ask".into()));
+    }
+    let reason = one("reason");
+    if reason.is_empty() {
+        return Err(Fault::Usage(
+            "--reason is what the agent is told when the guard fires".into(),
+        ));
+    }
+    let os = one("os");
+    if !["", "windows", "linux", "macos"].contains(&os.as_str()) {
+        return Err(Fault::Usage("--os is windows, linux or macos".into()));
+    }
+    // Sequences split on `;`, words on whitespace: "git push --force; git push -f".
+    let words: Vec<Vec<String>> = args
+        .get("words")
+        .unwrap_or("")
+        .split(';')
+        .map(|s| s.split_whitespace().map(String::from).collect::<Vec<_>>())
+        .filter(|w| !w.is_empty())
+        .collect();
+    let taken = |id: &str| lock.guards.iter().any(|g| g.id == id);
+    let id = match args.get("id") {
+        Some(id) if taken(id) => {
+            return Err(Fault::Usage(format!(
+                "guard `{id}` exists, and guards are add-only: pass another --id"
+            )));
+        }
+        Some(id) if slug(id) != id || id.is_empty() => {
+            return Err(Fault::Usage(format!("--id is a slug: `{}`", slug(id))));
+        }
+        Some(id) => id.to_string(),
+        None => {
+            let base = slug(&rule);
+            (1..)
+                .map(|n| {
+                    if n == 1 {
+                        base.clone()
+                    } else {
+                        format!("{base}-{n}")
+                    }
+                })
+                .find(|id| !taken(id))
+                .unwrap_or_default()
+        }
+    };
+    let g = Guard {
+        id,
+        rule,
+        action,
+        reason,
+        words,
+        unless: list("unless"),
+        paths: list("paths"),
+        tools: list("tools"),
+        staged: list("backstop"),
+        repo: one("repo"),
+        branch: one("branch"),
+        os,
+    };
+    if g.words.is_empty() && g.paths.is_empty() && g.tools.is_empty() && g.staged.is_empty() {
+        return Err(Fault::Usage(
+            "a guard matches something: --words, --paths, --tools or --backstop".into(),
+        ));
+    }
+    let line = format!(
+        "rules: guard `{}` added ({} on rule {}); {} guards\n",
+        g.id,
+        g.action,
+        g.rule,
+        lock.guards.len() + 1
+    );
+    lock.guards.push(g);
+    write_lock(cfg, &lock)?;
+    emit(&line);
+    Ok(0)
 }
 
 pub fn slug(s: &str) -> String {

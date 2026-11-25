@@ -70,7 +70,7 @@ cat > "$SEED" <<'EOF'
     { "id": "bare-bunx", "rule": "never-bare-bunx", "action": "deny", "reason": "bunx --bun",
       "words": [["bunx"]], "unless": ["--bun"] },
     { "id": "rules-files", "rule": "rules-change-only-on-a-yes", "action": "ask", "reason": "the owner's yes",
-      "words": [["knowledge", "rules", "lock"]],
+      "words": [["knowledge", "rules", "lock"], ["knowledge", "rules", "guard"]],
       "paths": ["*/00-meta/hard-rules.md", "*/00-meta/rules.lock"] },
     { "id": "push", "rule": "ask-before-every-push", "action": "ask", "reason": "each push its own yes",
       "words": [["git", "push"], ["git", "reset", "--hard"]] },
@@ -191,6 +191,27 @@ git -C "$VAULT" config --unset core.hooksPath 2>/dev/null
 check "proof: between the write and the next start, rules check FAILs" '! k rules check >/dev/null 2>&1'
 out=$(k rules check --restore 2>&1)
 check "proof: the next start's restore brings the rule back" 'printf "%s" "$out" | grep -q "restored from HEAD: ask-before-every-push" && grep -q "Each push needs its own yes." "$RULES"'
+
+# --- S9.8: rules guard add, add-only, behind the rules-files ask ----------------------------------
+LOCKF="$VAULT/00-Meta/rules.lock"
+before=$(cat "$LOCKF")
+check "guard add: the verb itself asks" 'decides "$(bash_p "\"knowledge rules guard add --rule x\"")" ask'
+check "guard add: a rule not in the lock is refused, the lock untouched" \
+  '! k rules guard add --rule no-such-rule --action deny --reason r --words "x" >/dev/null 2>&1 && [ "$(cat "$LOCKF")" = "$before" ]'
+check "guard add: an action other than deny or ask is refused" \
+  '! k rules guard add --rule never-write-to-f --action allow --reason r --words "x" >/dev/null 2>&1 && [ "$(cat "$LOCKF")" = "$before" ]'
+check "guard add: a guard that matches nothing is refused" \
+  '! k rules guard add --rule never-write-to-f --action deny --reason r >/dev/null 2>&1 && [ "$(cat "$LOCKF")" = "$before" ]'
+check "guard add: a taken id is refused, never replaced" \
+  '! k rules guard add --id f-drive --rule never-write-to-f --action ask --reason weaker --words "x" >/dev/null 2>&1 && [ "$(cat "$LOCKF")" = "$before" ]'
+out=$(k rules guard add --rule never-write-to-f --action deny --reason "end of life" --words "format f:; diskpart" 2>&1)
+check "guard add: adds one guard, named for its rule" 'printf "%s" "$out" | grep -q "guard \`never-write-to-f\` added (deny on rule never-write-to-f); 7 guards"'
+check "guard add: rules list shows it" 'k rules list | grep -q "^7 guards: .*never-write-to-f$"'
+check "guard add: the new guard denies its words" 'decides "$(bash_p "\"format f: /q\"")" deny && decides "$(bash_p "\"diskpart\"")" deny'
+check "guard add: the old guards still hold" 'decides "$(bash_p "\"npm i\"")" deny'
+out=$(k rules guard add --rule never-write-to-f --action ask --reason "mounts" --paths "*/mnt/f/*" 2>&1)
+check "guard add: a second one on the same rule gets the next id" 'printf "%s" "$out" | grep -q "guard \`never-write-to-f-2\` added"'
+check "guard add: the rules' hashes are untouched" 'k rules check >/dev/null 2>&1'
 
 rm -rf "$TMP"
 echo

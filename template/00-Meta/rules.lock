@@ -596,6 +596,11 @@
           "knowledge",
           "rules",
           "disable"
+        ],
+        [
+          "knowledge",
+          "rules",
+          "guard"
         ]
       ],
       "unless": [],
