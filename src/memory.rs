@@ -524,9 +524,12 @@ fn flush(cfg: &Config, args: &Args, sid: &str, cwd: &str, dry: bool) {
         if !dry {
             state::record_failure("flush", &state::claude_reason(&o, &msg));
         }
-        log(
-            ev!("hook" => J::s("flush"), "sid" => J::s(sid), "outcome" => J::s("failed"), "reason" => J::s(js_head(&msg, 200)), "ms" => ms.clone(), "stderr" => J::s(js_head(o.stderr.lines().rev().map(str::trim).find(|l| !l.is_empty()).unwrap_or(""), 200))),
-        );
+        let mut fields = ev!("hook" => J::s("flush"), "sid" => J::s(sid), "outcome" => J::s("failed"), "reason" => J::s(js_head(&msg, 200)), "ms" => ms.clone(), "stderr" => J::s(js_head(o.stderr.lines().rev().map(str::trim).find(|l| !l.is_empty()).unwrap_or(""), 200)));
+        // A JSON-lines runner says why on stdout, not stderr: the log names it (opencode, 2026-11-25).
+        if let Some(e) = state::json_error(&o.stdout) {
+            fields.push(("error".to_string(), J::s(js_head(&e, 200))));
+        }
+        log(fields);
         return;
     }
     if !dry {

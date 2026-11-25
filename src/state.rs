@@ -424,9 +424,27 @@ pub fn hide(c: &mut Command) {
 #[cfg(not(windows))]
 pub fn hide(_: &mut Command) {}
 
+/// PATH with this binary's folder first, or None when the folder is already on it. Harnesses start
+/// the binary by its path (Claude Code's `knowledge_bin`, the opencode shim's cargo-bin fallback),
+/// from environments whose PATH may lack that folder (systemd --user, the desktop app). Then git's
+/// pre-commit hook, a child of a child, refused the records commit for "knowledge is not on PATH"
+/// (Arch, 2026-11-25).
+fn self_path() -> Option<&'static std::ffi::OsString> {
+    static P: std::sync::OnceLock<Option<std::ffi::OsString>> = std::sync::OnceLock::new();
+    P.get_or_init(|| {
+        let dir = std::env::current_exe().ok()?.parent()?.to_path_buf();
+        let path = std::env::var_os("PATH").unwrap_or_default();
+        if std::env::split_paths(&path).any(|p| p == dir) {
+            return None;
+        }
+        std::env::join_paths(std::iter::once(dir).chain(std::env::split_paths(&path))).ok()
+    })
+    .as_ref()
+}
+
 /// Run a program to its end or its timeout, with no console window. stdout and stderr are read on
 /// their own threads, so a chatty child cannot fill a pipe and stall; the wait polls, starting at
-/// 1 ms, so a quick `git` costs no fixed sleep.
+/// 1 ms, so a quick `git` costs no fixed sleep. The child's PATH has this binary's folder.
 pub fn run(
     program: &Path,
     args: &[&str],
@@ -446,6 +464,9 @@ pub fn run(
         .stderr(Stdio::piped());
     if let Some(d) = cwd {
         c.current_dir(d);
+    }
+    if let Some(p) = self_path() {
+        c.env("PATH", p);
     }
     for (k, v) in envs {
         c.env(k, v);
@@ -714,9 +735,34 @@ pub fn clear_failure(tag: &str) {
     }
 }
 
-/// The reason a `claude -p` failed: its first meaningful line, stdout included (an auth failure
-/// prints there), hook chatter skipped; else `message`, the error's own first line.
+/// The error event a JSON-lines runner printed to stdout: opencode's `{"type":"error","error":
+/// {"message"}}`, Codex's `{"type":"error","message"}` or `turn.failed`'s `error.message`. It comes
+/// after a `step_start`, so the first line named nothing, and "Free usage limit reached" was lost
+/// (opencode 2.4.1, Arch, 2026-11-25).
+pub fn json_error(stdout: &str) -> Option<String> {
+    stdout
+        .lines()
+        .filter_map(|l| serde_json::from_str::<serde_json::Value>(l.trim()).ok())
+        .filter_map(|v| {
+            let e = &v["error"];
+            e["message"]
+                .as_str()
+                .or(e.as_str())
+                .or((v["type"] == "error")
+                    .then(|| v["message"].as_str())
+                    .flatten())
+                .map(str::to_string)
+        })
+        .next_back()
+}
+
+/// The reason a `claude -p` failed: a JSON-lines runner's error event; else its first meaningful
+/// line, stdout included (an auth failure prints there), hook chatter skipped; else `message`, the
+/// error's own first line.
 pub fn claude_reason(o: &Out, message: &str) -> String {
+    if let Some(e) = json_error(&o.stdout) {
+        return e;
+    }
     format!("{}\n{}", o.stderr, o.stdout)
         .lines()
         .map(str::trim)

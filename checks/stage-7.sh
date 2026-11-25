@@ -14,7 +14,7 @@ sha() { if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -d' '
 
 TMP=$(mktemp -d)
 VAULT="$TMP/vault"
-export KNOWLEDGE_HOME="$TMP/home" HOME="$TMP/user" USERPROFILE="$TMP/user"
+export KNOWLEDGE_HOME="$TMP/home" HOME="$TMP/user" USERPROFILE="$TMP/user" TMPDIR="$TMP" TMP TEMP="$TMP" # failures land in temp
 unset KNOWLEDGE_CONFIG CLAUDE_INVOKED_BY
 mkdir -p "$KNOWLEDGE_HOME" "$HOME/.claude" "$HOME/.codex" "$HOME/.config/opencode"
 cp -R "$ROOT/template" "$VAULT"
@@ -261,8 +261,36 @@ check "the opencode plugin handles every event its adapter maps" \
   '(for e in $(tr -d "\n" < "$ROOT/adapters/opencode.json" | sed "s/.*\"events\": *{\([^}]*\)}.*/\1/" | grep -o "\[\"[a-z.]*\"\]" | tr -d "[]\""); do grep -qF "\"$e\"" "$OTS" || exit 1; done)'
 check "the opencode flush runner and export run a private server, on the free model" \
   'grep -q "\"opencode\", \"run\", \"--standalone\", \"-m\", \"opencode/tidepool-alpha-free\"" "$ROOT/adapters/opencode.json" && grep -q "\"export\": \[\"opencode\", \"session\", \"export\", \"--standalone\"\]" "$ROOT/adapters/opencode.json"'
+# opencode prints a failed run's cause as a JSON error event on stdout, after a step_start, with
+# stderr empty: the flush's log names it ("Free usage limit reached", Arch, 2026-11-25).
+# The stand-in also records which knowledge its PATH finds: the binary puts its own folder on its
+# children's PATH, so git's pre-commit hook finds it under systemd --user or the desktop app.
+mkdir -p "$TMP/ocfail" && printf '#!/bin/sh\ncat >/dev/null\ncommand -v knowledge > "%s"\necho %s\necho %s\nexit 1\n' \
+  "$TMP/oc-which" \
+  "'{\"type\":\"step_start\",\"part\":{\"type\":\"step-start\"}}'" \
+  "'{\"type\":\"error\",\"error\":{\"type\":\"AI.Error\",\"message\":\"Free usage limit reached.\"}}'" > "$TMP/ocfail/opencode" \
+  && chmod +x "$TMP/ocfail/opencode"
+printf '%s' '{"info":{"id":"ses_check"},"messages":[{"type":"user","id":"m1","text":"Which retrieval tier comes first?","time":{"created":1795581200000}},{"type":"assistant","id":"m2","content":[{"type":"text","text":"Tier 0, the injected note names."}],"time":{"created":1795581201000}}]}' > "$TMP/oc-export.json"
+check "an opencode flush that fails logs the runner's JSON error event" \
+  'PATH="$TMP/ocfail:$PATH" k flush ses_check "$TMP" --harness opencode --transcript "$TMP/oc-export.json" --dry-run --from-start 2>&1 | grep -q "\"outcome\":\"failed\".*\"error\":\"Free usage limit reached.\""'
+check "a child of knowledge finds this knowledge on PATH when the caller's PATH lacks its folder" \
+  'PATH="$TMP/ocfail:/usr/bin:/bin" "$(cd "$(dirname "$BIN")" && pwd)/$(basename "$BIN")" flush ses_check "$TMP" --harness opencode --transcript "$TMP/oc-export.json" --dry-run --from-start >/dev/null 2>&1; [ "$(cat "$TMP/oc-which")" = "$(cd "$(dirname "$BIN")" && pwd)/$(basename "$BIN")" ]'
 if command -v bun >/dev/null 2>&1; then
   check "the opencode plugin builds with bun" 'bun build "$OTS" --target=bun --outdir "$TMP/ocbuild" >/dev/null 2>&1 && [ -s "$TMP/ocbuild/knowledge.js" ]'
+  # opencode's service may start without ~/.cargo/bin on PATH (systemd --user, Arch 2026-11-25):
+  # the shim, loaded under a PATH without knowledge, still reaches $CARGO_HOME/bin's. A stand-in
+  # there records the verbs it is called with; the prompt hook calls session, then prompt.
+  if [ "$(uname -s)" = Linux ]; then
+    mkdir -p "$TMP/cargo/bin" && printf '#!/bin/sh\necho "$2" >> "%s"\necho "{}"\n' "$TMP/oc-verbs" > "$TMP/cargo/bin/knowledge" \
+      && chmod +x "$TMP/cargo/bin/knowledge"
+    check "the opencode plugin finds knowledge in \$CARGO_HOME/bin when the service PATH lacks it" \
+      'BUN=$(command -v bun) && PATH=/usr/bin:/bin CARGO_HOME="$TMP/cargo" "$BUN" -e "
+        const h = {}; const reg = async (n, f) => { h[n] = f; };
+        const ctx = { event: { subscribe: async function* () {} }, session: { hook: reg }, tool: { hook: reg }, location: { directory: \"/\" } };
+        await (await import(\"$OTS\")).default.setup(ctx);
+        await h.prompt({ sessionID: \"s\", prompt: { text: \"x\" } });
+        await new Promise((r) => setTimeout(r, 300));" && grep -qx session "$TMP/oc-verbs" && grep -qx prompt "$TMP/oc-verbs"'
+  fi
 else
   echo "SKIP  bun build of the opencode plugin: no bun on PATH"
 fi
@@ -353,7 +381,9 @@ check "no skill or command names ~/.claude/hooks or skeleton-config.mjs" \
 S7="$TMP/s77"
 FX7=$(native "$S7")
 SK7="$S7/sk"
-export HOME="$S7/home" USERPROFILE="$S7/home" KNOWLEDGE_BIN="$BIN"
+# The temp dir moves with HOME: the binary records failures there, and a fixture's records commit
+# (no git email in the fixture HOME) wrote the machine's own /tmp/brain-claude-failures.json.
+export HOME="$S7/home" USERPROFILE="$S7/home" KNOWLEDGE_BIN="$BIN" TMPDIR="$TMP" TMP TEMP="$TMP"
 unset KNOWLEDGE_HOME KNOWLEDGE_CONFIG XDG_CONFIG_HOME CLAUDE_CONFIG_DIR
 mkdir -p "$S7/bin" "$SK7" "$HOME/.claude/plugins" "$HOME/.codex" "$HOME/.config/opencode" "$TMP/out7"
 : > "$S7/bin/opencode"

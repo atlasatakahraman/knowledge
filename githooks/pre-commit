@@ -19,7 +19,8 @@ if ! command -v gitleaks >/dev/null 2>&1; then
 fi
 gitleaks git --staged --no-banner --redact . || exit 1
 if ! command -v knowledge >/dev/null 2>&1; then
-  echo "pre-commit: knowledge is not on PATH; commit refused. Run `cargo install --path <skeleton> --locked`, then commit again." >&2
+  # Backticks are escaped: unescaped, the shell ran them and the message read "Run , then" (2026-11-25).
+  echo "pre-commit: knowledge is not on PATH; commit refused. Run \`cargo install --path <skeleton> --locked\`, then commit again." >&2
   exit 1
 fi
 # A skeleton pull makes this hook live before the binary is rebuilt: an older one answers
@@ -27,7 +28,7 @@ fi
 out=$(knowledge rules check --staged 2>&1)
 code=$?
 case "$out" in
-  "knowledge: usage:"*) echo "pre-commit: the installed knowledge has no \`rules\` verb; commit refused. Run `cargo install --path <skeleton> --locked`, then commit again." >&2 ;;
+  "knowledge: usage:"*) echo "pre-commit: the installed knowledge has no \`rules\` verb; commit refused. Run \`cargo install --path <skeleton> --locked\`, then commit again." >&2 ;;
   *) [ -n "$out" ] && printf '%s\n' "$out" >&2 ;;
 esac
 [ "$code" -eq 0 ] || exit $code

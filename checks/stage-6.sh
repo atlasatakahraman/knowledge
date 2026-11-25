@@ -15,7 +15,7 @@ native() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else pri
 
 TMP=$(mktemp -d)
 FX=$(native "$TMP")
-export HOME="$TMP/home" USERPROFILE="$TMP/home"
+export HOME="$TMP/home" USERPROFILE="$TMP/home" TMPDIR="$TMP" TMP TEMP="$TMP" # failures land in temp
 unset KNOWLEDGE_CONFIG KNOWLEDGE_HOME XDG_CONFIG_HOME CLAUDE_CONFIG_DIR
 # The hook block names this build.
 export KNOWLEDGE_BIN="$BIN"

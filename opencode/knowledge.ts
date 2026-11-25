@@ -16,8 +16,20 @@
 //   event session.execution.succeeded -> capture   (stop; opencode 2.2.1 has no session.idle)
 //   event session.deleted             -> capture   (session end)
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
+import { homedir } from "node:os";
+import { delimiter, join } from "node:path";
 
 const PIN = "0.12.0";
+// opencode's service is started by the login manager (systemd --user on Arch), whose PATH lacks
+// ~/.cargo/bin, where `cargo install` puts the binary: a bare "knowledge" was ENOENT, and every hook
+// came back empty (Arch, 2026-11-25). So PATH first, as the other harnesses run it, then cargo's bin.
+const EXE = process.platform === "win32" ? "knowledge.exe" : "knowledge";
+const BIN =
+  [...(process.env.PATH ?? "").split(delimiter), join(process.env.CARGO_HOME ?? join(homedir(), ".cargo"), "bin")]
+    .filter(Boolean)
+    .map((dir) => join(dir, EXE))
+    .find((p) => existsSync(p)) ?? "knowledge";
 const EDITS = new Set(["edit", "write", "patch"]);
 
 type Reply = { context?: string; decision?: string; reason?: string };
@@ -29,7 +41,7 @@ function knowledge(verb: string, payload: object, ms: number): Promise<Reply> {
     let out = "";
     let child: ReturnType<typeof spawn>;
     try {
-      child = spawn("knowledge", ["hook", verb, "--harness", "opencode", "--pin", PIN], {
+      child = spawn(BIN, ["hook", verb, "--harness", "opencode", "--pin", PIN], {
         stdio: ["pipe", "pipe", "ignore"],
         windowsHide: true,
       });

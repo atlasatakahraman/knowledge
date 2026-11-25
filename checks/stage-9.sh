@@ -18,7 +18,7 @@ check() { if eval "$2"; then pass "$1"; else fail "$1"; fi; }
 native() { if command -v cygpath >/dev/null 2>&1; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
 
 TMP=$(mktemp -d)
-export HOME="$TMP/user" USERPROFILE="$TMP/user" KNOWLEDGE_BIN="$BIN"
+export HOME="$TMP/user" USERPROFILE="$TMP/user" KNOWLEDGE_BIN="$BIN" TMPDIR="$TMP" TMP TEMP="$TMP" # failures land in temp
 unset KNOWLEDGE_CONFIG XDG_CONFIG_HOME CLAUDE_CONFIG_DIR CLAUDE_INVOKED_BY
 k() { timeout 120 "$BIN" "$@"; }
 # The doctor's checks that read the vault, not this machine's transcripts or harnesses.

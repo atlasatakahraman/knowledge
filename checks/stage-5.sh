@@ -18,7 +18,7 @@ VAULT="$TMP/vault"
 export KNOWLEDGE_HOME="$TMP/home"
 # `rules check --restore` repairs the instructions blocks under HOME: a fixture vault must never
 # reach the real ~/.claude/CLAUDE.md or ~/.codex/AGENTS.md (Stage 7).
-export HOME="$TMP/user" USERPROFILE="$TMP/user"
+export HOME="$TMP/user" USERPROFILE="$TMP/user" TMPDIR="$TMP" TMP TEMP="$TMP" # failures land in temp
 unset KNOWLEDGE_CONFIG
 mkdir -p "$KNOWLEDGE_HOME" "$TMP/bin" "$HOME"
 cp -R "$ROOT/template" "$VAULT"
