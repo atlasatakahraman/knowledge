@@ -7,7 +7,7 @@ opencode, the Claude desktop app), each under its own `found` line. An agent ins
 someone follows [AGENTS.md](../AGENTS.md) instead.
 
 ```bash
-git -c advice.detachedHead=false clone --branch v0.13.0 https://github.com/atlasatakahraman/knowledge ~/dev/knowledge
+git -c advice.detachedHead=false clone --branch v0.13.1 https://github.com/atlasatakahraman/knowledge ~/dev/knowledge
 # the binary, from the release (below) or: cargo install --path ~/dev/knowledge --locked
 knowledge setup --plan            # what it would write; nothing is written
 knowledge setup --apply <id>      # exactly that, where <id> is the plan's last line
@@ -24,7 +24,7 @@ archive, check it with all three of [verify.md](verify.md)'s steps against the c
 `allowed_signers`, then extract the two binaries into `~/.local/bin`:
 
 ```bash
-u=https://github.com/atlasatakahraman/knowledge/releases/download/v0.13.0 a=knowledge-0.13.0-x86_64-unknown-linux-gnu
+u=https://github.com/atlasatakahraman/knowledge/releases/download/v0.13.1 a=knowledge-0.13.1-x86_64-unknown-linux-gnu
 curl -fsSL -O $u/SHA256SUMS -O $u/SHA256SUMS.sig -O $u/$a.tar.gz
 cp ~/dev/knowledge/allowed_signers .      # then verify.md's three checks
 mkdir -p ~/.local/bin
@@ -32,7 +32,7 @@ tar -xzf $a.tar.gz -C ~/.local/bin --strip-components 1 $a/knowledge $a/knowledg
 ```
 
 ```powershell
-$u = "https://github.com/atlasatakahraman/knowledge/releases/download/v0.13.0"; $a = "knowledge-0.13.0-x86_64-pc-windows-msvc"
+$u = "https://github.com/atlasatakahraman/knowledge/releases/download/v0.13.1"; $a = "knowledge-0.13.1-x86_64-pc-windows-msvc"
 curl.exe -fsSL -O "$u/SHA256SUMS" -O "$u/SHA256SUMS.sig" -O "$u/$a.zip"
 Copy-Item C:\dev\knowledge\allowed_signers .      # then verify.md's three checks
 New-Item -ItemType Directory -Force $HOME\.local\bin | Out-Null
@@ -47,22 +47,26 @@ A plan on a new machine, for Claude Code alone (`--harness claude`), with the ho
 `~`:
 
 ```
-knowledge 0.13.0 setup plan: nothing is written
+knowledge 0.13.1 setup plan: nothing is written
 
   ok      prerequisites    git · claude · gitleaks
-  ok      skeleton         ~/dev/knowledge (0.13.0)
-  create  vault            ~/knowledge: new, from template/ (31 files), .skeleton.json pins 0.13.0, git init, a first commit when git knows your user.email
+  ok      skeleton         ~/dev/knowledge (0.13.1)
+  create  vault            ~/knowledge: new, from template/ (31 files), .skeleton.json pins 0.13.1, git init, a first commit when git knows your user.email
   change  core.fileMode    ~/knowledge/.git/config: false (Obsidian's mode-only rewrites would block the pull)
   change  hooksPath        ~/knowledge/.git/config: -> ~/dev/knowledge/githooks (secret scan, rules backstops)
   change  hooksPath        ~/dev/knowledge/.git/config: -> ~/dev/knowledge/githooks (secret scan, rules backstops)
   create  config           ~/.config/knowledge/config.json: vault ~/knowledge, devRoot ~/dev, os windows
   create  link             ~/.claude/skills/knowledge -> ~/dev/knowledge/skills/knowledge
   create  link             ~/.agents/skills/knowledge -> ~/dev/knowledge/skills/knowledge
-  create  link             ~/.claude/commands/knowledge-commits.md -> ~/dev/knowledge/commands/knowledge-commits.md
-  create  link             ~/.claude/commands/knowledge-log.md -> ~/dev/knowledge/commands/knowledge-log.md
-  create  link             ~/.claude/commands/knowledge-sync.md -> ~/dev/knowledge/commands/knowledge-sync.md
-  create  link             ~/.claude/commands/knowledge-usage.md -> ~/dev/knowledge/commands/knowledge-usage.md
-  ok      knowledge        ~/.cargo/bin/knowledge.exe (0.13.0)
+  create  link             ~/.claude/skills/knowledge-commits -> ~/dev/knowledge/skills/knowledge-commits
+  create  link             ~/.agents/skills/knowledge-commits -> ~/dev/knowledge/skills/knowledge-commits
+  create  link             ~/.claude/skills/knowledge-log -> ~/dev/knowledge/skills/knowledge-log
+  create  link             ~/.agents/skills/knowledge-log -> ~/dev/knowledge/skills/knowledge-log
+  create  link             ~/.claude/skills/knowledge-sync -> ~/dev/knowledge/skills/knowledge-sync
+  create  link             ~/.agents/skills/knowledge-sync -> ~/dev/knowledge/skills/knowledge-sync
+  create  link             ~/.claude/skills/knowledge-usage -> ~/dev/knowledge/skills/knowledge-usage
+  create  link             ~/.agents/skills/knowledge-usage -> ~/dev/knowledge/skills/knowledge-usage
+  ok      knowledge        ~/.cargo/bin/knowledge.exe (0.13.1)
   create  plugin           claude plugin install knowledge@knowledge, from https://github.com/atlasatakahraman/knowledge (git, no autoUpdate)
   create  settings.json    ~/.claude/settings.json: our 0 hooks out (the plugin carries them), knowledge_bin = ~/.cargo/bin/knowledge.exe
   create  CLAUDE.md        ~/.claude/CLAUDE.md: imports ~/knowledge/00-Meta/Identity.md, ~/knowledge/00-Meta/Hard-Rules.md
@@ -71,10 +75,12 @@ knowledge 0.13.0 setup plan: nothing is written
 After apply:
   knowledge doctor --repair --pretty: the first index, hubs and commit notes
   knowledge rules list --json, then knowledge rules enable <pack> for each pack you want: the rules interview
-  fill the FILL: placeholders in ~/knowledge/00-Meta, then start Claude Code in ~/knowledge
+  fill the FILL: placeholders in ~/knowledge/00-Meta (an agent installing for you asks about each one)
+  a private repo for the vault, if you want one: gh repo create knowledge-vault --private --source ~/knowledge --remote origin --push
+  then start Claude Code in ~/knowledge
 
-14 change(s). Apply exactly these: knowledge setup --apply 09ab01df7a24ef40 --harness claude
-plan 09ab01df7a24ef40
+18 change(s). Apply exactly these: knowledge setup --apply 0d28e0144f98cbbc --harness claude
+plan 0d28e0144f98cbbc
 ```
 
 The apply ends with `Done.`, and a second `--plan` on the same machine says `Nothing to change.`
@@ -133,8 +139,8 @@ A new one from the template, or an existing clone (then skip to `core.fileMode`)
 
 ```bash
 cp -r <skeleton>/template <vault>
-echo '{"version":"0.13.0"}' > <vault>/.skeleton.json     # the version `knowledge --version` prints
-git -C <vault> init -b main && git -C <vault> add -A && git -C <vault> commit -m "chore: new vault from knowledge 0.13.0"
+echo '{"version":"0.13.1"}' > <vault>/.skeleton.json     # the version `knowledge --version` prints
+git -C <vault> init -b main && git -C <vault> add -A && git -C <vault> commit -m "chore: new vault from knowledge 0.13.1"
 git -C <vault> config core.fileMode false
 ```
 
@@ -206,25 +212,27 @@ $ knowledge config
 ### 4. Links into `~/.claude`
 
 ```bash
-mkdir -p ~/.claude/skills ~/.claude/commands
-ln -s <skeleton>/skills/knowledge ~/.claude/skills/knowledge
-ln -s <skeleton>/commands/knowledge-*.md ~/.claude/commands/
-mkdir -p ~/.agents/skills && ln -s <skeleton>/skills/knowledge ~/.agents/skills/knowledge
+mkdir -p ~/.claude/skills ~/.agents/skills
+for s in <skeleton>/skills/*/; do
+  ln -s "${s%/}" ~/.claude/skills/; ln -s "${s%/}" ~/.agents/skills/
+done
 ```
 
 ```powershell
-New-Item -ItemType Junction -Path $HOME\.claude\skills\knowledge -Target C:\dev\knowledge\skills\knowledge
-Get-ChildItem C:\dev\knowledge\commands\knowledge-*.md | ForEach-Object {
-  New-Item -ItemType SymbolicLink -Path "$HOME\.claude\commands\$($_.Name)" -Target $_.FullName }
-New-Item -ItemType Directory -Force $HOME\.agents\skills | Out-Null
-New-Item -ItemType Junction -Path $HOME\.agents\skills\knowledge -Target C:\dev\knowledge\skills\knowledge
+foreach ($d in "$HOME\.claude\skills", "$HOME\.agents\skills") {
+  New-Item -ItemType Directory -Force $d | Out-Null
+  Get-ChildItem -Directory C:\dev\knowledge\skills | ForEach-Object {
+    New-Item -ItemType Junction -Path "$d\$($_.Name)" -Target $_.FullName } }
 ```
 
-A file symlink on Windows needs Developer Mode (Settings > For developers) or an elevated shell; a
-junction needs neither. `~/.agents/skills` is the skills folder Codex, opencode, Gemini CLI, Cursor,
-Amp and Zed read, so `/knowledge` reaches them through the same link; opencode reads both folders
-and loads the skill once. Before 0.13.0 these were `~/.claude/hooks`, `skills/brain` and
-`commands/brain-*`: `knowledge setup` removes those links when their targets end in those paths.
+Every link is a folder's: a junction on Windows, which needs neither Developer Mode nor an
+elevated shell. `~/.agents/skills` is the skills folder Codex, opencode, Gemini CLI, Cursor, Amp and
+Zed read, so the skills reach them through the same links; opencode reads both folders and loads
+each skill once. The `knowledge-*` skills are slash-only (`disable-model-invocation: true`), so
+Claude Code keeps their descriptions out of context until you type one. Before 0.13.0 these were
+`~/.claude/hooks`, `skills/brain` and `commands/brain-*`, and before 0.13.1 the `knowledge-*` were
+`~/.claude/commands/knowledge-*.md` file links: `knowledge setup` removes those links when their
+targets end in those paths.
 
 ### 5. The knowledge binary
 
@@ -234,7 +242,7 @@ From source:
 ```
 $ cargo install --path <skeleton> --locked
 $ knowledge --version
-knowledge 0.13.0
+knowledge 0.13.1
 SQLite 3.54.1, FTS5 on
 ```
 
@@ -355,9 +363,12 @@ built by the first `knowledge find <symbol> --code` or `graph <symbol> --code` t
 brought level by every one after.
 
 Then, for a new vault, fill the `<!-- FILL: … -->` placeholders in `00-Meta/Identity.md` and
-`00-Meta/Hard-Rules.md`, and replace the questions in `00-Meta/retrieval-cases.json` with ones the
-vault must always answer. Last, the rules interview: `knowledge rules list` shows the packs, and
-`knowledge rules enable <pack>` turns one's guards on.
+`00-Meta/Hard-Rules.md` (an agent following [AGENTS.md](../AGENTS.md) asks you about each one), and
+replace the questions in `00-Meta/retrieval-cases.json` with ones the vault must always answer.
+Then the rules interview: `knowledge rules list` shows the packs, and `knowledge rules enable
+<pack>` turns one's guards on; `knowledge rules guard add` gives a rule you write a guard of its own
+([verbs.md](verbs.md)). Last, if you want the vault on a second machine, a private repo:
+`gh repo create knowledge-vault --private --source <vault> --remote origin --push`.
 
 Each session start runs the full doctor once per logical day, detached, with `--repair --record`;
 a FAIL opens the next session with a `!! VAULT HEALTH FAIL` line. No scheduled task is needed.

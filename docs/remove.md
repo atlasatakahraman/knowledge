@@ -9,23 +9,27 @@ Like the install, the plan writes nothing and the apply refuses if anything move
 plan for Claude Code alone (`--harness claude`), with the home folder shown as `~`:
 
 ```
-knowledge 0.13.0 remove plan: nothing is written
+knowledge 0.13.1 remove plan: nothing is written
 
-  remove  settings.json    ~/.claude/settings.json: our 0 hooks and the plugin's option removed, every other hook kept (the old file kept as ~/.claude/settings.json.pre-skeleton-9095b15d)
-  remove  plugin           claude plugin uninstall knowledge@knowledge (0.13.0), then marketplace remove knowledge
+  remove  settings.json    ~/.claude/settings.json: our 0 hooks and the plugin's option removed, every other hook kept (the old file kept as ~/.claude/settings.json.pre-skeleton-0588b9aa)
+  remove  plugin           claude plugin uninstall knowledge@knowledge (0.13.1), then marketplace remove knowledge
   remove  CLAUDE.md        ~/.claude/CLAUDE.md: the imports section setup wrote
   remove  link             ~/.claude/skills/knowledge
   remove  link             ~/.agents/skills/knowledge
-  remove  link             ~/.claude/commands/knowledge-commits.md
-  remove  link             ~/.claude/commands/knowledge-log.md
-  remove  link             ~/.claude/commands/knowledge-sync.md
-  remove  link             ~/.claude/commands/knowledge-usage.md
+  remove  link             ~/.claude/skills/knowledge-commits
+  remove  link             ~/.agents/skills/knowledge-commits
+  remove  link             ~/.claude/skills/knowledge-log
+  remove  link             ~/.agents/skills/knowledge-log
+  remove  link             ~/.claude/skills/knowledge-sync
+  remove  link             ~/.agents/skills/knowledge-sync
+  remove  link             ~/.claude/skills/knowledge-usage
+  remove  link             ~/.agents/skills/knowledge-usage
   remove  hooksPath        ~/knowledge/.git/config: core.hooksPath unset
   remove  hooksPath        ~/dev/knowledge/.git/config: core.hooksPath unset
   info    kept             the vault, config.json, the compile state and any signing key: --remove deletes no data
 
-11 change(s). Apply exactly these: knowledge setup --remove --apply 7b91790e0269d18d --harness claude
-plan 7b91790e0269d18d
+15 change(s). Apply exactly these: knowledge setup --remove --apply 45483e7fe037b649 --harness claude
+plan 45483e7fe037b649
 ```
 
 It takes out the links, the Claude plugin, its marketplace and its option in `settings.json`
@@ -45,6 +49,7 @@ A `generic` block goes with `knowledge setup --harness generic --instructions <f
 --plan`, then `--apply <id>`.
 
 It never touches the vault, and keeps `config.json`, the indexes, the compile state and any signing
-key: delete `~/.config/knowledge` by hand if you want them gone. The binary stays too:
-`cargo uninstall knowledge`. The vault stays a folder of Markdown notes. Obsidian's graph colours
+key: delete `~/.config/knowledge` by hand if you want them gone. The binaries stay too: delete
+`knowledge` and `knowledge-code` from `~/.local/bin` (a release install), or
+`cargo uninstall knowledge` (a source build). The vault stays a folder of Markdown notes. Obsidian's graph colours
 stay too: they are Obsidian's view state.

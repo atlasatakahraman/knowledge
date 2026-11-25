@@ -8,9 +8,17 @@ Run each step, show the person its output, and go on only when the output matche
 is one line; the output shown is from a real run on Windows (paths shortened to `~`). The flags and
 every step by hand: [docs/install.md](docs/install.md).
 
-1. **Check the prerequisites.** Each prints a version; a missing one is the person's to install
-   (the commands are in [docs/install.md](docs/install.md)), and you ask before running any. `gh`
-   checks the build provenance and needs the person signed in (`gh auth login`, theirs to run).
+The person decides; you do the work. Where a step needs something from them (an install, a name, a
+choice), ask one question with a concrete suggestion, then run the command yourself on their yes.
+Two kinds of step stay theirs to run: a sign-in (`gh auth login`, the harness's own), and anything
+that lowers a protection (see the list at the end). An installer that asks for elevation shows its
+own prompt; that click is theirs too.
+
+1. **Check the prerequisites.** Each prints a version. For a missing one, ask whether to install
+   it, naming the command from [docs/install.md](docs/install.md) § Prerequisites for this OS, and
+   run it on a yes; a new install may need a new shell before it is on `PATH`. `gh` checks the
+   build provenance and needs the person signed in: `gh auth status` says whether they are, and
+   `gh auth login` is theirs to run.
 
    ```
    $ git --version
@@ -23,6 +31,12 @@ every step by hand: [docs/install.md](docs/install.md).
    gh version 2.97.0 (2026-07-31)
    ```
 
+   Then git's identity, which the vault's commits carry. When `git config user.email` prints
+   nothing, ask for the name and email to use, and whether for all of this machine's git or only
+   the vault. All of it: `git config --global user.name "<name>"` and `user.email` now, on a yes.
+   Only the vault: the same with `git -C <vault>` once step 7 has made it, then step 7's last
+   paragraph.
+
 2. **Download the latest release** into a new, empty folder. `SHA256SUMS` comes first: it names
    one archive per platform, `knowledge-<version>-<target>.zip` on Windows and `.tar.gz` elsewhere.
    Pick this machine's target (`x86_64-pc-windows-msvc`, `aarch64-apple-darwin`,
@@ -32,7 +46,7 @@ every step by hand: [docs/install.md](docs/install.md).
    ```
    $ curl -fsSLO https://github.com/atlasatakahraman/knowledge/releases/latest/download/SHA256SUMS
    $ curl -fsSLO https://github.com/atlasatakahraman/knowledge/releases/latest/download/SHA256SUMS.sig
-   $ curl -fsSLO https://github.com/atlasatakahraman/knowledge/releases/latest/download/knowledge-0.13.0-x86_64-pc-windows-msvc.zip
+   $ curl -fsSLO https://github.com/atlasatakahraman/knowledge/releases/latest/download/knowledge-0.13.1-x86_64-pc-windows-msvc.zip
    ```
 
    No archive for this target: build from source instead (step 5's last paragraph).
@@ -42,7 +56,7 @@ every step by hand: [docs/install.md](docs/install.md).
    session start leaves a checkout on a tag alone.
 
    ```
-   $ git -c advice.detachedHead=false clone --branch v0.13.0 https://github.com/atlasatakahraman/knowledge ~/dev/knowledge
+   $ git -c advice.detachedHead=false clone --branch v0.13.1 https://github.com/atlasatakahraman/knowledge ~/dev/knowledge
    Cloning into '~/dev/knowledge'...
    ```
 
@@ -55,22 +69,24 @@ every step by hand: [docs/install.md](docs/install.md).
    ```
    $ cmd /c "ssh-keygen -Y verify -f allowed_signers -I atlasatakahraman -n file -s SHA256SUMS.sig < SHA256SUMS"
    Good "file" signature for atlasatakahraman with ED25519 key SHA256:4lk0qVkGnFfrnKNselpgVf9e55AvCRSy5OkdhcCq6uc
-   $ $f = "knowledge-0.13.0-x86_64-pc-windows-msvc.zip"; ((Get-FileHash $f -Algorithm SHA256).Hash + "  $f") -in (Get-Content SHA256SUMS)
+   $ $f = "knowledge-0.13.1-x86_64-pc-windows-msvc.zip"; ((Get-FileHash $f -Algorithm SHA256).Hash + "  $f") -in (Get-Content SHA256SUMS)
    True
-   $ gh attestation verify knowledge-0.13.0-x86_64-pc-windows-msvc.zip --repo atlasatakahraman/knowledge --signer-workflow atlasatakahraman/knowledge/.github/workflows/release.yml --source-ref refs/tags/v0.13.0 --deny-self-hosted-runners
+   $ gh attestation verify knowledge-0.13.1-x86_64-pc-windows-msvc.zip --repo atlasatakahraman/knowledge --signer-workflow atlasatakahraman/knowledge/.github/workflows/release.yml --source-ref refs/tags/v0.13.1 --deny-self-hosted-runners
    ```
 
    The last one exits 0 on a match.
 
 5. **Put the two binaries in `~/.local/bin`.** The folder must be named `bin`: `setup` takes any
    other folder for a build folder and WARNs. `tar` reads the zip on Windows too (Windows 10 1803
-   and later). If `~/.local/bin` is not on `PATH`, adding it is the person's step.
+   and later). If `~/.local/bin` is not on `PATH`, ask, then add it for the person's user: on
+   Windows `[Environment]::SetEnvironmentVariable('Path', [Environment]::GetEnvironmentVariable('Path', 'User') + ";$HOME\.local\bin", 'User')`,
+   elsewhere one line in their shell's profile. A new shell sees it.
 
    ```
    $ mkdir -p ~/.local/bin
-   $ tar -xf knowledge-0.13.0-x86_64-pc-windows-msvc.zip -C ~/.local/bin --strip-components 1 knowledge-0.13.0-x86_64-pc-windows-msvc/knowledge.exe knowledge-0.13.0-x86_64-pc-windows-msvc/knowledge-code.exe
+   $ tar -xf knowledge-0.13.1-x86_64-pc-windows-msvc.zip -C ~/.local/bin --strip-components 1 knowledge-0.13.1-x86_64-pc-windows-msvc/knowledge.exe knowledge-0.13.1-x86_64-pc-windows-msvc/knowledge-code.exe
    $ knowledge --version
-   knowledge 0.13.0
+   knowledge 0.13.1
    SQLite 3.54.1, FTS5 on
    ```
 
@@ -83,15 +99,15 @@ every step by hand: [docs/install.md](docs/install.md).
 
    ```
    $ knowledge setup --plan
-   knowledge 0.13.0 setup plan: nothing is written
+   knowledge 0.13.1 setup plan: nothing is written
    ...
-   14 change(s). Apply exactly these: knowledge setup --apply 1a5be68145b5b7a2 --harness claude
-   plan 1a5be68145b5b7a2
+   18 change(s). Apply exactly these: knowledge setup --apply d9305150d8d7ceea --harness claude
+   plan d9305150d8d7ceea
    ```
 
    Each line is `ok`, `create`, `change`, `WARN` or `FAIL`. A FAIL is the answer to report: quote it
    and stop, do not work around it. A WARN that names a missing tool carries the command that
-   installs it; installing is the person's call.
+   installs it: ask, run it on a yes, then plan again.
 
 7. **Apply the plan, only on the person's yes,** with the id from its last line:
 
@@ -102,6 +118,11 @@ every step by hand: [docs/install.md](docs/install.md).
    ```
 
    The id refuses to apply if anything changed since the plan; then plan again and show it again.
+
+   A new vault gets its first commit when git knows `user.email`. When the person chose an identity
+   for the vault only, set it now with `git -C <vault> config`, then make that commit:
+   `git -C <vault> add -A` and
+   `git -C <vault> commit -m "chore: new vault from knowledge <version>"`.
 
 8. **Build the index and check the vault:**
 
@@ -120,17 +141,39 @@ every step by hand: [docs/install.md](docs/install.md).
    turn on, one question with the packs as options, then `knowledge rules enable <pack>` for each
    one they chose.
 
-10. **For a new vault,** tell the person what is left for them: the `FILL:` placeholders in
-    `00-Meta/Identity.md` and `00-Meta/Hard-Rules.md`, and the questions in
-    `00-Meta/retrieval-cases.json`. Then a new session, in the vault, picks up the hooks.
+10. **For a new vault, fill it in with the person,** one section at a time. `grep -n "FILL:"` on
+    `<vault>/00-Meta/Identity.md` and `<vault>/00-Meta/Hard-Rules.md` lists the placeholders. For
+    each, ask one question that quotes it and offers a concrete answer from what you already know
+    (their earlier answers, this machine's OS, shell and installed tools); they accept it, change
+    it, or skip. Show the edit as a diff and write it on a yes; a skipped one keeps its `FILL:`
+    comment for later. Then the same for `00-Meta/retrieval-cases.json`: propose three or four
+    questions the vault must always answer, each with the note that answers it. After Hard-Rules
+    changes, `knowledge rules lock` re-stamps the lock. For each new rule that names something a
+    machine can see (a command, a path, an MCP tool), propose its guard: the
+    `knowledge rules guard add` line from [docs/verbs.md](docs/verbs.md), run on a yes. Last,
+    commit what was filled, on a yes, with a subject such as `docs(meta): identity and rules`.
+
+11. **Offer a private GitHub repo for the vault.** The session start pulls and the hooks push their
+    records when the vault has an `origin`, which is how a second machine shares it. Ask whether
+    they want one, and its name (suggest `knowledge-vault`). On a yes, with `gh` signed in:
+
+    ```
+    $ gh repo create knowledge-vault --private --source ~/knowledge --remote origin --push
+    ```
+
+    Always `--private`: a vault holds who the person is and how they work. A public one is theirs
+    to make on GitHub, never yours to offer.
+
+12. **A new session, started in the vault,** picks up the hooks. Tell the person so, and stop.
 
 **What you are never asked to do, and must not do:**
 
 - read, enter or copy a credential, a token or a private key, or sign in for the person;
-- turn off a protection: a permission rule, a sandbox, the secret scan, a hook;
+- turn off a protection: a permission rule, a sandbox, the secret scan, a hook, or a Windows
+  setting such as Developer Mode (no step needs it: every link is a folder's junction);
 - approve a permission prompt, or write Codex's hook trust (the person reviews hooks in `/hooks`);
 - turn on automatic updates;
-- commit or push the person's vault;
+- commit to or push the person's vault without their yes, or make it public;
 - edit a hook in `~/.claude/settings.json` that is not this engine's.
 
 If a step seems to need one of these, stop and say which step and why.
@@ -146,7 +189,7 @@ grammars). Layout:
 | `src/` | the crate; `src/harness/<id>.rs` translates one harness's hook payloads |
 | `adapters/<id>.json` | one data file per harness, built into the binary |
 | `claude/`, `codex/`, `opencode/` | the harnesses' plugins; each hook runs the binary |
-| `skills/`, `commands/` | the vault-writing skill and the slash commands; they run only `knowledge` |
+| `skills/` | the vault-writing skill and the slash-only `knowledge-*` skills; they run only `knowledge` |
 | `template/` | the empty vault `setup --from-template` copies, with its generic rules and lock |
 | `githooks/` | the pre-commit backstop `setup` points every clone at |
 | `checks/stage-N.sh` | the runnable checks, one per stage; CI runs them on every target |

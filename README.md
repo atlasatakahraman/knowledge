@@ -48,7 +48,9 @@ Follow its AGENTS.md, show me each step's output, and ask before anything you wr
 ```
 
 [AGENTS.md](AGENTS.md) walks it through the same steps as below, with the output each one should
-print. It shows you the setup plan, applies it only on your yes, then asks which rule packs you want.
+print. It shows you the setup plan, applies it only on your yes, then asks which rule packs you want,
+fills in who you are and your rules with you one question at a time, and offers a private GitHub
+repo for the vault.
 
 ### Requirements
 
@@ -60,7 +62,7 @@ with the Rust toolchain (`rustup`), in two to three minutes.
 ### By hand
 
 ```bash
-git -c advice.detachedHead=false clone --branch v0.13.0 https://github.com/atlasatakahraman/knowledge ~/dev/knowledge
+git -c advice.detachedHead=false clone --branch v0.13.1 https://github.com/atlasatakahraman/knowledge ~/dev/knowledge
 # the binary: your platform's release archive, verified, into ~/.local/bin (docs/install.md),
 # or from source: cargo install --path ~/dev/knowledge --locked
 knowledge setup --plan
@@ -91,7 +93,7 @@ docs as the vault. Paths are shortened and long snippets cut.
 > update knowledge to the newest release
 
 Relevant notes from the knowledge vault (~/knowledge):
-- **update** — $ knowledge update --plan  knowledge 0.13.0, x86_64-pc-windows-msvc …
+- **update** — $ knowledge update --plan  knowledge 0.13.1, x86_64-pc-windows-msvc …
 - **verify** — …from `knowledge setup --plan`, or update.md over an older version. How a release …
 - **release** — …A release is eight archives (build.yml's targets), one SHA256SUMS over them, …
 ```
@@ -101,7 +103,7 @@ Relevant notes from the knowledge vault (~/knowledge):
 ```text
 $ knowledge find "check the signature on a downloaded release"
 release — ~/knowledge/20-Knowledge/knowledge/release.md
-  …download v0.13.0 -R atlasatakahraman/knowledge -p SHA256SUMS … 5. Check the signature…
+  …download v0.13.1 -R atlasatakahraman/knowledge -p SHA256SUMS … 5. Check the signature…
 verify — ~/knowledge/20-Knowledge/knowledge/verify.md
   …Three checks, each answering a different question: | The signature over SHA256SUMS | …
 ```

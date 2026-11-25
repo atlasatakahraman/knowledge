@@ -43,8 +43,9 @@ Follow its AGENTS.md, show me each step's output, and ask before anything you wr
 ```
 
 O [AGENTS.md](../AGENTS.md) o conduz pelos mesmos passos descritos abaixo, com a saída que cada um deve
-imprimir. Ele mostra o plano de instalação, aplica só com o seu sim e depois pergunta quais pacotes
-de regras você quer.
+imprimir. Ele mostra o plano de instalação, aplica só com o seu sim, depois pergunta quais pacotes
+de regras você quer, preenche com você, uma pergunta por vez, quem você é e as suas regras, e
+oferece um repositório privado no GitHub para o vault.
 
 ### Requisitos
 
@@ -56,7 +57,7 @@ compilado a partir do código-fonte com a toolchain do Rust (`rustup`), em dois 
 ### À mão
 
 ```bash
-git -c advice.detachedHead=false clone --branch v0.13.0 https://github.com/atlasatakahraman/knowledge ~/dev/knowledge
+git -c advice.detachedHead=false clone --branch v0.13.1 https://github.com/atlasatakahraman/knowledge ~/dev/knowledge
 # the binary: your platform's release archive, verified, into ~/.local/bin (docs/install.md),
 # or from source: cargo install --path ~/dev/knowledge --locked
 knowledge setup --plan
@@ -89,7 +90,7 @@ uma palavra:
 > update knowledge to the newest release
 
 Relevant notes from the knowledge vault (~/knowledge):
-- **update** — $ knowledge update --plan  knowledge 0.13.0, x86_64-pc-windows-msvc …
+- **update** — $ knowledge update --plan  knowledge 0.13.1, x86_64-pc-windows-msvc …
 - **verify** — …from `knowledge setup --plan`, or update.md over an older version. How a release …
 - **release** — …A release is eight archives (build.yml's targets), one SHA256SUMS over them, …
 ```
@@ -100,7 +101,7 @@ leituras:
 ```text
 $ knowledge find "check the signature on a downloaded release"
 release — ~/knowledge/20-Knowledge/knowledge/release.md
-  …download v0.13.0 -R atlasatakahraman/knowledge -p SHA256SUMS … 5. Check the signature…
+  …download v0.13.1 -R atlasatakahraman/knowledge -p SHA256SUMS … 5. Check the signature…
 verify — ~/knowledge/20-Knowledge/knowledge/verify.md
   …Three checks, each answering a different question: | The signature over SHA256SUMS | …
 ```

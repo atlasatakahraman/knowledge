@@ -43,8 +43,9 @@ Follow its AGENTS.md, show me each step's output, and ask before anything you wr
 ```
 
 [AGENTS.md](../AGENTS.md) führt ihn durch dieselben Schritte wie unten, mit der Ausgabe, die jeder
-Schritt zeigen sollte. Er zeigt dir den Setup-Plan, wendet ihn nur mit deinem Ja an und fragt dann,
-welche Regelpakete du willst.
+Schritt zeigen sollte. Er zeigt dir den Setup-Plan, wendet ihn nur mit deinem Ja an, fragt dann,
+welche Regelpakete du willst, füllt mit dir Frage für Frage aus, wer du bist und welche Regeln du
+hast, und bietet ein privates GitHub-Repo für den Vault an.
 
 ### Voraussetzungen
 
@@ -56,7 +57,7 @@ Rust-Toolchain (`rustup`) aus dem Quellcode gebaut, in zwei bis drei Minuten.
 ### Von Hand
 
 ```bash
-git -c advice.detachedHead=false clone --branch v0.13.0 https://github.com/atlasatakahraman/knowledge ~/dev/knowledge
+git -c advice.detachedHead=false clone --branch v0.13.1 https://github.com/atlasatakahraman/knowledge ~/dev/knowledge
 # the binary: your platform's release archive, verified, into ~/.local/bin (docs/install.md),
 # or from source: cargo install --path ~/dev/knowledge --locked
 knowledge setup --plan
@@ -89,7 +90,7 @@ Agent ein Wort liest:
 > update knowledge to the newest release
 
 Relevant notes from the knowledge vault (~/knowledge):
-- **update** — $ knowledge update --plan  knowledge 0.13.0, x86_64-pc-windows-msvc …
+- **update** — $ knowledge update --plan  knowledge 0.13.1, x86_64-pc-windows-msvc …
 - **verify** — …from `knowledge setup --plan`, or update.md over an older version. How a release …
 - **release** — …A release is eight archives (build.yml's targets), one SHA256SUMS over them, …
 ```
@@ -100,7 +101,7 @@ einem Stapel Lesezugriffe:
 ```text
 $ knowledge find "check the signature on a downloaded release"
 release — ~/knowledge/20-Knowledge/knowledge/release.md
-  …download v0.13.0 -R atlasatakahraman/knowledge -p SHA256SUMS … 5. Check the signature…
+  …download v0.13.1 -R atlasatakahraman/knowledge -p SHA256SUMS … 5. Check the signature…
 verify — ~/knowledge/20-Knowledge/knowledge/verify.md
   …Three checks, each answering a different question: | The signature over SHA256SUMS | …
 ```
