@@ -50,6 +50,15 @@ check "an edited note is reindexed" 'k find wombats | grep -q new-note && ! k fi
 rm "$VAULT/90-Inbox/new-note.md"
 k index >/dev/null
 check "a deleted note leaves the index" '! k find wombats | grep -q new-note && k index --check >/dev/null'
+# Two reindexes at once (a doctor's and a backfill's): the second waits for the write lock, never
+# "database is locked" (a deferred transaction that reads first is refused past the busy timeout).
+locked=0
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  find "$VAULT" -name '*.md' -not -path '*/.obsidian/*' -exec touch {} +
+  k index > "$TMP/ix1.txt" 2>&1 & k index > "$TMP/ix2.txt" 2>&1; wait
+  grep -q locked "$TMP/ix1.txt" "$TMP/ix2.txt" && locked=$((locked + 1))
+done
+check "two reindexes at once both finish ($locked of 10 rounds locked)" '[ "$locked" = 0 ]'
 
 # --- S3.4 / S3.5: find, inject, hook prompt ------------------------------------------------------
 check "find ranks the protocol note for its words" 'k find retrieval protocol tiers | head -1 | grep -q Retrieval-Protocol'

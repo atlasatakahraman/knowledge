@@ -50,6 +50,11 @@ pub fn open_db(path: &Path, schema: &str, version: i32) -> Result<Connection, Fa
         conn = Connection::open(path)?;
     }
     conn.busy_timeout(Duration::from_secs(5))?;
+    // Every write transaction here reads first. A deferred one that finds another writer at its
+    // first write gets "database is locked" at once, past the busy timeout (SQLite cannot wait
+    // there without risking a deadlock); IMMEDIATE takes the write lock at BEGIN, where it waits.
+    // Two reindexes at once, a doctor's and a backfill's, failed this way (Arch, 2026-11-25).
+    conn.set_transaction_behavior(rusqlite::TransactionBehavior::Immediate);
     conn.query_row("PRAGMA journal_mode = WAL", [], |_| Ok(()))?;
     conn.pragma_update(None, "synchronous", "NORMAL")?;
     if found != version {
