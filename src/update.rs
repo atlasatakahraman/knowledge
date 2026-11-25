@@ -62,12 +62,12 @@ pub fn run(raw: &[String]) -> Result<u8, Fault> {
     let mut out = format!("knowledge {version}, {target}\n");
     let api = format!("https://api.github.com/repos/{slug}/releases/latest");
     let (status, _, _, body) = fetch::request(&api, false)?;
+    let sk = config::load()
+        .ok()
+        .and_then(|c| setup::checkout(&c.dev))
+        .map_or_else(|| "<checkout>".to_string(), |p| state::native(&p));
     if status == 404 {
         // GitHub answers 404 for a repo with no published release (a draft is not one).
-        let sk = config::load()
-            .ok()
-            .and_then(|c| setup::checkout(&c.dev))
-            .map_or_else(|| "<checkout>".to_string(), |p| state::native(&p));
         out.push_str(&format!(
             "No release is published yet at {repo}/releases.\n\
              Update from the checkout instead:\n  \
@@ -157,7 +157,11 @@ pub fn run(raw: &[String]) -> Result<u8, Fault> {
          {signers}\n   \
          {signed}\n   {check}\n   {provenance}\n\
          3. {quit}\n   Then extract knowledge and knowledge-code over the ones in {dir}\n\
-         4. knowledge setup --plan, then --apply <id>: the Codex and opencode plugins move to the \
+         4. Move the checkout to the release, so its plugins carry the new version (a checkout on \
+         a branch pulls instead):\n   \
+         git -C {sk} fetch --tags\n   \
+         git -C {sk} -c advice.detachedHead=false checkout {tag}\n\
+         5. knowledge setup --plan, then --apply <id>: the Codex and opencode plugins move to the \
          new version, and Codex asks for its hook review again\n",
         signers = SIGNERS.trim()
     ));
