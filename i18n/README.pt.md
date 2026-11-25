@@ -214,6 +214,38 @@ A lista completa e o que o `fetch` recusa: [docs/security.md](../docs/security.m
 O vault é uma pasta de arquivos Markdown com `[[wikilinks]]`, e cada verbo funciona nela sem o
 Obsidian. Abra-o no Obsidian se quiser a visão de grafo: o `setup` colore os grupos por tipo de nota.
 
+## Comandos
+
+Cada comando é um verbo de um único binário, `knowledge`. `knowledge <verb> --help` imprime o uso do
+verbo, quando usá-lo e por quê, e não executa nada. Cada flag, com saída real:
+[docs/verbs.md](../docs/verbs.md).
+
+| Comando | Use quando | Por quê |
+|---|---|---|
+| `find <query>` | você quer o que o vault diz sobre X e os MOCs não responderam; `--captures`, `--repo` e `--code` buscam em saídas guardadas, docs de repos e símbolos | uma chamada devolve a nota e o trecho que casou, em vez de arquivos lidos para o contexto |
+| `graph <note> [<note>]` | você quer saber como duas notas se ligam, ou o que usa um símbolo (`--code`) | ~25 ms a partir do índice, sem ler nenhum arquivo |
+| `keep <label> --q <query>` | a saída de um comando passa de ~2.000 caracteres e você precisa de uma parte | só as seções que casam chegam ao contexto; o resto continua pesquisável |
+| `fetch <url> --q <query>` | você está lendo uma página cujo endereço tem | Markdown cortado para a sua consulta; endereços privados são recusados |
+| `code index` · `code duplicate` | você nivela todos os mapas de código de uma vez, ou procura cópias num commit de monorepo | respostas sobre símbolos a zero tokens; uma cópia é pega antes de virar duas coisas para manter |
+| `index` | notas mudaram fora de uma sessão, ou `find` não acha uma nota que você sabe que existe | todo leitor usa este índice; uma linha velha responde com um trecho velho |
+| `inject <text>` | um prompt trouxe as notas erradas | é o próprio caminho do hook de prompt, rodado à mão |
+| `events <transcript>` | você revisa o que uma sessão passada decidiu | só os turnos que importam, não um transcript de megabytes |
+| `note log` · `note decision` | seu harness não roda hooks, ou a captura perdeu uma decisão | a mesma escrita que os hooks fazem |
+| `ledger list` · `ledger promote` | o início da sessão diz que há decisões esperando | uma captura bruta vira um registro de decisão, ou é descartada |
+| `doctor` | primeiro, sempre que algo parecer errado; depois do setup ou de uma atualização | o único lugar que diz qual parte ficou em silêncio |
+| `rules lock` · `check` · `guard add` | você editou Hard-Rules, a checagem de regras falhou, ou uma regra precisa ser imposta | uma regra num arquivo é conselho; um guard em cada chamada de ferramenta é imposição |
+| `setup --plan` · `--apply <id>` | uma máquina ou harness novo, uma atualização, uma mudança de regras | nada é escrito antes de você ler o plano |
+| `update --plan` | você escolhe procurar uma versão nova | sem telemetria e sem atualização automática |
+| `config [<key>]` | um script precisa do caminho do vault, ou um hook usa a pasta errada | uma fonte por máquina, sem caminhos fixos no código |
+| `records` | a checagem `auth` do doctor aponta uma execução falha; senão, os hooks a rodam | os registros chegam à sua outra máquina; seus próprios commits esperam o seu sim |
+| `flush` · `compile` | o canário do flush dispara, ou um dia ficou de fora; os hooks rodam os dois | uma sessão nunca descarregada nunca é lembrada |
+| `post-bash --backfill <since>` | você fez commit num terminal sem agente | o corpo com o porquê de cada commit chega ao vault |
+| `hubs` | uma nota nova ainda não é alcançável a partir de `00-MOC-Root` | os hubs são escritos a partir das pastas, nunca à mão |
+| `usage` | você quer quanto um mês custou, por projeto ou por janela de 5 horas | lido de transcripts locais, enviado a lugar nenhum |
+| `mcp` | um app fala MCP mas não roda hooks; o `setup` o registra | o mesmo índice e mapa de código para apps sem shell |
+| `hook <event>` | não à mão: o `setup` liga cada harness a ele | um binário roda cada harness sobre o mesmo vault |
+| `--version` | depois de uma instalação ou atualização, e num relatório de bug | diz se a busca (SQLite FTS5) funciona |
+
 ## Documentação
 
 Em inglês: [Instalação](../docs/install.md) · [verificar uma release](../docs/verify.md) ·

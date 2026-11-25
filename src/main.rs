@@ -3,8 +3,8 @@
 #![deny(unsafe_code)]
 
 use knowledge::{
-    Fault, capture, compile, config, doctor, emit, events, fetch, graph, hook, hubs, index, ledger,
-    mcp, memory, note, recorder, records, report, rules, search, setup, update, usage,
+    Fault, capture, compile, config, doctor, emit, events, fetch, graph, help, hook, hubs, index,
+    ledger, mcp, memory, note, recorder, records, report, rules, search, setup, update, usage,
 };
 use std::process::{Command, ExitCode};
 
@@ -44,7 +44,19 @@ const USAGE: &str = "usage:
   knowledge post-bash [--backfill <since>] [--dry-run]
   knowledge records | hubs
   knowledge usage [--month <YYYY-MM>] [--days N] [--projects] [--blocks]
-  knowledge mcp   (an MCP server on stdio: find, graph, read and note)";
+  knowledge mcp   (an MCP server on stdio: find, graph, read and note)
+
+knowledge <verb> --help: one verb's usage, when to use it and why. Nothing runs.";
+
+/// `--help` for one verb, or the full usage for none or an unknown one. Exits 0: asking is not
+/// a usage fault.
+fn print_help(verb: Option<&str>) -> Result<u8, Fault> {
+    match verb.and_then(help::verb) {
+        Some(text) => emit(text),
+        None => emit(&format!("{USAGE}\n")),
+    }
+    Ok(0)
+}
 
 /// The version, and the SQLite build's FTS5 flag: an index without FTS5 cannot search, and the
 /// `bundled` feature is what promises it. The stage check fails when this line says "off".
@@ -86,7 +98,12 @@ fn main() -> ExitCode {
         .split_first()
         .map_or(("", &[][..]), |(v, r)| (v.as_str(), r));
     let code = rest.iter().any(|a| a == "--code");
+    // Checked before any verb runs: without it `records --help` synced and `setup --apply x --help`
+    // would have applied, since unknown switches are ignored (S9.8).
+    let asks_help = argv.iter().any(|a| a == "--help" || a == "-h");
     report(match verb {
+        "--help" | "-h" | "help" => print_help(rest.first().map(String::as_str)),
+        _ if asks_help => print_help(Some(verb)),
         "--version" | "-V" | "version" => version(),
         "find" | "graph" if code => hand_off(&argv),
         "index" => index::run(rest),

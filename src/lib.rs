@@ -17,6 +17,7 @@ pub mod graph;
 pub mod guard;
 pub mod harness;
 pub mod health;
+pub mod help;
 pub mod hook;
 pub mod hubs;
 pub mod index;

@@ -218,6 +218,38 @@ Le vault est un dossier de fichiers Markdown avec des `[[wikilinks]]`, et chaque
 dessus sans Obsidian. Ouvrez-le dans Obsidian si vous voulez la vue en graphe : `setup` colore ses
 groupes par type de note.
 
+## Commandes
+
+Chaque commande est un verbe d'un seul binaire, `knowledge`. `knowledge <verb> --help` affiche
+l'usage du verbe, quand l'utiliser et pourquoi, et n'exécute rien. Chaque flag, avec une sortie
+réelle : [docs/verbs.md](../docs/verbs.md).
+
+| Commande | Utilisez-la quand | Pourquoi |
+|---|---|---|
+| `find <query>` | vous voulez ce que le vault dit de X et les MOC n'ont pas répondu ; `--captures`, `--repo` et `--code` cherchent dans les sorties gardées, les docs des repos et les symboles | un appel renvoie la note et le passage trouvé, au lieu de fichiers lus dans le contexte |
+| `graph <note> [<note>]` | vous voulez savoir comment deux notes sont liées, ou ce qui utilise un symbole (`--code`) | ~25 ms depuis l'index, aucun fichier n'est lu |
+| `keep <label> --q <query>` | la sortie d'une commande dépasse ~2 000 caractères et il vous en faut une partie | seules les sections trouvées entrent dans le contexte ; le reste reste cherchable |
+| `fetch <url> --q <query>` | vous lisez une page dont vous avez l'adresse | du Markdown coupé selon votre requête ; les adresses privées sont refusées |
+| `code index` · `code duplicate` | vous remettez à niveau toutes les cartes de code, ou cherchez des copies dans un commit de monorepo | des réponses sur les symboles à zéro token ; une copie est repérée avant de devenir deux choses à maintenir |
+| `index` | des notes ont changé hors d'une session, ou `find` rate une note que vous savez présente | chaque lecteur utilise cet index ; une ligne périmée répond avec un ancien passage |
+| `inject <text>` | un prompt a ramené les mauvaises notes | c'est le chemin même du hook de prompt, lancé à la main |
+| `events <transcript>` | vous relisez ce qu'une session passée a décidé | seulement les tours qui comptent, pas un transcript de plusieurs mégaoctets |
+| `note log` · `note decision` | votre harness n'exécute pas de hooks, ou la capture a manqué une décision | la même écriture que font les hooks |
+| `ledger list` · `ledger promote` | le début de session signale des décisions en attente | une capture brute devient un enregistrement de décision, ou est écartée |
+| `doctor` | d'abord, dès que quelque chose semble anormal ; après setup ou une mise à jour | le seul endroit qui dit quelle partie s'est tue |
+| `rules lock` · `check` · `guard add` | vous avez modifié Hard-Rules, la vérification des règles échoue, ou une règle doit être imposée | une règle dans un fichier est un conseil ; un guard sur chaque appel d'outil est une contrainte |
+| `setup --plan` · `--apply <id>` | une nouvelle machine ou un nouveau harness, une mise à jour, un changement de règles | rien n'est écrit avant que vous ayez lu le plan |
+| `update --plan` | vous choisissez de chercher une nouvelle version | pas de télémétrie, pas de mise à jour automatique |
+| `config [<key>]` | un script a besoin du chemin du vault, ou un hook utilise le mauvais dossier | une seule source par machine, aucun chemin codé en dur |
+| `records` | la vérification `auth` du doctor nomme une exécution échouée ; sinon les hooks la lancent | les enregistrements atteignent votre autre machine ; vos propres commits attendent votre oui |
+| `flush` · `compile` | le canari du flush se déclenche, ou un jour a été manqué ; les hooks lancent les deux | une session jamais vidée n'est jamais retenue |
+| `post-bash --backfill <since>` | vous avez commité dans un terminal sans agent | le texte « pourquoi » de chaque commit arrive dans le vault |
+| `hubs` | une nouvelle note n'est pas encore atteignable depuis `00-MOC-Root` | les hubs sont écrits depuis les dossiers, jamais à la main |
+| `usage` | vous voulez ce qu'un mois a coûté, par projet ou par fenêtre de 5 heures | lu dans les transcripts locaux, envoyé nulle part |
+| `mcp` | une app parle MCP mais n'exécute pas de hooks ; `setup` l'enregistre | le même index et la même carte de code pour les apps sans shell |
+| `hook <event>` | pas à la main : `setup` y relie chaque harness | un binaire exécute chaque harness sur le même vault |
+| `--version` | après une installation ou une mise à jour, et dans un rapport de bug | indique si la recherche (SQLite FTS5) fonctionne |
+
 ## Documentation
 
 En anglais : [Installation](../docs/install.md) · [vérifier une release](../docs/verify.md) ·

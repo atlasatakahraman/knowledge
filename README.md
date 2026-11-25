@@ -210,6 +210,38 @@ The full list, and what `fetch` refuses: [docs/security.md](docs/security.md).
 The vault is a folder of Markdown files with `[[wikilinks]]`, and every verb works on it without
 Obsidian. Open it in Obsidian if you want the graph view: `setup` colours its groups by note type.
 
+## Commands
+
+Every command is a verb of one binary, `knowledge`. `knowledge <verb> --help` prints the verb's
+usage, when to use it and why, and runs nothing. Every flag, with real output:
+[docs/verbs.md](docs/verbs.md).
+
+| Command | Use it when | Why |
+|---|---|---|
+| `find <query>` | you want what the vault says about X and the MOCs did not answer; `--captures`, `--repo` and `--code` search kept output, repo docs and symbols | one call returns the note and the passage that matched, instead of files read into context |
+| `graph <note> [<note>]` | you want how two notes connect, or what uses a symbol (`--code`) | ~25 ms from the index, and no file is read |
+| `keep <label> --q <query>` | a command's output is over ~2,000 chars and you need part of it | only the matching sections reach the context; the rest stays searchable |
+| `fetch <url> --q <query>` | you are reading a page whose address you have | Markdown cut to your query; private addresses are refused |
+| `code index` · `code duplicate` | you level every code map at once, or check a monorepo commit for copies | symbol answers at zero tokens; a copy is caught before it is two things to maintain |
+| `index` | notes changed outside a session, or `find` misses a note you know is there | every reader uses this index; a stale row answers with an old passage |
+| `inject <text>` | a prompt brought the wrong notes | it is the prompt hook's own path, run by hand |
+| `events <transcript>` | you review what a past session decided | only the turns that matter, not a transcript of megabytes |
+| `note log` · `note decision` | your harness runs no hooks, or the capture missed a decision | the same write-back the hooks do |
+| `ledger list` · `ledger promote` | the session start says decisions are waiting | a raw capture becomes a decision record, or is ruled out |
+| `doctor` | first, whenever something seems off; after setup or an update | the one place that says which part went quiet |
+| `rules lock` · `check` · `guard add` | you edited Hard-Rules, the rules check failed, or a rule needs enforcing | a rule in a file is advice; a guard on every tool call is enforcement |
+| `setup --plan` · `--apply <id>` | a new machine or harness, an update, a rules change | nothing is written before you have read the plan |
+| `update --plan` | you choose to check for a new version | no telemetry and no auto-update |
+| `config [<key>]` | a script needs the vault path, or a hook uses the wrong folder | one source per machine, no hard-coded paths |
+| `records` | the doctor's `auth` check names a failed run; the hooks run it otherwise | records reach your other machine; your own commits wait for your yes |
+| `flush` · `compile` | the flush canary fires, or a day was missed; the hooks run both | a session never flushed is never remembered |
+| `post-bash --backfill <since>` | you committed in a terminal with no agent | every commit's why-body lands in the vault |
+| `hubs` | a new note is not yet reachable from `00-MOC-Root` | the hubs are written from the folders, never by hand |
+| `usage` | you want what a month cost, by project or by 5-hour window | read from local transcripts, sent nowhere |
+| `mcp` | an app speaks MCP but runs no hooks; `setup` registers it | the same index and code map for apps without a shell |
+| `hook <event>` | not by hand: `setup` wires each harness to it | one binary runs every harness on the same vault |
+| `--version` | after an install or update, and in a bug report | says whether search (SQLite FTS5) works |
+
 ## Docs
 
 [Install](docs/install.md) · [verify a release](docs/verify.md) · [update](docs/update.md) ·

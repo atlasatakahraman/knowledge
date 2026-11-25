@@ -209,6 +209,38 @@ Vault, `[[wikilinks]]` içeren bir Markdown dosyaları klasörüdür ve her verb
 üzerinde çalışır. Graph görünümünü istiyorsan Obsidian'da aç: `setup` gruplarını not türüne göre
 renklendirir.
 
+## Komutlar
+
+Her komut tek bir binary'nin, `knowledge`'ın bir verb'üdür. `knowledge <verb> --help` verb'ün
+kullanımını, ne zaman ve neden kullanılacağını yazar ve hiçbir şey çalıştırmaz. Her flag, gerçek
+çıktıyla: [docs/verbs.md](../docs/verbs.md).
+
+| Komut | Ne zaman | Neden |
+|---|---|---|
+| `find <query>` | vault'un X hakkında ne dediğini istiyorsun ve MOC'lar cevap vermedi; `--captures`, `--repo` ve `--code` saklanan çıktıda, repo docs'unda ve sembollerde arar | tek çağrı notu ve eşleşen pasajı döndürür, context'e dosya okunmaz |
+| `graph <note> [<note>]` | iki notun nasıl bağlandığını ya da bir sembolü neyin kullandığını (`--code`) istiyorsun | index'ten ~25 ms, hiçbir dosya okunmaz |
+| `keep <label> --q <query>` | bir komutun çıktısı ~2.000 karakteri aşıyor ve bir kısmı lazım | context'e yalnızca eşleşen bölümler gelir; gerisi aranabilir kalır |
+| `fetch <url> --q <query>` | adresini bildiğin bir sayfayı okuyorsun | sorguna göre kesilmiş Markdown; özel adresler reddedilir |
+| `code index` · `code duplicate` | bütün code map'leri bir kerede güncelliyorsun ya da bir monorepo commit'inde kopya arıyorsun | sembol cevapları sıfır token; kopya, bakımı iki ayrı şey olmadan yakalanır |
+| `index` | notlar bir session dışında değişti ya da `find` var olduğunu bildiğin bir notu bulamıyor | her okuyucu bu index'i kullanır; eski bir satır eski pasajla cevap verir |
+| `inject <text>` | bir prompt yanlış notları getirdi | prompt hook'unun kendi yolu, elle çalıştırılır |
+| `events <transcript>` | geçmiş bir session'ın neye karar verdiğine bakıyorsun | megabaytlık transcript yerine yalnızca önemli turlar |
+| `note log` · `note decision` | harness'ın hook çalıştırmıyor ya da capture bir kararı kaçırdı | hook'ların yaptığı yazmanın aynısı |
+| `ledger list` · `ledger promote` | session başlangıcı bekleyen kararlar olduğunu söylüyor | ham bir capture karar kaydına dönüşür ya da elenir |
+| `doctor` | önce, bir şey ters göründüğünde; setup'tan ya da bir güncellemeden sonra | hangi parçanın sessizleştiğini söyleyen tek yer |
+| `rules lock` · `check` · `guard add` | Hard-Rules'u düzenledin, rules kontrolü düştü ya da bir kural zorlanmalı | dosyadaki kural tavsiyedir; her tool çağrısındaki guard zorlamadır |
+| `setup --plan` · `--apply <id>` | yeni bir makine ya da harness, bir güncelleme, bir kural değişikliği | planı okumadan hiçbir şey yazılmaz |
+| `update --plan` | yeni bir sürümü kontrol etmeyi sen seçiyorsun | telemetri yok, otomatik güncelleme yok |
+| `config [<key>]` | bir script'e vault yolu lazım ya da bir hook yanlış klasörü kullanıyor | makine başına tek kaynak, gömülü yol yok |
+| `records` | doctor'ın `auth` kontrolü başarısız bir çalıştırma gösteriyor; yoksa hook'lar çalıştırır | kayıtlar diğer makinene ulaşır; kendi commit'lerin senin onayını bekler |
+| `flush` · `compile` | flush canary'si öttü ya da bir gün kaçtı; ikisini de hook'lar çalıştırır | hiç flush edilmeyen session hiç hatırlanmaz |
+| `post-bash --backfill <since>` | ajansız bir terminalde commit attın | her commit'in neden-gövdesi vault'a düşer |
+| `hubs` | yeni bir not henüz `00-MOC-Root`'tan erişilemiyor | hub'lar klasörlerden yazılır, asla elle değil |
+| `usage` | bir ayın maliyetini proje ya da 5 saatlik pencere bazında istiyorsun | yerel transcript'lerden okunur, hiçbir yere gönderilmez |
+| `mcp` | bir uygulama MCP konuşuyor ama hook çalıştırmıyor; `setup` onu kaydeder | shell'i olmayan uygulamalar için aynı index ve code map |
+| `hook <event>` | elle değil: `setup` her harness'ı ona bağlar | tek binary her harness'ı aynı vault üzerinde çalıştırır |
+| `--version` | kurulumdan ya da güncellemeden sonra, bir hata raporunda | aramanın (SQLite FTS5) çalışıp çalışmadığını söyler |
+
 ## Docs
 
 İngilizce: [Kurulum](../docs/install.md) · [bir release'i doğrulama](../docs/verify.md) ·

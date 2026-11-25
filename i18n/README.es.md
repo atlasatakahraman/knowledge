@@ -215,6 +215,38 @@ El vault es una carpeta de archivos Markdown con `[[wikilinks]]`, y cada verbo f
 sin Obsidian. Ábrelo en Obsidian si quieres la vista de grafo: `setup` colorea sus grupos por tipo
 de nota.
 
+## Comandos
+
+Cada comando es un verbo de un único binario, `knowledge`. `knowledge <verb> --help` imprime el uso
+del verbo, cuándo usarlo y por qué, y no ejecuta nada. Cada flag, con salida real:
+[docs/verbs.md](../docs/verbs.md).
+
+| Comando | Úsalo cuando | Por qué |
+|---|---|---|
+| `find <query>` | quieres lo que el vault dice sobre X y los MOCs no respondieron; `--captures`, `--repo` y `--code` buscan en salidas guardadas, docs de repos y símbolos | una llamada devuelve la nota y el pasaje que coincidió, en vez de leer archivos al contexto |
+| `graph <note> [<note>]` | quieres saber cómo se conectan dos notas, o qué usa un símbolo (`--code`) | ~25 ms desde el índice, sin leer ningún archivo |
+| `keep <label> --q <query>` | la salida de un comando pasa de ~2.000 caracteres y necesitas una parte | solo las secciones que coinciden llegan al contexto; el resto sigue siendo buscable |
+| `fetch <url> --q <query>` | lees una página cuya dirección tienes | Markdown recortado a tu consulta; las direcciones privadas se rechazan |
+| `code index` · `code duplicate` | nivelas todos los mapas de código a la vez, o revisas copias en un commit de un monorepo | respuestas de símbolos a cero tokens; una copia se detecta antes de ser dos cosas que mantener |
+| `index` | las notas cambiaron fuera de una sesión, o `find` no encuentra una nota que sabes que existe | todo lector usa este índice; una fila vieja responde con un pasaje viejo |
+| `inject <text>` | un prompt trajo las notas equivocadas | es el propio camino del hook de prompt, ejecutado a mano |
+| `events <transcript>` | revisas lo que decidió una sesión pasada | solo los turnos que importan, no un transcript de megabytes |
+| `note log` · `note decision` | tu harness no ejecuta hooks, o la captura perdió una decisión | la misma escritura que hacen los hooks |
+| `ledger list` · `ledger promote` | el inicio de sesión dice que hay decisiones esperando | una captura en bruto se vuelve un registro de decisión, o se descarta |
+| `doctor` | primero, cuando algo parezca raro; después de setup o de una actualización | el único lugar que dice qué parte se quedó callada |
+| `rules lock` · `check` · `guard add` | editaste Hard-Rules, falló la comprobación de reglas, o una regla debe imponerse | una regla en un archivo es un consejo; un guard en cada llamada a una herramienta es imposición |
+| `setup --plan` · `--apply <id>` | una máquina o harness nuevo, una actualización, un cambio de reglas | nada se escribe antes de que hayas leído el plan |
+| `update --plan` | tú eliges buscar una versión nueva | sin telemetría y sin actualización automática |
+| `config [<key>]` | un script necesita la ruta del vault, o un hook usa la carpeta equivocada | una fuente por máquina, sin rutas fijas en el código |
+| `records` | la comprobación `auth` del doctor nombra una ejecución fallida; si no, la ejecutan los hooks | los registros llegan a tu otra máquina; tus propios commits esperan tu sí |
+| `flush` · `compile` | salta el canario del flush, o se perdió un día; los hooks ejecutan ambos | una sesión nunca volcada nunca se recuerda |
+| `post-bash --backfill <since>` | hiciste commit en una terminal sin agente | el cuerpo con el porqué de cada commit llega al vault |
+| `hubs` | una nota nueva aún no es alcanzable desde `00-MOC-Root` | los hubs se escriben desde las carpetas, nunca a mano |
+| `usage` | quieres saber cuánto costó un mes, por proyecto o por ventana de 5 horas | leído de transcripts locales, enviado a ningún sitio |
+| `mcp` | una app habla MCP pero no ejecuta hooks; `setup` lo registra | el mismo índice y mapa de código para apps sin shell |
+| `hook <event>` | no a mano: `setup` conecta cada harness a él | un binario ejecuta cada harness sobre el mismo vault |
+| `--version` | tras una instalación o actualización, y en un reporte de error | dice si la búsqueda (SQLite FTS5) funciona |
+
 ## Documentación
 
 En inglés: [Instalación](../docs/install.md) · [verificar una release](../docs/verify.md) ·

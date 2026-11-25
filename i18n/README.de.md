@@ -216,6 +216,38 @@ Der Vault ist ein Ordner mit Markdown-Dateien und `[[wikilinks]]`, und jedes Ver
 ohne Obsidian. Öffne ihn in Obsidian, wenn du die Graph-Ansicht willst: `setup` färbt ihre Gruppen
 nach Notiztyp.
 
+## Befehle
+
+Jeder Befehl ist ein Verb einer einzigen Binary, `knowledge`. `knowledge <verb> --help` gibt die
+Verwendung des Verbs aus, wann und warum man es nutzt, und führt nichts aus. Jedes Flag, mit echter
+Ausgabe: [docs/verbs.md](../docs/verbs.md).
+
+| Befehl | Nutze ihn, wenn | Warum |
+|---|---|---|
+| `find <query>` | du wissen willst, was der Vault über X sagt, und die MOCs nicht geantwortet haben; `--captures`, `--repo` und `--code` durchsuchen gespeicherte Ausgaben, Repo-Docs und Symbole | ein Aufruf liefert die Notiz und die passende Passage, statt Dateien in den Kontext zu lesen |
+| `graph <note> [<note>]` | du wissen willst, wie zwei Notizen zusammenhängen, oder was ein Symbol nutzt (`--code`) | ~25 ms aus dem Index, keine Datei wird gelesen |
+| `keep <label> --q <query>` | die Ausgabe eines Befehls über ~2.000 Zeichen liegt und du einen Teil brauchst | nur die passenden Abschnitte erreichen den Kontext; der Rest bleibt durchsuchbar |
+| `fetch <url> --q <query>` | du eine Seite liest, deren Adresse du hast | Markdown, auf deine Anfrage gekürzt; private Adressen werden abgelehnt |
+| `code index` · `code duplicate` | du alle Code-Maps auf einmal angleichst oder einen Monorepo-Commit auf Kopien prüfst | Symbol-Antworten ohne Tokens; eine Kopie wird gefunden, bevor sie zwei Dinge zum Pflegen ist |
+| `index` | Notizen außerhalb einer Session geändert wurden oder `find` eine Notiz verfehlt, die es gibt | jeder Leser nutzt diesen Index; eine veraltete Zeile antwortet mit einer alten Passage |
+| `inject <text>` | ein Prompt die falschen Notizen gebracht hat | es ist der eigene Weg des Prompt-Hooks, von Hand ausgeführt |
+| `events <transcript>` | du prüfst, was eine frühere Session entschieden hat | nur die wichtigen Turns, kein Transcript von Megabytes |
+| `note log` · `note decision` | dein Harness keine Hooks ausführt oder das Capture eine Entscheidung verpasst hat | dasselbe Zurückschreiben, das die Hooks machen |
+| `ledger list` · `ledger promote` | der Session-Start meldet wartende Entscheidungen | ein rohes Capture wird zu einem Entscheidungseintrag oder wird verworfen |
+| `doctor` | zuerst, wann immer etwas komisch wirkt; nach setup oder einem Update | der eine Ort, der sagt, welcher Teil verstummt ist |
+| `rules lock` · `check` · `guard add` | du Hard-Rules bearbeitet hast, der Rules-Check fehlschlägt oder eine Regel durchgesetzt werden soll | eine Regel in einer Datei ist ein Rat; ein Guard bei jedem Tool-Aufruf ist Durchsetzung |
+| `setup --plan` · `--apply <id>` | ein neuer Rechner oder Harness, ein Update, eine Regeländerung | nichts wird geschrieben, bevor du den Plan gelesen hast |
+| `update --plan` | du selbst entscheidest, nach einer neuen Version zu sehen | keine Telemetrie und kein Auto-Update |
+| `config [<key>]` | ein Skript den Vault-Pfad braucht oder ein Hook den falschen Ordner nutzt | eine Quelle pro Rechner, keine fest codierten Pfade |
+| `records` | der `auth`-Check des Doctors einen fehlgeschlagenen Lauf nennt; sonst führen ihn die Hooks aus | Records erreichen deinen anderen Rechner; deine eigenen Commits warten auf dein Ja |
+| `flush` · `compile` | der Flush-Canary anschlägt oder ein Tag fehlt; beide führen die Hooks aus | eine nie geflushte Session wird nie erinnert |
+| `post-bash --backfill <since>` | du in einem Terminal ohne Agent committet hast | der Warum-Text jedes Commits landet im Vault |
+| `hubs` | eine neue Notiz von `00-MOC-Root` aus noch nicht erreichbar ist | die Hubs werden aus den Ordnern geschrieben, nie von Hand |
+| `usage` | du wissen willst, was ein Monat gekostet hat, nach Projekt oder 5-Stunden-Fenster | aus lokalen Transcripts gelesen, nirgendwohin gesendet |
+| `mcp` | eine App MCP spricht, aber keine Hooks ausführt; `setup` registriert ihn | derselbe Index und dieselbe Code-Map für Apps ohne Shell |
+| `hook <event>` | nicht von Hand: `setup` verbindet jedes Harness damit | eine Binary führt jedes Harness auf demselben Vault aus |
+| `--version` | nach einer Installation oder einem Update, und in einem Bug-Report | sagt, ob die Suche (SQLite FTS5) funktioniert |
+
 ## Dokumentation
 
 Auf Englisch: [Installation](../docs/install.md) · [ein Release prüfen](../docs/verify.md) ·
