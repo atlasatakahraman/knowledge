@@ -26,7 +26,8 @@ opencode) holds the binary, so the replace is a step you take with those apps qu
 
 ## From the checkout
 
-The skeleton checkout fast-forwards itself at each session start when its tree is clean. After a
+The skeleton checkout fast-forwards itself at each session start, unless origin changed a file you
+have uncommitted changes in. After a
 pull that changed `src/`, rebuild the binary, then plan:
 
 ```bash

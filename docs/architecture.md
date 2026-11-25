@@ -88,8 +88,10 @@ folders. `setup` writes it. Check what the hooks see with `knowledge config`.
 
 ## Sync
 
-Each session start fast-forwards the vault and this checkout, each only when its tree is clean.
-A checkout on a detached HEAD (a tag) is pinned on purpose and left alone.
+Each session start fast-forwards the vault and this checkout. Uncommitted changes block a pull
+only when origin changed one of the same files (`state::incoming_overlaps`); then nothing is
+merged and the start says so. A checkout on a detached HEAD (a tag) is pinned on purpose and left
+alone.
 
 The vault pushes one thing on its own: the records the hooks write (daily logs, commit notes, the
 decision ledger, health and usage). After the SessionEnd flush, `knowledge records` commits them

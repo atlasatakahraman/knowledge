@@ -563,6 +563,22 @@ pub fn git(cwd: &Path, args: &[&str], timeout: Duration) -> Out {
     )
 }
 
+/// Whether origin's side since the merge base touches a path that is changed here and not
+/// committed: a tracked file, or an untracked one origin adds. Uncommitted changes anywhere else
+/// never block a pull. A fast-forward over an overlap is refused by git, but a rebase's
+/// autostash pops back into conflict markers (2026-11-25), so both pulls ask this first. Checked
+/// by path, not by git's message, which a translated git changes.
+pub fn incoming_overlaps(cwd: &Path) -> bool {
+    let list = |a: &[&str]| git(cwd, a, Duration::from_secs(8)).stdout;
+    let mine = list(&["diff", "--name-only", "--no-renames", "HEAD"])
+        + &list(&["ls-files", "--others", "--exclude-standard"]);
+    let mine: std::collections::HashSet<&str> = mine.lines().filter(|l| !l.is_empty()).collect();
+    !mine.is_empty()
+        && list(&["diff", "--name-only", "--no-renames", "HEAD...@{u}"])
+            .lines()
+            .any(|p| mine.contains(p))
+}
+
 /// `git fetch --quiet`, retried once after a second when another process moved a remote ref under
 /// it ("cannot lock ref"). Our `pull-<name>` lock only sees our own processes: the desktop app's
 /// background fetch of the vault landed in the same second as a session start's (2026-11-25, Arch).

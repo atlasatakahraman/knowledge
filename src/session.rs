@@ -100,9 +100,11 @@ enum Pull {
     Done { n: i64, before: String },
 }
 
-/// Fast-forward one checkout from its upstream: clean tree only (untracked files never block it),
-/// pull only. Fetch then merge under a lock: two sessions starting together each ran `git pull`,
-/// and the two fetches left FETCH_HEAD with two merge lines (2026-11-02).
+/// Fast-forward one checkout from its upstream, pull only. Fetch then merge under a lock: two
+/// sessions starting together each ran `git pull`, and the two fetches left FETCH_HEAD with two
+/// merge lines (2026-11-02). Uncommitted changes block only a pull that touches them
+/// (`state::incoming_overlaps`): a clean-tree precheck skipped every pull while two files nobody
+/// commits sat modified in the vault (2026-11-25).
 fn ff_pull(cfg: &Config, cwd: &Path) -> Pull {
     let git = |a: &[&str]| state::git(cwd, a, Duration::from_secs(8));
     let name = cwd
@@ -110,12 +112,6 @@ fn ff_pull(cfg: &Config, cwd: &Path) -> Pull {
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_default();
     state::with_lock(&format!("pull-{name}"), 60_000, || {
-        if !git(&["status", "--porcelain", "--untracked-files=no"])
-            .out()
-            .is_empty()
-        {
-            return Pull::Skipped;
-        }
         let before = git(&["rev-parse", "HEAD"]).out().to_string();
         // The records sync just before this fetched the vault already (it writes FETCH_HEAD): a
         // second fetch would be a second network round trip in the session start's path.
@@ -129,6 +125,9 @@ fn ff_pull(cfg: &Config, cwd: &Path) -> Pull {
         }
         if !records::tip_trusted(cfg, &git) {
             return Pull::Refused;
+        }
+        if state::incoming_overlaps(cwd) {
+            return Pull::Skipped;
         }
         let m = git(&["merge", "--ff-only", "--quiet", "@{u}"]);
         if !m.ok() {
@@ -197,7 +196,7 @@ fn vault_pull(cfg: &Config, by_records: i64) -> Option<String> {
     }
     match r {
         Pull::Busy => None,
-        Pull::Skipped => Some("!! VAULT PULL skipped: uncommitted changes. Commit or stash, then `git pull --ff-only`.".into()),
+        Pull::Skipped => Some("!! VAULT PULL skipped: incoming commits touch files with uncommitted changes. Commit or stash those, then `git pull --ff-only`.".into()),
         Pull::Failed(f) => Some(format!("!! VAULT PULL failed: {f}. Pull by hand before editing.")),
         Pull::Refused => Some(refused("pull-vault", "VAULT")),
         Pull::Done { .. } => {
@@ -290,7 +289,7 @@ fn skeleton_pull(cfg: &Config) -> Option<String> {
     match ff_pull(cfg, &root) {
         Pull::Busy => None,
         Pull::Skipped => Some(format!(
-            "!! SKELETON PULL skipped: uncommitted changes in {shown}."
+            "!! SKELETON PULL skipped: incoming commits touch files with uncommitted changes in {shown}."
         )),
         Pull::Failed(f) => Some(format!(
             "!! SKELETON PULL failed: {f}. Pull {shown} by hand."

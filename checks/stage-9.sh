@@ -4,7 +4,8 @@
 # made by `setup --from-template` passes them with the generic packs locked; no folder name is
 # written in src/ outside config.rs. S9.4: the docs exist, one per task. S9.5 (signed releases):
 # allowed_signers holds one file-only ed25519 key, docs/verify.md names its fingerprint, and a
-# fixture key's signature and checksum pass and fail as docs/verify.md says. Every run is on a
+# fixture key's signature and checksum pass and fail as docs/verify.md says. S9.7: the session-start
+# pull runs past uncommitted changes and stops, merging nothing, only at one origin also changed. Every run is on a
 # fixture HOME and KNOWLEDGE_HOME, so the real state never moves. Builds nothing. Run from the repo
 # root:
 #   bash checks/stage-9.sh target/release/knowledge
@@ -192,6 +193,33 @@ check "and fails the same key's signature for a commit (namespace git)" \
   '[ -f "$TMP/sig/commit.sig" ] && ! sigv "$TMP/sig/commit.sig" "$TMP/sig/SHA256SUMS"'
 check "verify.md's checksum command passes the archive and fails a changed one" \
   '(cd "$TMP/sig" && grep -F "  a.zip" SHA256SUMS | $SUM -c - > /dev/null && printf y > a.zip && ! grep -F "  a.zip" SHA256SUMS | $SUM -c - > /dev/null 2>&1)'
+
+# --- The session-start pull: uncommitted changes block only a merge that touches them ------------
+# Two .docx nobody commits kept the real vault's pull skipped every session (2026-11-25).
+P="$TMP/pull"
+pg() { git -C "$1" -c user.name=check -c user.email=check@example.invalid -c core.hooksPath= "${@:2}"; }
+# The fixture HOME has no git identity, and the records sync commits before the pull runs.
+export KNOWLEDGE_HOME="$TMP/pullhome" GIT_AUTHOR_NAME=check GIT_COMMITTER_NAME=check \
+  GIT_AUTHOR_EMAIL=check@example.invalid GIT_COMMITTER_EMAIL=check@example.invalid
+mkdir -p "$KNOWLEDGE_HOME"
+cp -R "$ROOT/template" "$P.seed"
+{ pg "$P.seed" init -q -b main && pg "$P.seed" add -A && pg "$P.seed" commit -q -m seed
+  git clone -q --bare "$P.seed" "$P.git" && git clone -q "$P.git" "$P.vault" && git clone -q "$P.git" "$P.other"; } 2>/dev/null
+printf '{"vault": "%s", "devRoot": "%s"}\n' "$(native "$P.vault")" "$(native "$TMP/nodev")" > "$KNOWLEDGE_HOME/config.json"
+upstream() { printf '%s\n' "$2" >> "$P.other/$1" && pg "$P.other" add -A && pg "$P.other" commit -q -m "$1" && pg "$P.other" push -q; }
+upstream 00-Meta/Conventions.md 'from the other boot'
+printf 'mine, uncommitted\n' >> "$P.vault/00-Meta/Identity.md"
+out=$(k hook session --harness claude < /dev/null 2>&1)
+check "a change elsewhere: the pull runs, the uncommitted edit stays" \
+  'grep -q "from the other boot" "$P.vault/00-Meta/Conventions.md" && grep -q "mine, uncommitted" "$P.vault/00-Meta/Identity.md" && ! printf "%s" "$out" | grep -q "PULL skipped"'
+upstream 00-Meta/Identity.md 'the other boot edits it too'
+# The records sync commits this session's records first, so the overlap meets its rebase path too:
+# an autostash there popped back into conflict markers before the path check (2026-11-25).
+out=$(LANG=tr_TR.UTF-8 LANGUAGE=tr k hook session --harness claude < /dev/null 2>&1)
+check "a change to the same file: skipped and said, under a translated git too" \
+  'printf "%s" "$out" | grep -q "VAULT PULL skipped: incoming commits touch files with uncommitted changes"'
+check "and nothing merged: origin's commit stays out, the edit is whole, no stash, no records failure" \
+  '! pg "$P.vault" merge-base --is-ancestor origin/main HEAD && grep -q "mine, uncommitted" "$P.vault/00-Meta/Identity.md" && ! grep -q "^<<<<<<<" "$P.vault/00-Meta/Identity.md" && [ -z "$(pg "$P.vault" stash list)" ] && ! printf "%s" "$out" | grep -q "RECORDS FAILING"'
 
 rm -rf "$TMP"
 echo

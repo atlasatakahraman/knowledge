@@ -14,7 +14,7 @@ rebuilds everything derived (the index, the hubs, the commit notes) and is safe 
 | `!! SKELETON x is behind the vault's pin y` at session start | The other machine moved the vault to a newer skeleton: `git -C <skeleton> pull --ff-only`, then rebuild ([update.md](update.md)) |
 | `!! SKELETON x is ahead of the vault's pin y` | The skeleton moved on: read its changes since `y` (`git -C <skeleton> log vy..`), adapt the vault, set `.skeleton.json` to `x`, commit |
 | `!! VAULT PULL refused: the tip is not signed by a known key` | Pull trust is on and origin's tip is unsigned or signed by a key not in `allowed_signers`: check who pushed it (`git log --show-signature -1 @{u}`) before adding a key ([security.md](security.md)) |
-| `!! VAULT PULL skipped: uncommitted changes` | The vault has uncommitted work: commit or stash it, then `git pull --ff-only` |
+| `!! VAULT PULL skipped: incoming commits touch files with uncommitted changes` | Origin changed files you also changed and have not committed; git merged nothing. Commit or stash those files, then `git pull --ff-only`. Uncommitted changes elsewhere never block the pull |
 | `pre-commit: gitleaks is not on PATH; commit refused` | Install gitleaks ([install.md](install.md)), or the commit stays unscanned |
 | `pin FAIL` in the plan | The adopted vault pins another version: check out that one, or adapt the vault and bump the pin |
 | Every hook errors with `no knowledge config` | `config.json` is missing, or `$KNOWLEDGE_CONFIG` points somewhere empty ([install.md](install.md)) |

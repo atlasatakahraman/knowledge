@@ -186,6 +186,15 @@ fn sync_locked(cfg: &Config, vault: &Path) -> J {
         state::record_failure("pull-vault", UNTRUSTED_TIP);
         return with(with(res, "pulled", J::n(0)), "refused", J::Bool(true));
     }
+    // Origin changed files that are also changed here, uncommitted: nothing is merged, the records
+    // wait committed, and the session pull right after says why in its own line. Not a failure.
+    if pulled > 0 && state::incoming_overlaps(vault) {
+        return with(
+            with(res, "pulled", J::n(0)),
+            "skipped",
+            J::s("incoming commits touch uncommitted files"),
+        );
+    }
     if pulled > 0 && !unpushed.is_empty() {
         let r = git(&["rebase", "--quiet", "--autostash", "@{u}"]);
         if !r.ok() {
