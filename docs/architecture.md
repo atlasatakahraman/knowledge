@@ -23,7 +23,8 @@ assets/                       the README's images, text outlined: banner, hero, 
                               draws them in every language of i18n.mjs, live.mjs draws the live
                               pills (see "The README's images"). Dev tooling run by bun, with its own
                               package.json; the engine has none
-README.<id>.md                the README in tr, es, pt, fr, de
+i18n/           README.<id>.md  the README in tr, es, pt, fr, de
+.github/                      CI, issue forms, SECURITY.md, CONTRIBUTING.md (GitHub reads both here)
 AGENTS.md                     the install, step by step, for an agent; then how to work on this repo
 docs/           <task>.md     install, update, remove, verbs, security, troubleshooting, benchmark
 ```
@@ -146,8 +147,8 @@ msedge --headless=new --hide-scrollbars --force-device-scale-factor=1 --window-s
 
 ### Languages
 
-The README comes in six languages: `README.md` (English) and `README.<id>.md` for `tr`, `es`, `pt`
-(Brazilian), `fr` and `de`. Every word drawn into an image lives in `assets/i18n.mjs`, one entry per
+The README comes in six languages: `README.md` (English) and `i18n/README.<id>.md` for `tr`, `es`,
+`pt` (Brazilian), `fr` and `de`, kept out of the root so the file list stays short above the README. Every word drawn into an image lives in `assets/i18n.mjs`, one entry per
 language: the hero's rows (`_…_` underlines, `` `…` `` is a code chip), its footer, the pills'
 labels and values, and the decimal mark. Names that are commands or features (`prompt hook`,
 `guard`, `knowledge find`) stay English in every language.
@@ -157,7 +158,7 @@ Each image is written twice over:
 | File | Holds | Used by |
 |---|---|---|
 | `<name>-<theme>.svg` | every language, in an SVG `<switch>` | `README.md` |
-| `<name>-<id>-<theme>.svg` | that language only | `README.<id>.md` |
+| `<name>-<id>-<theme>.svg` | that language only | `i18n/README.<id>.md` |
 
 A README cannot see its reader's language, but an image can: in a `<switch>`, the browser draws the
 first child whose `systemLanguage` matches any language in its list, by exact tag or by prefix
@@ -169,6 +170,7 @@ tall as its tallest language, so a shorter one leaves empty space under the hero
 The fonts are Latin only, so a language in another script needs fonts that cover it first; the
 build stops on any letter a font lacks. To add a language: add its entry to `i18n.mjs` (`tags`
 lists every regional tag to match, Spanish's `es-419` and `es-MX` among them), write
-`README.<id>.md` with README.md's code blocks and links unchanged, add the id to the language row
+`i18n/README.<id>.md` with README.md's code blocks and links unchanged (a `../` before each repo
+path), add the id to the language row
 of every README and to the list in `checks/stage-9.sh`, and run the build. The check fails a
 translation whose code blocks, links or images drift from README.md's.

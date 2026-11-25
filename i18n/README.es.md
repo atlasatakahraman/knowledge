@@ -1,25 +1,25 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/banner-dark.svg">
-    <img alt="knowledge" src="assets/banner-light.svg" width="880">
+    <source media="(prefers-color-scheme: dark)" srcset="../assets/banner-dark.svg">
+    <img alt="knowledge" src="../assets/banner-light.svg" width="880">
   </picture>
 </p>
 
-<p align="center"><a href="README.md">English</a> | <a href="README.tr.md">Türkçe</a> | <b>Español</b> | <a href="README.pt.md">Português</a> | <a href="README.fr.md">Français</a> | <a href="README.de.md">Deutsch</a></p>
+<p align="center"><a href="../README.md">English</a> | <a href="README.tr.md">Türkçe</a> | <b>Español</b> | <a href="README.pt.md">Português</a> | <a href="README.fr.md">Français</a> | <a href="README.de.md">Deutsch</a></p>
 
 <p align="center">
   <a href="https://github.com/atlasatakahraman/knowledge/stargazers"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/atlasatakahraman/knowledge/badges/stars-es-dark.svg"><img alt="estrellas" src="https://raw.githubusercontent.com/atlasatakahraman/knowledge/badges/stars-es-light.svg" height="28"></picture></a>
   <a href="https://github.com/atlasatakahraman/knowledge/tags"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/atlasatakahraman/knowledge/badges/latest-es-dark.svg"><img alt="última versión" src="https://raw.githubusercontent.com/atlasatakahraman/knowledge/badges/latest-es-light.svg" height="28"></picture></a>
 </p>
 <p align="center">
-  <a href="#agentes"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/badges/harnesses-es-dark.svg"><img alt="agentes: Claude Code, Codex, opencode, app de Claude" src="assets/badges/harnesses-es-light.svg" height="28"></picture></a>
-  <a href="#requisitos"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/badges/platforms-es-dark.svg"><img alt="plataformas: Windows, Arch pendiente" src="assets/badges/platforms-es-light.svg" height="28"></picture></a>
+  <a href="#agentes"><picture><source media="(prefers-color-scheme: dark)" srcset="../assets/badges/harnesses-es-dark.svg"><img alt="agentes: Claude Code, Codex, opencode, app de Claude" src="../assets/badges/harnesses-es-light.svg" height="28"></picture></a>
+  <a href="#requisitos"><picture><source media="(prefers-color-scheme: dark)" srcset="../assets/badges/platforms-es-dark.svg"><img alt="plataformas: Windows, Arch pendiente" src="../assets/badges/platforms-es-light.svg" height="28"></picture></a>
 </p>
 <p align="center">
-  <a href="docs/benchmark.md"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/badges/prompt-hook-es-dark.svg"><img alt="prompt hook: ~17,8 ms" src="assets/badges/prompt-hook-es-light.svg" height="28"></picture></a>
-  <a href="docs/benchmark.md"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/badges/guard-es-dark.svg"><img alt="guard: ~24,9 ms" src="assets/badges/guard-es-light.svg" height="28"></picture></a>
-  <a href="docs/benchmark.md"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/badges/tokens-es-dark.svg"><img alt="tokens: 82 % menos que grep" src="assets/badges/tokens-es-light.svg" height="28"></picture></a>
-  <a href="docs/benchmark.md"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/badges/find-es-dark.svg"><img alt="knowledge find: 33/33, ~33 ms" src="assets/badges/find-es-light.svg" height="28"></picture></a>
+  <a href="../docs/benchmark.md"><picture><source media="(prefers-color-scheme: dark)" srcset="../assets/badges/prompt-hook-es-dark.svg"><img alt="prompt hook: ~17,8 ms" src="../assets/badges/prompt-hook-es-light.svg" height="28"></picture></a>
+  <a href="../docs/benchmark.md"><picture><source media="(prefers-color-scheme: dark)" srcset="../assets/badges/guard-es-dark.svg"><img alt="guard: ~24,9 ms" src="../assets/badges/guard-es-light.svg" height="28"></picture></a>
+  <a href="../docs/benchmark.md"><picture><source media="(prefers-color-scheme: dark)" srcset="../assets/badges/tokens-es-dark.svg"><img alt="tokens: 82 % menos que grep" src="../assets/badges/tokens-es-light.svg" height="28"></picture></a>
+  <a href="../docs/benchmark.md"><picture><source media="(prefers-color-scheme: dark)" srcset="../assets/badges/find-es-dark.svg"><img alt="knowledge find: 33/33, ~33 ms" src="../assets/badges/find-es-light.svg" height="28"></picture></a>
 </p>
 
 <p align="center"><b>Conocimiento que crece contigo y con tus agentes.</b><br>
@@ -27,8 +27,8 @@ Memoria y reglas para agentes de programación. Quién eres, qué descartaste y 
 decidiste, cargado en cada sesión de cada agente que usas.</p>
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/hero-es-dark.svg">
-  <img alt="Los agentes te olvidan. Quién eres y cómo trabajas se cargan primero, completos, en cada sesión. Ignoran tus reglas. Un guard en cada llamada a una herramienta rechaza lo que descartaste: git push espera tu sí. Nadie lo apunta. Las sesiones, los commits y las decisiones se registran solos. Cada herramienta guarda su propia memoria. Claude Code, Codex, opencode y la app de Claude leen un solo vault." src="assets/hero-es-light.svg" width="100%">
+  <source media="(prefers-color-scheme: dark)" srcset="../assets/hero-es-dark.svg">
+  <img alt="Los agentes te olvidan. Quién eres y cómo trabajas se cargan primero, completos, en cada sesión. Ignoran tus reglas. Un guard en cada llamada a una herramienta rechaza lo que descartaste: git push espera tu sí. Nadie lo apunta. Las sesiones, los commits y las decisiones se registran solos. Cada herramienta guarda su propia memoria. Claude Code, Codex, opencode y la app de Claude leen un solo vault." src="../assets/hero-es-light.svg" width="100%">
 </picture>
 
 ## Inicio rápido
@@ -42,7 +42,7 @@ Install knowledge for me from https://github.com/atlasatakahraman/knowledge.
 Follow its AGENTS.md, show me each step's output, and ask before anything you write.
 ```
 
-[AGENTS.md](AGENTS.md) lo guía por los mismos pasos que se describen abajo, con la salida que cada
+[AGENTS.md](../AGENTS.md) lo guía por los mismos pasos que se describen abajo, con la salida que cada
 uno debe imprimir. Te muestra el plan de instalación, lo aplica solo con tu sí y luego te pregunta
 qué paquetes de reglas quieres.
 
@@ -65,7 +65,7 @@ knowledge setup --apply <id>      # the id is the plan's last line
 luego para cada otro agente que encuentre, y termina con el id del plan. `--apply <id>` se niega si
 algo cambió desde entonces; si no, escribe exactamente ese plan. Un vault nuevo se crea en
 `~/knowledge`; también se puede adoptar una carpeta existente. Opciones, Windows y cada paso a mano:
-[docs/install.md](docs/install.md).
+[docs/install.md](../docs/install.md).
 
 ### Después de un vault nuevo
 
@@ -77,7 +77,7 @@ activa los paquetes de reglas que quieras.
 
 ## Una sesión, en la práctica
 
-Salida real del fixture público que usa [docs/benchmark.md](docs/benchmark.md): la documentación de
+Salida real del fixture público que usa [docs/benchmark.md](../docs/benchmark.md): la documentación de
 este repositorio como vault. Las rutas están acortadas y los fragmentos largos, recortados.
 
 **Escribes un prompt.** El prompt hook añade las notas que lo responden antes de que el agente lea
@@ -129,7 +129,7 @@ CI sobre instalaciones de prueba.
 | Codex de la app de ChatGPT | Los hooks del plugin de Codex, una vez aceptados en la CLI | Como Codex; los hooks aún no aceptados se omiten en silencio | Compilado, no verificado |
 | Cualquier otro (`generic`) | El bloque en un archivo que tú indicas, `knowledge find` y `graph`, y `knowledge note` para escribir de vuelta | Ninguna en ejecución: las reglas son solo texto. El backstop de pre-commit sigue corriendo en cada clon que configuró `setup` | Compilado, no verificado |
 
-Cómo se añade un agente: [docs/architecture.md](docs/architecture.md#harnesses).
+Cómo se añade un agente: [docs/architecture.md](../docs/architecture.md#harnesses).
 
 ## Cómo funciona
 
@@ -151,7 +151,7 @@ JavaScript, y el índice del vault es un solo archivo SQLite por máquina.
   que todo está sano.
 
 Qué escribe cada hook y cuándo: `template/00-Meta/Hook-Lifecycle.md`. Cada verbo, con salida real:
-[docs/verbs.md](docs/verbs.md).
+[docs/verbs.md](../docs/verbs.md).
 
 ### Las reglas y el guard
 
@@ -204,7 +204,7 @@ cadena así falla quedándose en silencio: `template/00-Meta/Why-This-Exists.md`
 - **Nunca se leen:** las credenciales de los agentes. El motor ejecuta la CLI del agente y deja que
   inicie sesión por sí misma.
 
-La lista completa y lo que `fetch` rechaza: [docs/security.md](docs/security.md).
+La lista completa y lo que `fetch` rechaza: [docs/security.md](../docs/security.md).
 
 ## Obsidian es opcional
 
@@ -214,17 +214,17 @@ de nota.
 
 ## Documentación
 
-En inglés: [Instalación](docs/install.md) · [verificar una release](docs/verify.md) ·
-[actualizar](docs/update.md) · [desinstalar](docs/remove.md) · [cada verbo](docs/verbs.md) ·
-[seguridad](docs/security.md) · [solución de problemas](docs/troubleshooting.md) ·
-[benchmark](docs/benchmark.md) · [arquitectura](docs/architecture.md) · [release](docs/release.md),
+En inglés: [Instalación](../docs/install.md) · [verificar una release](../docs/verify.md) ·
+[actualizar](../docs/update.md) · [desinstalar](../docs/remove.md) · [cada verbo](../docs/verbs.md) ·
+[seguridad](../docs/security.md) · [solución de problemas](../docs/troubleshooting.md) ·
+[benchmark](../docs/benchmark.md) · [arquitectura](../docs/architecture.md) · [release](../docs/release.md),
 para el mantenedor.
 
 ## Contribuir
 
 Cómo está organizado el motor, sus crates, la config por máquina, la sincronización y la CI:
-[docs/architecture.md](docs/architecture.md). Cómo trabajar en este repositorio:
-[AGENTS.md](AGENTS.md), segunda parte.
+[docs/architecture.md](../docs/architecture.md). Cómo trabajar en este repositorio:
+[AGENTS.md](../AGENTS.md), segunda parte.
 
 ## Herramientas de terceros
 
@@ -245,4 +245,4 @@ Las versiones hasta la 0.4.0 se publicaron bajo GPL-3.0-only y siguen disponible
 
 ---
 
-Esta página es una traducción de [README.md](README.md); si difieren, vale la versión en inglés.
+Esta página es una traducción de [README.md](../README.md); si difieren, vale la versión en inglés.

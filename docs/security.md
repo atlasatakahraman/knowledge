@@ -1,7 +1,7 @@
 # Security
 
 What the engine protects, how, and what it cannot stop. To report a vulnerability:
-[SECURITY.md](../SECURITY.md).
+[SECURITY.md](../.github/SECURITY.md).
 
 ## What it touches
 

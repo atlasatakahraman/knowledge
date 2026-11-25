@@ -5,7 +5,7 @@
   </picture>
 </p>
 
-<p align="center"><b>English</b> | <a href="README.tr.md">Türkçe</a> | <a href="README.es.md">Español</a> | <a href="README.pt.md">Português</a> | <a href="README.fr.md">Français</a> | <a href="README.de.md">Deutsch</a></p>
+<p align="center"><b>English</b> | <a href="i18n/README.tr.md">Türkçe</a> | <a href="i18n/README.es.md">Español</a> | <a href="i18n/README.pt.md">Português</a> | <a href="i18n/README.fr.md">Français</a> | <a href="i18n/README.de.md">Deutsch</a></p>
 
 <!-- Pills and hero: one SVG per theme, holding every language; the reader's browser languages pick
      one (assets/i18n.mjs). README.<lang>.md uses the <name>-<lang>-<theme>.svg files instead. stars

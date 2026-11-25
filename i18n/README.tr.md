@@ -1,25 +1,25 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/banner-dark.svg">
-    <img alt="knowledge" src="assets/banner-light.svg" width="880">
+    <source media="(prefers-color-scheme: dark)" srcset="../assets/banner-dark.svg">
+    <img alt="knowledge" src="../assets/banner-light.svg" width="880">
   </picture>
 </p>
 
-<p align="center"><a href="README.md">English</a> | <b>Türkçe</b> | <a href="README.es.md">Español</a> | <a href="README.pt.md">Português</a> | <a href="README.fr.md">Français</a> | <a href="README.de.md">Deutsch</a></p>
+<p align="center"><a href="../README.md">English</a> | <b>Türkçe</b> | <a href="README.es.md">Español</a> | <a href="README.pt.md">Português</a> | <a href="README.fr.md">Français</a> | <a href="README.de.md">Deutsch</a></p>
 
 <p align="center">
   <a href="https://github.com/atlasatakahraman/knowledge/stargazers"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/atlasatakahraman/knowledge/badges/stars-tr-dark.svg"><img alt="yıldız" src="https://raw.githubusercontent.com/atlasatakahraman/knowledge/badges/stars-tr-light.svg" height="28"></picture></a>
   <a href="https://github.com/atlasatakahraman/knowledge/tags"><picture><source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/atlasatakahraman/knowledge/badges/latest-tr-dark.svg"><img alt="son sürüm" src="https://raw.githubusercontent.com/atlasatakahraman/knowledge/badges/latest-tr-light.svg" height="28"></picture></a>
 </p>
 <p align="center">
-  <a href="#ajanlar"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/badges/harnesses-tr-dark.svg"><img alt="ajanlar: Claude Code, Codex, opencode, Claude uygulaması" src="assets/badges/harnesses-tr-light.svg" height="28"></picture></a>
-  <a href="#gereksinimler"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/badges/platforms-tr-dark.svg"><img alt="platformlar: Windows, Arch bekliyor" src="assets/badges/platforms-tr-light.svg" height="28"></picture></a>
+  <a href="#ajanlar"><picture><source media="(prefers-color-scheme: dark)" srcset="../assets/badges/harnesses-tr-dark.svg"><img alt="ajanlar: Claude Code, Codex, opencode, Claude uygulaması" src="../assets/badges/harnesses-tr-light.svg" height="28"></picture></a>
+  <a href="#gereksinimler"><picture><source media="(prefers-color-scheme: dark)" srcset="../assets/badges/platforms-tr-dark.svg"><img alt="platformlar: Windows, Arch bekliyor" src="../assets/badges/platforms-tr-light.svg" height="28"></picture></a>
 </p>
 <p align="center">
-  <a href="docs/benchmark.md"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/badges/prompt-hook-tr-dark.svg"><img alt="prompt hook: ~17,8 ms" src="assets/badges/prompt-hook-tr-light.svg" height="28"></picture></a>
-  <a href="docs/benchmark.md"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/badges/guard-tr-dark.svg"><img alt="guard: ~24,9 ms" src="assets/badges/guard-tr-light.svg" height="28"></picture></a>
-  <a href="docs/benchmark.md"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/badges/tokens-tr-dark.svg"><img alt="token: grep'ten %82 düşük" src="assets/badges/tokens-tr-light.svg" height="28"></picture></a>
-  <a href="docs/benchmark.md"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/badges/find-tr-dark.svg"><img alt="knowledge find: 33/33, ~33 ms" src="assets/badges/find-tr-light.svg" height="28"></picture></a>
+  <a href="../docs/benchmark.md"><picture><source media="(prefers-color-scheme: dark)" srcset="../assets/badges/prompt-hook-tr-dark.svg"><img alt="prompt hook: ~17,8 ms" src="../assets/badges/prompt-hook-tr-light.svg" height="28"></picture></a>
+  <a href="../docs/benchmark.md"><picture><source media="(prefers-color-scheme: dark)" srcset="../assets/badges/guard-tr-dark.svg"><img alt="guard: ~24,9 ms" src="../assets/badges/guard-tr-light.svg" height="28"></picture></a>
+  <a href="../docs/benchmark.md"><picture><source media="(prefers-color-scheme: dark)" srcset="../assets/badges/tokens-tr-dark.svg"><img alt="token: grep'ten %82 düşük" src="../assets/badges/tokens-tr-light.svg" height="28"></picture></a>
+  <a href="../docs/benchmark.md"><picture><source media="(prefers-color-scheme: dark)" srcset="../assets/badges/find-tr-dark.svg"><img alt="knowledge find: 33/33, ~33 ms" src="../assets/badges/find-tr-light.svg" height="28"></picture></a>
 </p>
 
 <p align="center"><b>Seninle ve ajanlarınla birlikte büyüyen bilgi.</b><br>
@@ -27,8 +27,8 @@ Coding ajanları için hafıza ve kurallar. Kim olduğun, neyi yasakladığın v
 verdiğin, kullandığın her ajanın her oturumuna yüklenir.</p>
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/hero-tr-dark.svg">
-  <img alt="Ajanlar seni unutur. Kim olduğun ve nasıl çalıştığın her oturumda önce, eksiksiz yüklenir. Kurallarını yok sayarlar. Her tool call'da bir guard, yasakladığın şeyi reddeder: git push senin onayını bekler. Kimse not almaz. Oturumlar, commit'ler ve kararlar kendiliğinden kaydedilir. Her aracın kendi hafızası var. Claude Code, Codex, opencode ve Claude uygulaması tek bir vault okur." src="assets/hero-tr-light.svg" width="100%">
+  <source media="(prefers-color-scheme: dark)" srcset="../assets/hero-tr-dark.svg">
+  <img alt="Ajanlar seni unutur. Kim olduğun ve nasıl çalıştığın her oturumda önce, eksiksiz yüklenir. Kurallarını yok sayarlar. Her tool call'da bir guard, yasakladığın şeyi reddeder: git push senin onayını bekler. Kimse not almaz. Oturumlar, commit'ler ve kararlar kendiliğinden kaydedilir. Her aracın kendi hafızası var. Claude Code, Codex, opencode ve Claude uygulaması tek bir vault okur." src="../assets/hero-tr-light.svg" width="100%">
 </picture>
 
 ## Hızlı başlangıç
@@ -42,7 +42,7 @@ Install knowledge for me from https://github.com/atlasatakahraman/knowledge.
 Follow its AGENTS.md, show me each step's output, and ask before anything you write.
 ```
 
-[AGENTS.md](AGENTS.md) ajanı aşağıdaki adımların aynısından, her birinin basması gereken çıktıyla
+[AGENTS.md](../AGENTS.md) ajanı aşağıdaki adımların aynısından, her birinin basması gereken çıktıyla
 geçirir. Sana setup planını gösterir, onu yalnızca senin onayınla uygular, sonra hangi kural
 paketlerini istediğini sorar.
 
@@ -65,7 +65,7 @@ knowledge setup --apply <id>      # the id is the plan's last line
 da değiştireceği her dosyayı listeler ve planın id'siyle biter. `--apply <id>` o zamandan beri bir
 şey değiştiyse reddeder, değişmediyse tam olarak o planı yazar. Yeni bir vault `~/knowledge` altına
 kurulur; onun yerine var olan bir klasör de benimsenebilir. Flag'ler, Windows ve her adımın elle
-yapılışı: [docs/install.md](docs/install.md).
+yapılışı: [docs/install.md](../docs/install.md).
 
 ### Yeni bir vault'tan sonra
 
@@ -77,7 +77,7 @@ kural paketlerini açar.
 
 ## Pratikte bir oturum
 
-[docs/benchmark.md](docs/benchmark.md)'nin kullandığı public fixture'dan gerçek çıktı: vault olarak
+[docs/benchmark.md](../docs/benchmark.md)'nin kullandığı public fixture'dan gerçek çıktı: vault olarak
 bu repository'nin docs'u. Yollar kısaltıldı, uzun snippet'ler kesildi.
 
 **Bir prompt yazarsın.** Prompt hook, ajan tek kelime okumadan önce onu cevaplayan notları ekler:
@@ -126,7 +126,7 @@ Arch'ta kendi turunu bekliyor. Her adapter'ın kod yolu CI'da fixture kurulumlar
 | ChatGPT uygulamasının Codex'i | CLI'da güvenildikten sonra Codex plugin'inin hook'ları | Codex gibi; henüz güvenilmemiş hook'lar sessizce atlanır | Build edildi, doğrulanmadı |
 | Diğer herhangi biri (`generic`) | Senin belirttiğin bir dosyadaki blok, `knowledge find` ve `graph`, geri yazmak için `knowledge note` | Çalışma anında yok: kurallar yalnızca metin. Pre-commit backstop yine de `setup`'ın kurduğu her clone'da çalışır | Build edildi, doğrulanmadı |
 
-Bir ajanın nasıl eklendiği: [docs/architecture.md](docs/architecture.md#harnesses).
+Bir ajanın nasıl eklendiği: [docs/architecture.md](../docs/architecture.md#harnesses).
 
 ## Nasıl çalışır
 
@@ -146,7 +146,7 @@ başlatmaz ve vault'un index'i makine başına tek bir SQLite dosyasıdır.
   gereken sorular, linkler, kayıtlar, kurallar. Oturum başında sessizlik, sağlıklı demektir.
 
 Her hook'un ne yazdığı ve ne zaman: `template/00-Meta/Hook-Lifecycle.md`. Gerçek çıktısıyla her verb:
-[docs/verbs.md](docs/verbs.md).
+[docs/verbs.md](../docs/verbs.md).
 
 ### Kurallar ve guard
 
@@ -198,7 +198,7 @@ bozulur: `template/00-Meta/Why-This-Exists.md`.
 - **Asla okunmaz:** ajanların kimlik bilgileri. Engine ajanın CLI'ını çalıştırır ve oturum açmayı
   ona bırakır.
 
-Tam liste ve `fetch`'in neyi reddettiği: [docs/security.md](docs/security.md).
+Tam liste ve `fetch`'in neyi reddettiği: [docs/security.md](../docs/security.md).
 
 ## Obsidian isteğe bağlı
 
@@ -208,17 +208,17 @@ renklendirir.
 
 ## Docs
 
-İngilizce: [Kurulum](docs/install.md) · [bir release'i doğrulama](docs/verify.md) ·
-[güncelleme](docs/update.md) · [kaldırma](docs/remove.md) · [her verb](docs/verbs.md) ·
-[güvenlik](docs/security.md) · [sorun giderme](docs/troubleshooting.md) ·
-[benchmark](docs/benchmark.md) · [mimari](docs/architecture.md) · [release](docs/release.md),
+İngilizce: [Kurulum](../docs/install.md) · [bir release'i doğrulama](../docs/verify.md) ·
+[güncelleme](../docs/update.md) · [kaldırma](../docs/remove.md) · [her verb](../docs/verbs.md) ·
+[güvenlik](../docs/security.md) · [sorun giderme](../docs/troubleshooting.md) ·
+[benchmark](../docs/benchmark.md) · [mimari](../docs/architecture.md) · [release](../docs/release.md),
 maintainer için.
 
 ## Katkıda bulunmak
 
 Engine'in nasıl düzenlendiği, crate'leri, makine başına config, sync ve CI:
-[docs/architecture.md](docs/architecture.md). Bu repository üzerinde nasıl çalışılır:
-[AGENTS.md](AGENTS.md), ikinci kısım.
+[docs/architecture.md](../docs/architecture.md). Bu repository üzerinde nasıl çalışılır:
+[AGENTS.md](../AGENTS.md), ikinci kısım.
 
 ## Üçüncü taraf araçlar
 
@@ -239,4 +239,4 @@ MIT. Bkz. `LICENSE`. Yukarıdaki üçüncü taraf araçlar kendi lisanslarını 
 
 ---
 
-Bu sayfa [README.md](README.md)'nin çevirisidir; ikisi ayrılırsa İngilizce olan geçerlidir.
+Bu sayfa [README.md](../README.md)'nin çevirisidir; ikisi ayrılırsa İngilizce olan geçerlidir.

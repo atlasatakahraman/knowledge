@@ -17,8 +17,8 @@ Open an issue or an idea before a large pull request, so the approach is agreed 
 ## Making a change
 
 The layout, the build and the checks every commit passes are in
-[AGENTS.md § Working on this repository](AGENTS.md#working-on-this-repository). How the parts fit
-together is in [docs/architecture.md](docs/architecture.md). In short:
+[AGENTS.md § Working on this repository](../AGENTS.md#working-on-this-repository). How the parts fit
+together is in [docs/architecture.md](../docs/architecture.md). In short:
 
 1. Never run a build against your real home: the checks point `HOME`, `USERPROFILE` and
    `KNOWLEDGE_HOME` at a fixture, and so should any probe.
@@ -27,4 +27,4 @@ together is in [docs/architecture.md](docs/architecture.md). In short:
 3. A doc's command output is pasted from a real run on a fixture vault, never written from memory.
 4. Commits are by area, each building on its own, with a body that says why.
 
-By contributing you agree that your work is licensed under the [MIT licence](LICENSE).
+By contributing you agree that your work is licensed under the [MIT licence](../LICENSE).

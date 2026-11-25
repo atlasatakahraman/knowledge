@@ -107,7 +107,7 @@ check "src/ names no folder outside config.rs" '[ -z "$hits" ]'
 [ -z "$hits" ] || printf '%s\n' "$hits" | sed 's/^/      /'
 
 # --- S9.4: the docs split by task, and `update --plan` -------------------------------------------
-DOCS="$ROOT/README.md $(ls "$ROOT"/README.*.md) $ROOT/AGENTS.md $ROOT/SECURITY.md $(ls "$ROOT"/docs/*.md)"
+DOCS="$ROOT/README.md $(ls "$ROOT"/i18n/README.*.md) $ROOT/AGENTS.md $ROOT/.github/SECURITY.md $ROOT/.github/CONTRIBUTING.md $(ls "$ROOT"/docs/*.md)"
 dead=""
 for f in $DOCS; do
   dir=$(dirname "$f")
@@ -129,20 +129,21 @@ check "no user doc, skill, command or template note names a bun command" '[ -z "
 # Each translated README mirrors README.md: its code blocks verbatim, and the same link and image
 # targets once its own -<lang>- image names are read as README.md's. The language row, the
 # "translation of README.md" line and in-page anchors (#ajanlar, #agents) differ by design.
+# The translations live in i18n/, so their ../ prefix is dropped before the compare.
 fences() { awk '/^```/ { print; f = !f; next } f' "$1"; }
 targets() {
-  grep -oE '\]\([^)]*\)|(src|srcset|href)="[^"]*"' "$1" | sed -E 's/^\]\(//; s/\)$//; s/^[a-z]+="//; s/"$//' |
-    sed -E 's/-(tr|es|pt|fr|de)-(light|dark)\.svg$/-\2.svg/' | grep -vE '^(README(\.[a-z]+)?\.md|#)' | sort
+  grep -oE '\]\([^)]*\)|(src|srcset|href)="[^"]*"' "$1" | sed -E 's/^\]\(//; s/\)$//; s/^[a-z]+="//; s/"$//; s#^\.\./##' |
+    sed -E 's/-(tr|es|pt|fr|de)-(light|dark)\.svg$/-\2.svg/' | grep -vE '^((i18n/)?README(\.[a-z]+)?\.md|#)' | sort
 }
 fences "$ROOT/README.md" > "$TMP/en.fences"; targets "$ROOT/README.md" > "$TMP/en.targets"
 tr_bad=""
 for lang in tr es pt fr de; do
-  r="$ROOT/README.$lang.md"
+  r="$ROOT/i18n/README.$lang.md"
   [ -f "$r" ] || { tr_bad="$tr_bad missing:$lang"; continue; }
   fences "$r" | cmp -s - "$TMP/en.fences" || tr_bad="$tr_bad fences:$lang"
   targets "$r" | cmp -s - "$TMP/en.targets" || tr_bad="$tr_bad targets:$lang"
   # Its own images exist (the raw badges/ URLs are built by badges.yml, not kept here).
-  for a in $(grep -oE '(src|srcset)="assets/[^"]*"' "$r" | sed -E 's/^[a-z]+="//; s/"$//'); do
+  for a in $(grep -oE '(src|srcset)="\.\./assets/[^"]*"' "$r" | sed -E 's/^[a-z]+="\.\.\///; s/"$//'); do
     [ -f "$ROOT/$a" ] || tr_bad="$tr_bad image:$lang:$a"
   done
 done
