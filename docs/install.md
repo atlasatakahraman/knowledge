@@ -7,7 +7,7 @@ opencode, the Claude desktop app), each under its own `found` line. An agent ins
 someone follows [AGENTS.md](../AGENTS.md) instead.
 
 ```bash
-git -c advice.detachedHead=false clone --branch v0.13.1 https://github.com/atlasatakahraman/knowledge ~/dev/knowledge
+git -c advice.detachedHead=false clone --branch v0.13.2 https://github.com/atlasatakahraman/knowledge ~/dev/knowledge
 # the binary, from the release (below) or: cargo install --path ~/dev/knowledge --locked
 knowledge setup --plan            # what it would write; nothing is written
 knowledge setup --apply <id>      # exactly that, where <id> is the plan's last line
@@ -24,7 +24,7 @@ archive, check it with all three of [verify.md](verify.md)'s steps against the c
 `allowed_signers`, then extract the two binaries into `~/.local/bin`:
 
 ```bash
-u=https://github.com/atlasatakahraman/knowledge/releases/download/v0.13.1 a=knowledge-0.13.1-x86_64-unknown-linux-gnu
+u=https://github.com/atlasatakahraman/knowledge/releases/download/v0.13.2 a=knowledge-0.13.2-x86_64-unknown-linux-gnu
 curl -fsSL -O $u/SHA256SUMS -O $u/SHA256SUMS.sig -O $u/$a.tar.gz
 cp ~/dev/knowledge/allowed_signers .      # then verify.md's three checks
 mkdir -p ~/.local/bin
@@ -32,7 +32,7 @@ tar -xzf $a.tar.gz -C ~/.local/bin --strip-components 1 $a/knowledge $a/knowledg
 ```
 
 ```powershell
-$u = "https://github.com/atlasatakahraman/knowledge/releases/download/v0.13.1"; $a = "knowledge-0.13.1-x86_64-pc-windows-msvc"
+$u = "https://github.com/atlasatakahraman/knowledge/releases/download/v0.13.2"; $a = "knowledge-0.13.2-x86_64-pc-windows-msvc"
 curl.exe -fsSL -O "$u/SHA256SUMS" -O "$u/SHA256SUMS.sig" -O "$u/$a.zip"
 Copy-Item C:\dev\knowledge\allowed_signers .      # then verify.md's three checks
 New-Item -ItemType Directory -Force $HOME\.local\bin | Out-Null
@@ -47,11 +47,11 @@ A plan on a new machine, for Claude Code alone (`--harness claude`), with the ho
 `~`:
 
 ```
-knowledge 0.13.1 setup plan: nothing is written
+knowledge 0.13.2 setup plan: nothing is written
 
   ok      prerequisites    git · claude · gitleaks
-  ok      skeleton         ~/dev/knowledge (0.13.1)
-  create  vault            ~/knowledge: new, from template/ (31 files), .skeleton.json pins 0.13.1, git init, a first commit when git knows your user.email
+  ok      skeleton         ~/dev/knowledge (0.13.2)
+  create  vault            ~/knowledge: new, from template/ (31 files), .skeleton.json pins 0.13.2, git init, a first commit when git knows your user.email
   change  core.fileMode    ~/knowledge/.git/config: false (Obsidian's mode-only rewrites would block the pull)
   change  hooksPath        ~/knowledge/.git/config: -> ~/dev/knowledge/githooks (secret scan, rules backstops)
   change  hooksPath        ~/dev/knowledge/.git/config: -> ~/dev/knowledge/githooks (secret scan, rules backstops)
@@ -66,7 +66,7 @@ knowledge 0.13.1 setup plan: nothing is written
   create  link             ~/.agents/skills/knowledge-sync -> ~/dev/knowledge/skills/knowledge-sync
   create  link             ~/.claude/skills/knowledge-usage -> ~/dev/knowledge/skills/knowledge-usage
   create  link             ~/.agents/skills/knowledge-usage -> ~/dev/knowledge/skills/knowledge-usage
-  ok      knowledge        ~/.cargo/bin/knowledge.exe (0.13.1)
+  ok      knowledge        ~/.cargo/bin/knowledge.exe (0.13.2)
   create  plugin           claude plugin install knowledge@knowledge, from https://github.com/atlasatakahraman/knowledge (git, no autoUpdate)
   create  settings.json    ~/.claude/settings.json: our 0 hooks out (the plugin carries them), knowledge_bin = ~/.cargo/bin/knowledge.exe
   create  CLAUDE.md        ~/.claude/CLAUDE.md: imports ~/knowledge/00-Meta/Identity.md, ~/knowledge/00-Meta/Hard-Rules.md
@@ -139,8 +139,8 @@ A new one from the template, or an existing clone (then skip to `core.fileMode`)
 
 ```bash
 cp -r <skeleton>/template <vault>
-echo '{"version":"0.13.1"}' > <vault>/.skeleton.json     # the version `knowledge --version` prints
-git -C <vault> init -b main && git -C <vault> add -A && git -C <vault> commit -m "chore: new vault from knowledge 0.13.1"
+echo '{"version":"0.13.2"}' > <vault>/.skeleton.json     # the version `knowledge --version` prints
+git -C <vault> init -b main && git -C <vault> add -A && git -C <vault> commit -m "chore: new vault from knowledge 0.13.2"
 git -C <vault> config core.fileMode false
 ```
 
@@ -242,7 +242,7 @@ From source:
 ```
 $ cargo install --path <skeleton> --locked
 $ knowledge --version
-knowledge 0.13.1
+knowledge 0.13.2
 SQLite 3.54.1, FTS5 on
 ```
 

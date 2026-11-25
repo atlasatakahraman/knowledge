@@ -20,7 +20,7 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { delimiter, join } from "node:path";
 
-const PIN = "0.13.1";
+const PIN = "0.13.2";
 // opencode's service is started by the login manager (systemd --user on Arch), whose PATH lacks
 // ~/.cargo/bin, where `cargo install` puts the binary: a bare "knowledge" was ENOENT, and every hook
 // came back empty (Arch, 2026-11-25). So PATH first, as the other harnesses run it, then cargo's bin.
