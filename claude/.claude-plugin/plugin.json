@@ -1,6 +1,6 @@
 {
   "name": "knowledge",
-  "version": "0.13.0",
+  "version": "0.13.1",
   "description": "The knowledge vault's hooks for Claude Code. Each one runs the knowledge binary's hook verb; knowledge setup installs this plugin and sets knowledge_bin.",
   "author": { "name": "atlasatakahraman" },
   "license": "MIT",

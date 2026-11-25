@@ -33,8 +33,8 @@ then drop the old line in the next.
 2. Tag and push the tag. `tag.gpgsign` signs it with the machine key.
 
    ```bash
-   git tag v0.13.0 -m "knowledge 0.13.0: <one line>"
-   git push origin v0.13.0
+   git tag v0.13.1 -m "knowledge 0.13.1: <one line>"
+   git push origin v0.13.1
    ```
 
 3. `release.yml` builds the eight archives, writes `SHA256SUMS`, attests each archive and opens a
@@ -43,7 +43,7 @@ then drop the old line in the next.
    `SHA256SUMS.sig`:
 
    ```bash
-   gh release download v0.13.0 -R atlasatakahraman/knowledge -p SHA256SUMS
+   gh release download v0.13.1 -R atlasatakahraman/knowledge -p SHA256SUMS
    ssh-keygen -Y sign -f ~/.ssh/knowledge_release_ed25519 -n file SHA256SUMS
    ```
 
@@ -51,13 +51,13 @@ then drop the old line in the next.
    then attach it:
 
    ```bash
-   gh release upload v0.13.0 SHA256SUMS.sig -R atlasatakahraman/knowledge
+   gh release upload v0.13.1 SHA256SUMS.sig -R atlasatakahraman/knowledge
    ```
 
 6. Download one archive from the draft and run all of [verify.md](verify.md) on it. Then publish:
 
    ```bash
-   gh release edit v0.13.0 --draft=false -R atlasatakahraman/knowledge
+   gh release edit v0.13.1 --draft=false -R atlasatakahraman/knowledge
    ```
 
 `workflow_dispatch` on `release.yml` is the dry run: the archives and `SHA256SUMS` are left as the

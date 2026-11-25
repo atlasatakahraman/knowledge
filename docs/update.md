@@ -7,8 +7,8 @@ an updater that phones home is a telemetry surface, so the check runs only when 
 
 ```
 $ knowledge update --plan
-knowledge 0.13.0, x86_64-pc-windows-msvc
-latest release: v0.13.0  https://github.com/atlasatakahraman/knowledge/releases/tag/v0.13.0
+knowledge 0.13.1, x86_64-pc-windows-msvc
+latest release: v0.13.1  https://github.com/atlasatakahraman/knowledge/releases/tag/v0.13.1
 This binary is the latest release. Nothing to do.
 ```
 

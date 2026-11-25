@@ -12,7 +12,7 @@ body:
     attributes:
       label: Version
       description: The output of `knowledge --version`.
-      placeholder: knowledge 0.13.0
+      placeholder: knowledge 0.13.1
     validations:
       required: true
   - type: dropdown

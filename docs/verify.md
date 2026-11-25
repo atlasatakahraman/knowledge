@@ -22,7 +22,7 @@ From the release page, into an empty folder: your platform's archive, `SHA256SUM
 `SHA256SUMS.sig`. Then `allowed_signers` from the same tag:
 
 ```
-https://raw.githubusercontent.com/atlasatakahraman/knowledge/v0.13.0/allowed_signers
+https://raw.githubusercontent.com/atlasatakahraman/knowledge/v0.13.1/allowed_signers
 ```
 
 It holds one line, the release key:
@@ -70,17 +70,17 @@ Couldn't verify signature: namespace does not match
 ## 2. The checksum
 
 ```bash
-grep -F "  knowledge-0.13.0-x86_64-unknown-linux-gnu.tar.gz" SHA256SUMS | sha256sum -c -
+grep -F "  knowledge-0.13.1-x86_64-unknown-linux-gnu.tar.gz" SHA256SUMS | sha256sum -c -
 ```
 
 ```
-knowledge-0.13.0-x86_64-unknown-linux-gnu.tar.gz: OK
+knowledge-0.13.1-x86_64-unknown-linux-gnu.tar.gz: OK
 ```
 
 On macOS, `shasum -a 256 -c -` in place of `sha256sum -c -`. On Windows:
 
 ```powershell
-$f = "knowledge-0.13.0-x86_64-pc-windows-msvc.zip"
+$f = "knowledge-0.13.1-x86_64-pc-windows-msvc.zip"
 ((Get-FileHash $f -Algorithm SHA256).Hash + "  $f") -in (Get-Content SHA256SUMS)
 ```
 
@@ -89,10 +89,10 @@ $f = "knowledge-0.13.0-x86_64-pc-windows-msvc.zip"
 ## 3. The build provenance
 
 ```bash
-gh attestation verify knowledge-0.13.0-x86_64-unknown-linux-gnu.tar.gz \
+gh attestation verify knowledge-0.13.1-x86_64-unknown-linux-gnu.tar.gz \
   --repo atlasatakahraman/knowledge \
   --signer-workflow atlasatakahraman/knowledge/.github/workflows/release.yml \
-  --source-ref refs/tags/v0.13.0 --deny-self-hosted-runners
+  --source-ref refs/tags/v0.13.1 --deny-self-hosted-runners
 ```
 
 It checks the archive's attestation in Sigstore's public transparency log: built by `release.yml`,
