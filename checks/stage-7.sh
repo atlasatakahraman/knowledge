@@ -270,11 +270,17 @@ mkdir -p "$TMP/ocfail" && printf '#!/bin/sh\ncat >/dev/null\ncommand -v knowledg
   "'{\"type\":\"step_start\",\"part\":{\"type\":\"step-start\"}}'" \
   "'{\"type\":\"error\",\"error\":{\"type\":\"AI.Error\",\"message\":\"Free usage limit reached.\"}}'" > "$TMP/ocfail/opencode" \
   && chmod +x "$TMP/ocfail/opencode"
+# Windows spawns only an .exe for a bare `opencode` (the real one is bun's opencode.exe shim), so
+# the script above is never run there. msys's env.exe, copied as opencode.exe, takes the runner's
+# first argument, `run`, as the program to start: the same script under that name.
+if command -v cygpath >/dev/null 2>&1; then
+  cp "$(command -v env)" "$TMP/ocfail/opencode.exe" && cp "$TMP/ocfail/opencode" "$TMP/ocfail/run"
+fi
 printf '%s' '{"info":{"id":"ses_check"},"messages":[{"type":"user","id":"m1","text":"Which retrieval tier comes first?","time":{"created":1795581200000}},{"type":"assistant","id":"m2","content":[{"type":"text","text":"Tier 0, the injected note names."}],"time":{"created":1795581201000}}]}' > "$TMP/oc-export.json"
 check "an opencode flush that fails logs the runner's JSON error event" \
   'PATH="$TMP/ocfail:$PATH" k flush ses_check "$TMP" --harness opencode --transcript "$TMP/oc-export.json" --dry-run --from-start 2>&1 | grep -q "\"outcome\":\"failed\".*\"error\":\"Free usage limit reached.\""'
 check "a child of knowledge finds this knowledge on PATH when the caller's PATH lacks its folder" \
-  'PATH="$TMP/ocfail:/usr/bin:/bin" "$(cd "$(dirname "$BIN")" && pwd)/$(basename "$BIN")" flush ses_check "$TMP" --harness opencode --transcript "$TMP/oc-export.json" --dry-run --from-start >/dev/null 2>&1; [ "$(cat "$TMP/oc-which")" = "$(cd "$(dirname "$BIN")" && pwd)/$(basename "$BIN")" ]'
+  'PATH="$TMP/ocfail:/usr/bin:/bin" "$(cd "$(dirname "$BIN")" && pwd)/$(basename "$BIN")" flush ses_check "$TMP" --harness opencode --transcript "$TMP/oc-export.json" --dry-run --from-start >/dev/null 2>&1; [ "$(sed "s/\.exe$//" "$TMP/oc-which")" = "$(cd "$(dirname "$BIN")" && pwd)/$(basename "$BIN" .exe)" ]'
 if command -v bun >/dev/null 2>&1; then
   check "the opencode plugin builds with bun" 'bun build "$OTS" --target=bun --outdir "$TMP/ocbuild" >/dev/null 2>&1 && [ -s "$TMP/ocbuild/knowledge.js" ]'
   # opencode's service may start without ~/.cargo/bin on PATH (systemd --user, Arch 2026-11-25):
