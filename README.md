@@ -52,15 +52,17 @@ print. It shows you the setup plan, applies it only on your yes, then asks which
 
 ### Requirements
 
-`git`, `gitleaks`, Claude Code (`claude`) and the Rust toolchain (`rustup`; `rust-toolchain.toml`
-pins 1.100.0 and rustup fetches it on the first build). No release archives are published yet, so
-the binary builds from source, in two to three minutes.
+`git`, `gitleaks`, Claude Code (`claude`) and the GitHub CLI (`gh`, for the build provenance).
+Each release has a signed archive per platform, checked before you extract it
+([docs/verify.md](docs/verify.md)). Without one for your platform, the binary builds from source
+with the Rust toolchain (`rustup`), in two to three minutes.
 
 ### By hand
 
 ```bash
-git clone https://github.com/atlasatakahraman/knowledge ~/dev/knowledge
-cargo install --path ~/dev/knowledge --locked
+git -c advice.detachedHead=false clone --branch v0.13.0 https://github.com/atlasatakahraman/knowledge ~/dev/knowledge
+# the binary: your platform's release archive, verified, into ~/.local/bin (docs/install.md),
+# or from source: cargo install --path ~/dev/knowledge --locked
 knowledge setup --plan
 knowledge setup --apply <id>      # the id is the plan's last line
 ```

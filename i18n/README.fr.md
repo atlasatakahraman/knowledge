@@ -48,15 +48,17 @@ demande quels paquets de règles vous voulez.
 
 ### Prérequis
 
-`git`, `gitleaks`, Claude Code (`claude`) et la toolchain Rust (`rustup` ; `rust-toolchain.toml`
-fixe la 1.100.0 et rustup la télécharge au premier build). Aucune archive de release n’est encore
-publiée, donc le binaire se compile depuis les sources, en deux à trois minutes.
+`git`, `gitleaks`, Claude Code (`claude`) et la CLI GitHub (`gh`, pour la provenance du build).
+Chaque release a une archive signée par plateforme, vérifiée avant de l’extraire
+([docs/verify.md](../docs/verify.md)). S’il n’y en a pas pour votre plateforme, le binaire se
+compile depuis les sources avec la toolchain Rust (`rustup`), en deux à trois minutes.
 
 ### À la main
 
 ```bash
-git clone https://github.com/atlasatakahraman/knowledge ~/dev/knowledge
-cargo install --path ~/dev/knowledge --locked
+git -c advice.detachedHead=false clone --branch v0.13.0 https://github.com/atlasatakahraman/knowledge ~/dev/knowledge
+# the binary: your platform's release archive, verified, into ~/.local/bin (docs/install.md),
+# or from source: cargo install --path ~/dev/knowledge --locked
 knowledge setup --plan
 knowledge setup --apply <id>      # the id is the plan's last line
 ```

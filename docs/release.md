@@ -27,8 +27,9 @@ then drop the old line in the next.
 
 ## Each release
 
-1. Set `version` in `Cargo.toml`, run `cargo build` so `Cargo.lock` follows, and commit. The
-   workflow refuses a tag that does not name this version.
+1. Set `version` in `Cargo.toml`, run `cargo build` so `Cargo.lock` follows, move every other
+   place `git grep` finds the old version (the plugin manifests and pins, the install docs' clone
+   tag and archive names), and commit. The workflow refuses a tag that does not name this version.
 2. Tag and push the tag. `tag.gpgsign` signs it with the machine key.
 
    ```bash

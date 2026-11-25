@@ -48,15 +48,17 @@ paketlerini istediğini sorar.
 
 ### Gereksinimler
 
-`git`, `gitleaks`, Claude Code (`claude`) ve Rust toolchain (`rustup`; `rust-toolchain.toml` 1.100.0'ı
-sabitler, rustup onu ilk build'de indirir). Henüz release arşivi yayımlanmadı, bu yüzden binary
-kaynaktan, iki üç dakikada build edilir.
+`git`, `gitleaks`, Claude Code (`claude`) ve GitHub CLI (`gh`, build provenance için). Her
+release'in platform başına imzalı bir arşivi var, açmadan önce doğrulanır
+([docs/verify.md](../docs/verify.md)). Platformun için arşiv yoksa binary Rust toolchain
+(`rustup`) ile kaynaktan, iki üç dakikada build edilir.
 
 ### Elle
 
 ```bash
-git clone https://github.com/atlasatakahraman/knowledge ~/dev/knowledge
-cargo install --path ~/dev/knowledge --locked
+git -c advice.detachedHead=false clone --branch v0.13.0 https://github.com/atlasatakahraman/knowledge ~/dev/knowledge
+# the binary: your platform's release archive, verified, into ~/.local/bin (docs/install.md),
+# or from source: cargo install --path ~/dev/knowledge --locked
 knowledge setup --plan
 knowledge setup --apply <id>      # the id is the plan's last line
 ```

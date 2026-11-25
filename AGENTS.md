@@ -9,38 +9,77 @@ is one line; the output shown is from a real run on Windows (paths shortened to 
 every step by hand: [docs/install.md](docs/install.md).
 
 1. **Check the prerequisites.** Each prints a version; a missing one is the person's to install
-   (the commands are in [docs/install.md](docs/install.md)), and you ask before running any.
+   (the commands are in [docs/install.md](docs/install.md)), and you ask before running any. `gh`
+   checks the build provenance and needs the person signed in (`gh auth login`, theirs to run).
 
    ```
    $ git --version
    git version 2.55.0.windows.4
-   $ cargo --version
-   cargo 1.100.0 (3acc79c0c 2026-11-05)
    $ gitleaks version
    8.30.1
    $ claude --version
    2.1.330 (Claude Code)
+   $ gh --version
+   gh version 2.97.0 (2026-07-31)
    ```
 
-2. **Clone the skeleton** into the person's checkouts folder (`~/dev` unless they keep another):
+2. **Download the latest release** into a new, empty folder. `SHA256SUMS` comes first: it names
+   one archive per platform, `knowledge-<version>-<target>.zip` on Windows and `.tar.gz` elsewhere.
+   Pick this machine's target (`x86_64-pc-windows-msvc`, `aarch64-apple-darwin`,
+   `x86_64-unknown-linux-gnu`, …), then fetch that archive and `SHA256SUMS.sig` from the same
+   place. On Windows the command is `curl.exe`, since PowerShell's `curl` is another command.
 
    ```
-   $ git clone https://github.com/atlasatakahraman/knowledge ~/dev/knowledge
+   $ curl -fsSLO https://github.com/atlasatakahraman/knowledge/releases/latest/download/SHA256SUMS
+   $ curl -fsSLO https://github.com/atlasatakahraman/knowledge/releases/latest/download/SHA256SUMS.sig
+   $ curl -fsSLO https://github.com/atlasatakahraman/knowledge/releases/latest/download/knowledge-0.13.0-x86_64-pc-windows-msvc.zip
    ```
 
-3. **Build and install the binary** (two to three minutes):
+   No archive for this target: build from source instead (step 5's last paragraph).
+
+3. **Clone the skeleton at that release's tag** into the person's checkouts folder (`~/dev` unless
+   they keep another). The checkout stays on the release, so its plugins match the binary; a
+   session start leaves a checkout on a tag alone.
 
    ```
-   $ cargo install --path ~/dev/knowledge --locked
-      Installed package `knowledge v0.13.0 (~/dev/knowledge)` (executables `knowledge-code.exe`, `knowledge.exe`)
+   $ git -c advice.detachedHead=false clone --branch v0.13.0 https://github.com/atlasatakahraman/knowledge ~/dev/knowledge
+   Cloning into '~/dev/knowledge'...
+   ```
+
+4. **Verify the archive before extracting it,** with all three checks of
+   [docs/verify.md](docs/verify.md), in its order, run in the download folder. Copy
+   `~/dev/knowledge/allowed_signers` there first. Its key's fingerprint must be
+   `SHA256:4lk0qVkGnFfrnKNselpgVf9e55AvCRSy5OkdhcCq6uc`. Any check that fails is the answer to
+   report: stop, and do not extract.
+
+   ```
+   $ cmd /c "ssh-keygen -Y verify -f allowed_signers -I atlasatakahraman -n file -s SHA256SUMS.sig < SHA256SUMS"
+   Good "file" signature for atlasatakahraman with ED25519 key SHA256:4lk0qVkGnFfrnKNselpgVf9e55AvCRSy5OkdhcCq6uc
+   $ $f = "knowledge-0.13.0-x86_64-pc-windows-msvc.zip"; ((Get-FileHash $f -Algorithm SHA256).Hash + "  $f") -in (Get-Content SHA256SUMS)
+   True
+   $ gh attestation verify knowledge-0.13.0-x86_64-pc-windows-msvc.zip --repo atlasatakahraman/knowledge --signer-workflow atlasatakahraman/knowledge/.github/workflows/release.yml --source-ref refs/tags/v0.13.0 --deny-self-hosted-runners
+   ```
+
+   The last one exits 0 on a match.
+
+5. **Put the two binaries in `~/.local/bin`.** The folder must be named `bin`: `setup` takes any
+   other folder for a build folder and WARNs. `tar` reads the zip on Windows too (Windows 10 1803
+   and later). If `~/.local/bin` is not on `PATH`, adding it is the person's step.
+
+   ```
+   $ mkdir -p ~/.local/bin
+   $ tar -xf knowledge-0.13.0-x86_64-pc-windows-msvc.zip -C ~/.local/bin --strip-components 1 knowledge-0.13.0-x86_64-pc-windows-msvc/knowledge.exe knowledge-0.13.0-x86_64-pc-windows-msvc/knowledge-code.exe
    $ knowledge --version
    knowledge 0.13.0
    SQLite 3.54.1, FTS5 on
    ```
 
-   `FTS5 on` is required: without it the index cannot search.
+   Outside Windows the members have no `.exe`. `FTS5 on` is required: without it the index cannot
+   search. To build from source instead (no archive for the target), the Rust toolchain is a
+   prerequisite too, and `cargo install --path ~/dev/knowledge --locked` puts both binaries in
+   `~/.cargo/bin` in two to three minutes.
 
-4. **Plan the setup, and show the whole plan to the person:**
+6. **Plan the setup, and show the whole plan to the person:**
 
    ```
    $ knowledge setup --plan
@@ -54,7 +93,7 @@ every step by hand: [docs/install.md](docs/install.md).
    and stop, do not work around it. A WARN that names a missing tool carries the command that
    installs it; installing is the person's call.
 
-5. **Apply the plan, only on the person's yes,** with the id from its last line:
+7. **Apply the plan, only on the person's yes,** with the id from its last line:
 
    ```
    $ knowledge setup --apply <id>
@@ -64,7 +103,7 @@ every step by hand: [docs/install.md](docs/install.md).
 
    The id refuses to apply if anything changed since the plan; then plan again and show it again.
 
-6. **Build the index and check the vault:**
+8. **Build the index and check the vault:**
 
    ```
    $ knowledge doctor --repair --pretty
@@ -77,13 +116,13 @@ every step by hand: [docs/install.md](docs/install.md).
    PASS with those two WARNs is a finished install: `hygiene` is uncommitted work, `pull-trust` is
    opt-in ([docs/security.md](docs/security.md)).
 
-7. **The rules interview.** `knowledge rules list --json` lists the packs. Ask the person which to
+9. **The rules interview.** `knowledge rules list --json` lists the packs. Ask the person which to
    turn on, one question with the packs as options, then `knowledge rules enable <pack>` for each
    one they chose.
 
-8. **For a new vault,** tell the person what is left for them: the `FILL:` placeholders in
-   `00-Meta/Identity.md` and `00-Meta/Hard-Rules.md`, and the questions in
-   `00-Meta/retrieval-cases.json`. Then a new session, in the vault, picks up the hooks.
+10. **For a new vault,** tell the person what is left for them: the `FILL:` placeholders in
+    `00-Meta/Identity.md` and `00-Meta/Hard-Rules.md`, and the questions in
+    `00-Meta/retrieval-cases.json`. Then a new session, in the vault, picks up the hooks.
 
 **What you are never asked to do, and must not do:**
 

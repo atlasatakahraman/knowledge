@@ -1,23 +1,47 @@
 # Install
 
-Build the binary, then let it plan the rest. Every step the plan takes is also written out below,
-so a person or an agent can do it by hand and get the same machine. One plan covers Claude Code,
-then every other harness it finds installed (Codex, opencode, the Claude desktop app), each under
-its own `found` line. An agent installing for someone follows [AGENTS.md](../AGENTS.md) instead.
+Clone the checkout at a release, put the binary beside it, then let it plan the rest. Every step
+the plan takes is also written out below, so a person or an agent can do it by hand and get the
+same machine. One plan covers Claude Code, then every other harness it finds installed (Codex,
+opencode, the Claude desktop app), each under its own `found` line. An agent installing for
+someone follows [AGENTS.md](../AGENTS.md) instead.
 
 ```bash
-git clone https://github.com/atlasatakahraman/knowledge ~/dev/knowledge
-cargo install --path ~/dev/knowledge --locked
+git -c advice.detachedHead=false clone --branch v0.13.0 https://github.com/atlasatakahraman/knowledge ~/dev/knowledge
+# the binary, from the release (below) or: cargo install --path ~/dev/knowledge --locked
 knowledge setup --plan            # what it would write; nothing is written
 knowledge setup --apply <id>      # exactly that, where <id> is the plan's last line
 ```
 
-```powershell
-git clone https://github.com/atlasatakahraman/knowledge C:\dev\knowledge
-cargo install --path C:\dev\knowledge --locked
-knowledge setup --plan
-knowledge setup --apply <id>
+The checkout stays on the release's tag, so its plugins carry the binary's version; a session
+start leaves a checkout on a tag alone, and [update.md](update.md) moves it.
+
+## The binary from a release
+
+Each release has one archive per platform, `SHA256SUMS` over them and the maintainer's signature
+over that. Into a new, empty folder, download `SHA256SUMS`, `SHA256SUMS.sig` and your platform's
+archive, check it with all three of [verify.md](verify.md)'s steps against the checkout's
+`allowed_signers`, then extract the two binaries into `~/.local/bin`:
+
+```bash
+u=https://github.com/atlasatakahraman/knowledge/releases/download/v0.13.0 a=knowledge-0.13.0-x86_64-unknown-linux-gnu
+curl -fsSL -O $u/SHA256SUMS -O $u/SHA256SUMS.sig -O $u/$a.tar.gz
+cp ~/dev/knowledge/allowed_signers .      # then verify.md's three checks
+mkdir -p ~/.local/bin
+tar -xzf $a.tar.gz -C ~/.local/bin --strip-components 1 $a/knowledge $a/knowledge-code
 ```
+
+```powershell
+$u = "https://github.com/atlasatakahraman/knowledge/releases/download/v0.13.0"; $a = "knowledge-0.13.0-x86_64-pc-windows-msvc"
+curl.exe -fsSL -O "$u/SHA256SUMS" -O "$u/SHA256SUMS.sig" -O "$u/$a.zip"
+Copy-Item C:\dev\knowledge\allowed_signers .      # then verify.md's three checks
+New-Item -ItemType Directory -Force $HOME\.local\bin | Out-Null
+tar -xf "$a.zip" -C $HOME\.local\bin --strip-components 1 "$a/knowledge.exe" "$a/knowledge-code.exe"
+```
+
+The folder must be named `bin`: `setup` takes any other for a build folder and WARNs. Windows'
+own `tar` (Windows 10 1803 and later) reads the zip. Put `~/.local/bin` on `PATH` if it is not
+there yet. A platform with no archive builds from the checkout instead: [§ 5](#5-the-knowledge-binary).
 
 A plan on a new machine, for Claude Code alone (`--harness claude`), with the home folder shown as
 `~`:
@@ -85,15 +109,17 @@ checkout, `<vault>` the vault, `<dev>` the checkouts folder.
 
 ### 1. Prerequisites
 
-`git`, `claude` (Claude Code), `gitleaks` and `cargo` (the Rust toolchain, for the knowledge
-binary), all on `PATH`. The hooks commit and push their records on their own and scan them with
-gitleaks first. Without it they commit nothing.
+`git`, `claude` (Claude Code) and `gitleaks`, all on `PATH`, plus `gh` to check a release's build
+provenance, or `cargo` (the Rust toolchain) to build the binary from source instead. The hooks
+commit and push their records on their own and scan them with gitleaks first. Without it they
+commit nothing.
 
 | Tool | Linux | Windows |
 |---|---|---|
 | git | your package manager (`pacman -S git`, `apt install git`) | `winget install Git.Git` |
 | claude | `curl -fsSL https://claude.ai/install.sh \| bash` | `irm https://claude.ai/install.ps1 \| iex` |
 | gitleaks | your package manager (`pacman -S gitleaks`, `brew install gitleaks`) | `winget install Gitleaks.Gitleaks` |
+| gh | your package manager (`pacman -S github-cli`, `brew install gh`) | `winget install GitHub.cli` |
 | cargo | `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \| sh` | `winget install Rustlang.Rustup` |
 
 `rust-toolchain.toml` pins the compiler (1.100.0); rustup fetches it on the first build. On Windows
@@ -201,6 +227,9 @@ and loads the skill once. Before 0.13.0 these were `~/.claude/hooks`, `skills/br
 `commands/brain-*`: `knowledge setup` removes those links when their targets end in those paths.
 
 ### 5. The knowledge binary
+
+From a release: [§ The binary from a release](#the-binary-from-a-release), into `~/.local/bin`.
+From source:
 
 ```
 $ cargo install --path <skeleton> --locked

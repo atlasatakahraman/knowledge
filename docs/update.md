@@ -8,17 +8,21 @@ an updater that phones home is a telemetry surface, so the check runs only when 
 ```
 $ knowledge update --plan
 knowledge 0.13.0, x86_64-pc-windows-msvc
-No release is published yet at https://github.com/atlasatakahraman/knowledge/releases.
-Update from the checkout instead:
-  git -C ~/dev/knowledge pull --ff-only
-  cargo install --path ~/dev/knowledge --locked
-  knowledge setup --plan     (then --apply <id>)
+latest release: v0.13.0  https://github.com/atlasatakahraman/knowledge/releases/tag/v0.13.0
+This binary is the latest release. Nothing to do.
 ```
+
+Before the first release it named the checkout's steps instead (`pull --ff-only`, `cargo install`,
+then the plan).
 
 It makes one HTTPS call, to GitHub's API for the latest release, and sends nothing about you or
 your vault. Once a release exists, it names it and prints this platform's steps: the archive,
 `SHA256SUMS` and `SHA256SUMS.sig` to download, [verify.md](verify.md)'s three checks, the folder to
-extract the two binaries into, and the plan to run after. It downloads nothing and replaces nothing.
+extract the two binaries into, the checkout's move to the new tag (a checkout installed from a
+release sits on its tag, and its plugins must carry the binary's version or the hooks stand down),
+and the plan to run after. It downloads nothing and replaces nothing. 0.13.0 prints no checkout
+step; from it, run `git -C <checkout> fetch --tags` and `git -C <checkout> checkout v<new>` before
+the plan.
 The release key it prints is the one built into your binary, so the new release is checked against
 a key you already trust rather than one fetched beside the archive.
 `--apply` is not built: on Windows a running `knowledge mcp` (the Claude desktop app, Codex,
