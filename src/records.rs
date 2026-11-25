@@ -127,9 +127,9 @@ fn sync_locked(cfg: &Config, vault: &Path) -> J {
                 J::s("gitleaks flagged the staged records; nothing committed"),
             );
         }
-        let subject = format!("chore(brain): records from the {} boot", cfg.os);
+        let subject = format!("chore(knowledge): records from the {} boot", cfg.os);
         let body = format!(
-            "Written by the hooks after the last commit, committed by syncRecords so the other boot\npulls them:\n{}",
+            "Written by the hooks after the last commit, committed by `knowledge records` so the other\nboot pulls them:\n{}",
             staged
                 .iter()
                 .map(|f| format!("- {f}"))

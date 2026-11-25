@@ -367,7 +367,7 @@ fn compile(cfg: &Config, force: bool, dry: bool) {
                 ),
             ]);
         }
-        let subject = format!("chore(brain): compile {day}");
+        let subject = format!("chore(knowledge): compile {day}");
         let c = git(&[
             "-c",
             "user.name=knowledge-compile",
